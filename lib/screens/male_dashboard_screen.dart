@@ -32,15 +32,6 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
   // Navigation & filter states
   int _currentTab = 0; // 0 for Home, 1 for Recents, 2 for Chats
   bool _isOnlineSwitch = true;
-  String _selectedCategory = 'All';
-
-  final List<String> _categories = [
-    'All',
-    'Star',
-    'Relationship',
-    'Marriage',
-    'Confidence',
-  ];
 
   // Modern Color Palette Constants
   static const Color brandBg = Color(0xFFF8FAFC); // Slate 50
@@ -184,10 +175,7 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
             FemaleExpert(
               id: doc.id,
               nickname: nickname,
-              age: (data['age'] as num?)?.toInt() ?? 20,
-              city: data['city'] ?? 'Online',
               pricePerMin: (data['pricePerMin'] as num?)?.toInt() ?? 5,
-              bio: data['bio'] ?? '',
               languages: data['languages']?.toString() ?? 'Hindi',
               rating: (() {
                 final totalSecs = (data['totalTalkSeconds'] as num?)?.toDouble() ?? 0;
@@ -196,7 +184,6 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
                 return double.parse((stored ?? computed.clamp(3.5, 5.0)).toStringAsFixed(1));
               })(),
               isOnline: data['isOnline'] == true,
-              categories: List<String>.from((data['categories'] as List<dynamic>?) ?? ['All']),
             ),
           );
         } catch (e) {
@@ -536,8 +523,7 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
     final expertsList = allAvailableExperts.where((expert) {
       if (expert.nickname.trim().isEmpty) return false;
       if (!expert.isOnline) return false;
-      if (_selectedCategory == 'All') return true;
-      return expert.categories.contains(_selectedCategory);
+      return true;
     }).toList();
 
     return RefreshIndicator(
@@ -863,14 +849,10 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
         final expert = FemaleExpert(
           id: doc.id,
           nickname: data['nickname'] ?? nickname,
-          age: (data['age'] as num?)?.toInt() ?? 20,
-          city: data['city'] ?? '',
           pricePerMin: (data['pricePerMin'] as num?)?.toInt() ?? 5,
-          bio: data['bio'] ?? '',
           languages: data['languages'] ?? 'Hindi',
           rating: (data['rating'] ?? 4.5).toDouble(),
           isOnline: isOnline,
-          categories: List<String>.from(data['categories'] ?? ['All']),
         );
         _triggerCall(expert);
       } else {
@@ -963,16 +945,8 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
                   );
                 }
 
-                // Sort in memory by endedAt descending
+                // Sort removed due to createdAt deprecation
                 final sortedDocs = List<QueryDocumentSnapshot>.from(docs);
-                sortedDocs.sort((a, b) {
-                  final aTime = (a.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
-                  final bTime = (b.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
-                  if (aTime == null && bTime == null) return 0;
-                  if (aTime == null) return 1;
-                  if (bTime == null) return -1;
-                  return bTime.compareTo(aTime);
-                });
 
                 return ListView.builder(
                   itemCount: sortedDocs.length,
@@ -980,25 +954,12 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
                     final data = sortedDocs[index].data() as Map<String, dynamic>;
                     final expertId = data['expertId'] ?? 'Unknown';
                     final durationSeconds = data['durationSeconds'] ?? 0;
-                    final endedAt = data['createdAt'] as Timestamp?;
                     
                     final m = durationSeconds ~/ 60;
                     final s = durationSeconds % 60;
                     final durationStr = '${m}m ${s}s';
                     
-                    String formattedTime = '';
-                    if (endedAt != null) {
-                      final dt = endedAt.toDate();
-                      final hour = dt.hour > 12 ? dt.hour - 12 : (dt.hour == 0 ? 12 : dt.hour);
-                      final amPm = dt.hour >= 12 ? 'pm' : 'am';
-                      final minute = dt.minute.toString().padLeft(2, '0');
-                      final day = dt.day.toString().padLeft(2, '0');
-                      final month = dt.month.toString().padLeft(2, '0');
-                      final year = dt.year.toString().substring(2);
-                      formattedTime = '$day/$month/$year • $hour:$minute $amPm';
-                    } else {
-                      formattedTime = 'Just now';
-                    }
+                    String formattedTime = 'Just now';
 
                     return FutureBuilder<DocumentSnapshot>(
                       future: FirebaseFirestore.instance.collection('experts').doc(expertId).get(),
@@ -1244,26 +1205,14 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
                         ],
                       ),
                       const SizedBox(height: 4),
-                      // Age, city, language in one line
+                      // Age, language in one line
                       Text(
-                        '${expert.age}y · ${expert.city} · ${expert.languages}',
+                        '${expert.displayAge}y · ${expert.languages}',
                         style: const TextStyle(
                           fontSize: 11,
                           color: brandTextGrey,
                         ),
                         overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 6),
-                      // Bio
-                      Text(
-                        expert.bio,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: brandTextGrey.withOpacity(0.8),
-                          fontStyle: FontStyle.italic,
-                        ),
                       ),
                     ],
                   ),

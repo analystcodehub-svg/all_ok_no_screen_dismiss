@@ -156,14 +156,10 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
           'nickname': appState.nickname,
           'mobileNumber': appState.mobileNumber,
           'age': 2026 - appState.birthYear,
-          'city': 'Online',
           'pricePerMin': 5,
-          'bio': 'Talk to me about life, love, and everything in between.',
           'languages': appState.primaryLanguage,
           'rating': 4.8,
           'isOnline': value,
-          'categories': ['All', 'Relationship', 'Star'],
-          'lastUpdated': FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));
         debugPrint('[STATUS] Firestore updated experts/$expertId');
       } catch (e) {
@@ -344,10 +340,7 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
             language: appState.primaryLanguage,
           )
           .catchError((e) => debugPrint('Error: $e'));
-      FirebaseFirestore.instance
-          .collection('experts')
-          .doc(expertId)
-          .set({'lastUpdated': FieldValue.serverTimestamp()}, SetOptions(merge: true)).catchError((e) => null);
+
     }
     _incomingCallSubscription?.cancel();
     appState.reset();

@@ -78,15 +78,10 @@ class _AudioVerificationPageState extends State<AudioVerificationPage> with Sing
           'nickname': appState.nickname,
           'mobileNumber': appState.mobileNumber,
           'age': 2026 - appState.birthYear,
-          'city': 'Online',
           'pricePerMin': 5,
-          'bio': 'Talk to me about life, love, and everything in between.',
           'languages': appState.primaryLanguage,
           'rating': 4.8,
           'isOnline': false, // Offline by default when onboarded
-          'categories': ['All', 'Relationship', 'Star'],
-          'createdAt': FieldValue.serverTimestamp(),
-          'lastUpdated': FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));
       } catch (e) {
         debugPrint('Error saving expert profile at onboarding: $e');

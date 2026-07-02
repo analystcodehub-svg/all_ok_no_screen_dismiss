@@ -33,8 +33,6 @@ class ChatService {
       await newRoomRef.set({
         'participants': [user1, user2],
         'lastMessage': '',
-        'lastUpdated': FieldValue.serverTimestamp(),
-        'createdAt': FieldValue.serverTimestamp(),
       });
       return newRoomRef.id;
     } catch (e) {

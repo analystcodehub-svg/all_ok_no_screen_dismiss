@@ -39,7 +39,6 @@ class _ReferralScreenState extends State<ReferralScreen> {
           await FirebaseFirestore.instance.collection('experts').add({
             'nickname': nickname,
             'referralCode': code,
-            'createdAt': FieldValue.serverTimestamp(),
           });
         }
       } catch (_) {}

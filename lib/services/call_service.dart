@@ -153,7 +153,6 @@ class CallService {
         'callerId': callerId,
         'receiverId': expertId,
         'status': 'calling',
-        'createdAt': ServerValue.timestamp,
       });
 
       bool remoteDescriptionSet = false;

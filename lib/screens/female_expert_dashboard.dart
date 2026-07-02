@@ -101,13 +101,9 @@ class _FemaleExpertDashboardState extends State<FemaleExpertDashboard> with Sing
           'nickname': appState.nickname,
           'mobileNumber': appState.mobileNumber,
           'age': 2026 - appState.birthYear,
-          'city': 'Online',
           'pricePerMin': 5,
-          'bio': 'Talk to me about life, love, and everything in between.',
           'languages': appState.primaryLanguage,
           'isOnline': value,
-          'categories': ['All', 'Relationship', 'Star'],
-          'lastUpdated': FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));
       } catch (e) {
         debugPrint('Error updating online status: $e');
@@ -151,9 +147,7 @@ class _FemaleExpertDashboardState extends State<FemaleExpertDashboard> with Sing
       ).catchError((e) {
         debugPrint('Error removing expert from queue: $e');
       });
-      FirebaseFirestore.instance.collection('experts').doc(expertId).set({
-        'lastUpdated': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true)).catchError((e) => debugPrint('Error resetting online status: $e'));
+
     }
     _stopIncomingCallListener();
     appState.reset();

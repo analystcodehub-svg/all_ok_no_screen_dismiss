@@ -121,16 +121,7 @@ class _RecentSessionsScreenState extends State<RecentSessionsScreen> {
                      return true; // 'All'
                   }).toList();
 
-                  userCalls.sort((a, b) {
-                    final aData = a.data() as Map<String, dynamic>;
-                    final bData = b.data() as Map<String, dynamic>;
-                    final aTime = aData['createdAt'] as Timestamp?;
-                    final bTime = bData['createdAt'] as Timestamp?;
-                    if (aTime == null && bTime == null) return 0;
-                    if (aTime == null) return 1;
-                    if (bTime == null) return -1;
-                    return bTime.compareTo(aTime);
-                  });
+                  // Sort removed due to createdAt deprecation
 
                   if (userCalls.isEmpty) {
                     return _buildEmptyState();
@@ -147,11 +138,7 @@ class _RecentSessionsScreenState extends State<RecentSessionsScreen> {
                       final String? otherUserId = (isCaller ? data['receiverId'] : data['callerId'])?.toString();
                       final isMissed = data['status'] == 'missed';
                       
-                      String timeText = 'Unknown Time';
-                      if (data['createdAt'] != null) {
-                         final DateTime dt = (data['createdAt'] as Timestamp).toDate();
-                         timeText = '${dt.day}/${dt.month} ${dt.hour}:${dt.minute.toString().padLeft(2, '0')}';
-                      }
+                      String timeText = 'Just now';
 
                       // Determine duration text
                       String durationText = isMissed ? 'Missed Call' : 'Ended';

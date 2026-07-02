@@ -354,7 +354,6 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
         'receiverId': widget.receiverId,
         'durationSeconds': _duration,
         'status': status,
-        'createdAt': FieldValue.serverTimestamp(),
       });
     } catch (e) {
       debugPrint('Error saving call log: $e');
