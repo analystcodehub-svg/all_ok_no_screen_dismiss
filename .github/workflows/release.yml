@@ -39,6 +39,9 @@ jobs:
       - name: Build APK (Release for Physical Devices)
         run: flutter build apk --release --target-platform android-arm,android-arm64
 
+      - name: Build APK (Debug)
+        run: flutter build apk --debug
+
       - name: Build App Bundle (Release)
         run: flutter build appbundle --release
 
@@ -55,6 +58,7 @@ jobs:
           name: Release v${{ steps.get_version.outputs.version }}
           files: |
             build/app/outputs/flutter-apk/app-release.apk
+            build/app/outputs/flutter-apk/app-debug.apk
             build/app/outputs/bundle/release/app-release.aab
           draft: false
           prerelease: false

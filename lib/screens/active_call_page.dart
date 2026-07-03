@@ -245,6 +245,9 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
         _duration++;
       });
 
+      /*
+      // Commented out for testing purposes
+
       if (_duration == 1 && widget.isCaller && widget.isFirstFreeCall) {
         _markFreeCallUsed();
       }
@@ -283,6 +286,7 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
         }
         // Expert earnings are credited at call end in _hangupLocal()
       }
+      */
     });
   }
 
