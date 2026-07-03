@@ -400,7 +400,7 @@ async def main():
     
     print("[4/5] Establishing RTDB Queue Presence & Disconnect Protection...")
     status_ref = db.reference(f'status/{bot_uid}')
-    queue_ref = db.reference(f'queues/{lang}/{bot_uid}')
+    queue_ref = db.reference(f'queues/female_{lang.lower()}/{bot_uid}')
     
     # Secure cleanup if PC crashes (on_disconnect is only for Client SDKs, not Admin SDK)
     # We rely on the try...finally block below to clean up presence on exit.

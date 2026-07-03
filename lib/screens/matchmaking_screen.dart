@@ -124,10 +124,17 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> with SingleTicker
       }
     }
 
+    if (matchedExpertUid == null) {
+      _statusMessage.value = 'No experts available right now. Please try again.';
+      if (!_isDisposed && mounted) {
+        await Future.delayed(const Duration(seconds: 2));
+        if (mounted) Navigator.pop(context);
+      }
+      return;
+    }
+
     // WE HAVE A LOCKED EXPERT. Start Ringing process!
     _statusMessage.value = 'Ringing...';
-
-    if (matchedExpertUid == null) return;
 
 
     try {
