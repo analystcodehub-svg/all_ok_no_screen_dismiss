@@ -9,11 +9,11 @@ void main() async {
   final experts = await FirebaseFirestore.instance.collection('experts').get();
   for (var doc in experts.docs) {
     if (!doc.data().containsKey('createdAt')) {
-      print('Updating expert ${doc.id} with missing createdAt field');
+      debugPrint('Updating expert ${doc.id} with missing createdAt field');
       await doc.reference.update({
         'createdAt': FieldValue.serverTimestamp(),
       });
     }
   }
-  print('Done updating experts.');
+  debugPrint('Done updating experts.');
 }

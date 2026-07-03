@@ -4,7 +4,6 @@ import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'providers/app_state.dart';
 import 'theme/app_theme.dart';
-import 'screens/main_navigation.dart';
 import 'screens/active_call_page.dart';
 import 'screens/auth_wrapper.dart';
 import 'services/notification_service.dart';

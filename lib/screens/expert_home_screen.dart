@@ -8,8 +8,6 @@ import '../providers/app_state.dart';
 import '../theme/app_colors.dart';
 import '../services/call_service.dart';
 import '../services/matchmaking_service.dart';
-import 'active_call_page.dart';
-import 'phone_auth_screen.dart';
 import 'upgrade_program_screen.dart';
 import 'withdraw_screen.dart';
 import 'incoming_call_screen.dart';
@@ -71,6 +69,7 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
         } catch (_) {}
       }
       _fetchExpertStats();
+      if (!mounted) return;
       final appState = context.read<AppState>();
       setState(() => _isAudioOn = appState.isOnline);
       final String expertId = appState.uid;
@@ -328,29 +327,6 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
     }
   }
 
-  void _logout() {
-    final appState = context.read<AppState>();
-    final expertId = appState.uid;
-    if (expertId.isNotEmpty) {
-      _matchingService
-          .setExpertOnlineStatus(
-            expertId: expertId,
-            isOnline: false,
-            gender: 'female',
-            language: appState.primaryLanguage,
-          )
-          .catchError((e) => debugPrint('Error: $e'));
-
-    }
-    _incomingCallSubscription?.cancel();
-    appState.reset();
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (_) => const PhoneAuthScreen()),
-      (route) => false,
-    );
-  }
-
   // ── UI ─────────────────────────────────────────────────────────────────
 
   @override
@@ -505,26 +481,6 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
         ],
       ),
     );
-  }
-
-  Widget _buildHeaderStat(String value, String label, IconData icon) {
-    return Column(
-      children: [
-        Text(value,
-            style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                fontSize: 14)),
-        const SizedBox(height: 2),
-        Text(label,
-            style:
-                const TextStyle(color: Colors.white70, fontSize: 11)),
-      ],
-    );
-  }
-
-  Widget _buildVerticalDivider() {
-    return Container(width: 1, height: 32, color: Colors.white24);
   }
 
   // ── 2. Availability Card ───────────────────────────────────────────────
@@ -1089,7 +1045,7 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
                           Icon(
                             Icons.headset_mic_outlined,
                             size: 15,
-                            color: AppColors.primaryBlue.withOpacity(0.8),
+                            color: AppColors.primaryBlue.withValues(alpha: 0.8),
                           ),
                           const SizedBox(width: 6),
                           const Text(

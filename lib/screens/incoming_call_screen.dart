@@ -239,7 +239,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
                       color: const Color(0xFF1E293B),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.greenAccent.withOpacity(0.3),
+                          color: Colors.greenAccent.withValues(alpha: 0.3),
                           blurRadius: 24,
                           spreadRadius: 4,
                         ),
@@ -277,7 +277,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
                             shape: BoxShape.circle,
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.redAccent.withOpacity(0.4),
+                                color: Colors.redAccent.withValues(alpha: 0.4),
                                 blurRadius: 16,
                                 offset: const Offset(0, 4),
                               ),
@@ -316,7 +316,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
                             shape: BoxShape.circle,
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.greenAccent.withOpacity(0.4),
+                                color: Colors.greenAccent.withValues(alpha: 0.4),
                                 blurRadius: 16,
                                 offset: const Offset(0, 4),
                               ),

@@ -15,11 +15,11 @@ void main() async {
   for (final nickname in mockNicknames) {
     try {
       await collection.doc(nickname).delete();
-      print('Deleted $nickname from Firestore');
+      debugPrint('Deleted $nickname from Firestore');
     } catch (e) {
-      print('Error deleting $nickname: $e');
+      debugPrint('Error deleting $nickname: $e');
     }
   }
 
-  print('Cleanup complete!');
+  debugPrint('Cleanup complete!');
 }

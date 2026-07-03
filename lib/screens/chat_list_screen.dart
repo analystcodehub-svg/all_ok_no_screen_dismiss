@@ -41,13 +41,13 @@ class _ChatListScreenState extends State<ChatListScreen> {
             if (userData['nickname'] != null && userData['nickname'].toString().isNotEmpty) {
               displayName = userData['nickname'].toString();
             } else {
-              displayName = 'User ' + otherUser.substring(otherUser.length - 4);
+              displayName = 'User ${otherUser.substring(otherUser.length - 4)}';
             }
           } else {
-            displayName = 'User ' + otherUser.substring(otherUser.length - 4);
+            displayName = 'User ${otherUser.substring(otherUser.length - 4)}';
           }
         } catch (e) {
-          displayName = 'User ' + otherUser.substring(otherUser.length - 4);
+          displayName = 'User ${otherUser.substring(otherUser.length - 4)}';
         }
       }
       
@@ -232,7 +232,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
     
     String initials = name.length >= 2 ? name.substring(0, 2).toUpperCase() : name.toUpperCase();
     if (name.startsWith('User ') && name.length > 5) {
-      initials = 'U' + name.substring(name.length - 1);
+      initials = 'U${name.substring(name.length - 1)}';
     }
 
     return GestureDetector(
@@ -245,7 +245,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+              color: Colors.black.withValues(alpha: 0.05),
               blurRadius: 10,
               spreadRadius: 1,
               offset: const Offset(0, 4),

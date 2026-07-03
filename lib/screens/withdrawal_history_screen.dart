@@ -113,7 +113,7 @@ class WithdrawalHistoryScreen extends StatelessWidget {
         border: Border.all(color: Colors.grey.shade200, width: 1),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withValues(alpha: 0.03),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -195,14 +195,14 @@ class WithdrawalHistoryScreen extends StatelessWidget {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.support_agent_rounded, size: 16, color: AppColors.primaryBlue.withOpacity(0.8)),
+                          Icon(Icons.support_agent_rounded, size: 16, color: AppColors.primaryBlue.withValues(alpha: 0.8)),
                           const SizedBox(width: 6),
                           Text(
                             'Help',
                             style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
-                              color: AppColors.primaryBlue.withOpacity(0.8),
+                              color: AppColors.primaryBlue.withValues(alpha: 0.8),
                             ),
                           ),
                         ],

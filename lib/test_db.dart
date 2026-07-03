@@ -6,8 +6,8 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
   final snapshot = await FirebaseFirestore.instance.collection('experts').get();
-  print('Total experts: ${snapshot.docs.length}');
+  debugPrint('Total experts: ${snapshot.docs.length}');
   for (var doc in snapshot.docs) {
-    print('${doc.id}: isOnline=${doc.data()['isOnline']}, nickname=${doc.data()['nickname']}');
+    debugPrint('${doc.id}: isOnline=${doc.data()['isOnline']}, nickname=${doc.data()['nickname']}');
   }
 }

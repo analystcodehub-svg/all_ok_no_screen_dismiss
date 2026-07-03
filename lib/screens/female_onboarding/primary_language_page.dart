@@ -105,8 +105,8 @@ class _PrimaryLanguagePageState extends State<PrimaryLanguagePage> {
                               fontSize: 100,
                               fontWeight: FontWeight.bold,
                               color: isSelected
-                                  ? AppTheme.primaryBlue.withOpacity(0.08)
-                                  : Colors.black.withOpacity(0.03),
+                                  ? AppTheme.primaryBlue.withValues(alpha: 0.08)
+                                  : Colors.black.withValues(alpha: 0.03),
                             ),
                           ),
                         ),
@@ -138,17 +138,19 @@ class _PrimaryLanguagePageState extends State<PrimaryLanguagePage> {
                                   ),
                                 ],
                               ),
-                              Radio<String>(
+                              Radio<String>.adaptive(
                                 value: name,
-                                groupValue: _selectedLang,
-                                activeColor: AppTheme.primaryBlue,
-                                onChanged: (value) {
-                                  if (value != null) {
-                                    setState(() {
-                                      _selectedLang = value;
-                                    });
-                                  }
-                                },
+                                  // ignore: deprecated_member_use
+                                  groupValue: _selectedLang,
+                                  activeColor: AppTheme.primaryBlue,
+                                  // ignore: deprecated_member_use
+                                  onChanged: (value) {
+                                    if (value != null) {
+                                      setState(() {
+                                        _selectedLang = value;
+                                      });
+                                    }
+                                  },
                               ),
                             ],
                           ),

@@ -112,7 +112,7 @@ class _KycSuccessScreenState extends State<KycSuccessScreen>
                           color: Colors.green.shade500,
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.green.withOpacity(0.35),
+                              color: Colors.green.withValues(alpha: 0.35),
                               blurRadius: 20,
                               spreadRadius: 2,
                               offset: const Offset(0, 6),
@@ -245,7 +245,7 @@ class _KycSuccessScreenState extends State<KycSuccessScreen>
         Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
+            color: color.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(10),
           ),
           child: Icon(icon, color: color, size: 18),

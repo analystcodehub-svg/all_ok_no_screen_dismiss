@@ -6,11 +6,11 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
   
-  print('=== EXPERTS ===');
+  debugPrint('=== EXPERTS ===');
   final experts = await FirebaseFirestore.instance.collection('experts').get();
   for (var doc in experts.docs) {
     if (doc.id == 'gulabo' || doc.id == 'lovely') {
-       print('Expert: ${doc.id} -> ${doc.data()}');
+       debugPrint('Expert: ${doc.id} -> ${doc.data()}');
     }
   }
 }

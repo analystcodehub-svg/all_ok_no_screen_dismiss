@@ -7,6 +7,6 @@ void main() async {
   await Firebase.initializeApp();
   final snapshot = await FirebaseFirestore.instance.collection('experts').get();
   for (var doc in snapshot.docs) {
-    print(doc.data()['nickname']);
+    debugPrint(doc.data()['nickname']);
   }
 }

@@ -5,8 +5,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
 import 'gender_selection_screen.dart';
-import 'male_dashboard_screen.dart';
-import 'female_expert_dashboard.dart'; // Add this for experts if they exist
 import 'main_navigation.dart';
 
 class OtpVerificationScreen extends StatefulWidget {
@@ -67,7 +65,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
         if (mounted) {
           if (userDoc.exists) {
             // Profile exists, load gender and route appropriately
-            final data = userDoc.data() as Map<String, dynamic>? ?? {};
+            final data = userDoc.data() ?? {};
             final gender = (data['gender'] ?? 'male').toString();
 
             // Load app state

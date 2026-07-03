@@ -412,7 +412,7 @@ class _RecentSessionsScreenState extends State<RecentSessionsScreen> {
           Column(
             children: [
               GestureDetector(
-                onTap: () => _triggerCall(context, otherUserId ?? '', !isCaller),
+                onTap: () => _triggerCall(context, otherUserId, !isCaller),
                 child: Container(
                   width: 48,
                   height: 48,

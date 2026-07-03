@@ -205,14 +205,6 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
     }
   }
 
-  void _markFreeCallUsed() async {
-    final appState = context.read<AppState>();
-    final mobile = appState.mobileNumber;
-    appState.setHasUsedFreeCall(true);
-    await FirebaseFirestore.instance.collection('users').doc(mobile).set({
-      'hasUsedFreeCall': true,
-    }, SetOptions(merge: true));
-  }
 
   Future<void> _resolveExpertTier() async {
     if (_tierResolved) return;
@@ -520,7 +512,7 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
             height: 56,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: isActive ? Colors.white : Colors.white.withOpacity(0.08),
+              color: isActive ? Colors.white : Colors.white.withValues(alpha: 0.08),
             ),
             child: Icon(
               icon,

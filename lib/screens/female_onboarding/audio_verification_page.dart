@@ -232,7 +232,7 @@ class _AudioVerificationPageState extends State<AudioVerificationPage> with Sing
                           boxShadow: [
                             BoxShadow(
                               color: (_isRecording ? Colors.redAccent : AppTheme.primaryBlue)
-                                  .withOpacity(0.4),
+                                  .withValues(alpha: 0.4),
                               blurRadius: 20,
                               spreadRadius: 2,
                             ),
@@ -279,13 +279,13 @@ class _AudioVerificationPageState extends State<AudioVerificationPage> with Sing
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.shield_outlined, size: 16, color: AppTheme.primaryBlue.withOpacity(0.6)),
+                  Icon(Icons.shield_outlined, size: 16, color: AppTheme.primaryBlue.withValues(alpha: 0.6)),
                   const SizedBox(width: 6),
                   Text(
                     '100% Safe and Private',
                     style: TextStyle(
                       fontSize: 12,
-                      color: AppTheme.textGrey.withOpacity(0.8),
+                      color: AppTheme.textGrey.withValues(alpha: 0.8),
                     ),
                   ),
                 ],

@@ -4,7 +4,6 @@ import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
 import 'female_onboarding/female_onboarding_parent.dart';
 import 'male_onboarding/male_onboarding_parent.dart';
-import 'male_dashboard_screen.dart';
 
 class GenderSelectionScreen extends StatefulWidget {
   const GenderSelectionScreen({super.key});
@@ -169,7 +168,7 @@ class _GenderSelectionScreenState extends State<GenderSelectionScreen> {
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.04),
+                    color: Colors.black.withValues(alpha: 0.04),
                     blurRadius: 10,
                     offset: const Offset(0, 4),
                   ),

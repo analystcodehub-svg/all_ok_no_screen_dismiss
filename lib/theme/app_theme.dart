@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'app_colors.dart';
-
 class AppTheme {
   // Legacy colors (kept for existing screens to not break them, but pink is removed)
   static const Color primaryBlue = Color(0xFF3B5998);
@@ -20,11 +18,9 @@ class AppTheme {
       colorScheme: ColorScheme.light(
         primary: primaryBlue,
         secondary: primaryBlue,
-        background: bgWhite,
         surface: bgWhite,
         onPrimary: Colors.white,
         onSecondary: Colors.white,
-        onBackground: textBlack,
         onSurface: textBlack,
       ),
       appBarTheme: const AppBarTheme(

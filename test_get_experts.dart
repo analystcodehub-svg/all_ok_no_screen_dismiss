@@ -7,6 +7,6 @@ void main() async {
   await Firebase.initializeApp();
   final snap = await FirebaseFirestore.instance.collection('experts').get();
   for (var doc in snap.docs) {
-    print("${doc.id} -> ${doc.data()}");
+    debugPrint("${doc.id} -> ${doc.data()}");
   }
 }

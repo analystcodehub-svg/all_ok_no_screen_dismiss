@@ -7,11 +7,11 @@ Future<void> main() async {
   await Firebase.initializeApp();
   
   final snapshot = await FirebaseFirestore.instance.collection('experts').get();
-  print('Total experts: ${snapshot.docs.length}');
+  debugPrint('Total experts: ${snapshot.docs.length}');
   for (var doc in snapshot.docs) {
-    print('Expert: ${doc.id}');
-    print('  nickname: ${doc.data()['nickname']}');
-    print('  isOnline: ${doc.data()['isOnline']}');
-    print('  categories: ${doc.data()['categories']}');
+    debugPrint('Expert: ${doc.id}');
+    debugPrint('  nickname: ${doc.data()['nickname']}');
+    debugPrint('  isOnline: ${doc.data()['isOnline']}');
+    debugPrint('  categories: ${doc.data()['categories']}');
   }
 }

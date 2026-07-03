@@ -1,13 +1,11 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
-import 'otp_verification_screen.dart';
 import 'main_navigation.dart';
 import 'gender_selection_screen.dart';
 
@@ -29,9 +27,6 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
   bool _referralChecking = false;
   bool _isLoading = false;
   String? _referralError;
-  String? _referredByCode;
-
-  static const platform = MethodChannel('com.sajnire.app/auth');
 
   final List<Map<String, dynamic>> _bannerSlides = [
     {
@@ -89,7 +84,6 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
       setState(() {
         _referralValid = false;
         _referralError = null;
-        _referredByCode = null;
       });
       return;
     }
@@ -108,13 +102,11 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
         setState(() {
           _referralValid = true;
           _referralError = null;
-          _referredByCode = code.trim().toUpperCase();
         });
       } else {
         setState(() {
           _referralValid = false;
           _referralError = 'Invalid referral code';
-          _referredByCode = null;
         });
       }
     } catch (_) {
@@ -145,7 +137,7 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
         
         final userDoc = await FirebaseFirestore.instance.collection('users').doc(phone).get();
         if (userDoc.exists) {
-          final data = userDoc.data() as Map<String, dynamic>? ?? {};
+          final data = userDoc.data() ?? {};
           final gender = (data['gender'] ?? 'male').toString();
           appState.setSelectedGender(gender == 'male' ? 'Male' : 'Female');
           appState.setNickname((data['nickname'] ?? '').toString());
@@ -463,7 +455,6 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
                                           setState(() {
                                             _referralValid = false;
                                             _referralError = null;
-                                            _referredByCode = null;
                                           });
                                         }
                                       },

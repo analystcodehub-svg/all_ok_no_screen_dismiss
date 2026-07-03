@@ -68,7 +68,7 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> with SingleTicker
 
   Future<void> _startMatchmakingProcess() async {
     await Future.delayed(const Duration(milliseconds: 600));
-    if (_isDisposed) return;
+    if (_isDisposed || !mounted) return;
 
     final appState = context.read<AppState>();
     final String callerUid = appState.mobileNumber.isNotEmpty 
@@ -116,7 +116,9 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> with SingleTicker
         _statusMessage.value = 'No experts available right now. Please try again.';
         if (!_isDisposed && mounted) {
           await Future.delayed(const Duration(seconds: 2));
-          Navigator.pop(context);
+          if (mounted) {
+            Navigator.pop(context);
+          }
         }
         return;
       }
@@ -125,8 +127,10 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> with SingleTicker
     // WE HAVE A LOCKED EXPERT. Start Ringing process!
     _statusMessage.value = 'Ringing...';
 
+    if (matchedExpertUid == null) return;
+
+
     try {
-      // 1. Generate WebRTC Offer and start call in RTDB
       final callRoomId = await _callService.startCall(
         expertId: matchedExpertUid,
         callerId: callerUid,
@@ -199,7 +203,7 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> with SingleTicker
             MaterialPageRoute(
               builder: (context) => ActiveCallPage(
                 callRoomId: callRoomId,
-                receiverId: matchedExpertUid!, // We know it's not null here
+                receiverId: matchedExpertUid ?? '', // We know it's not null here
                 callerId: callerUid,
                 nickname: nickname,
                 pricePerMin: pricePerMin,
@@ -293,7 +297,7 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> with SingleTicker
                       color: const Color(0xFF1E293B), // Slate 800
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFFF43F5E).withOpacity(0.5),
+                          color: const Color(0xFFF43F5E).withValues(alpha: 0.5),
                           blurRadius: 24,
                           spreadRadius: 4,
                         ),
@@ -362,7 +366,7 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> with SingleTicker
                 margin: const EdgeInsets.only(bottom: 40),
                 padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.1),
+                  color: Colors.white.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(30),
                 ),
                 child: const Text(

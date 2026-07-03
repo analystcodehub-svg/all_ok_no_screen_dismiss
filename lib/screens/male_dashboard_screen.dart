@@ -8,7 +8,6 @@ import 'package:google_fonts/google_fonts.dart';
 import '../providers/app_state.dart';
 import '../models/female_expert.dart';
 import 'phone_auth_screen.dart';
-import 'active_call_page.dart';
 import 'wallet_recharge_screen.dart';
 import 'matchmaking_screen.dart';
 import 'incoming_call_screen.dart';
@@ -36,14 +35,13 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
   // Modern Color Palette Constants
   static const Color brandBg = Color(0xFFF8FAFC); // Slate 50
   static const Color brandPrimary = Color(0xFF4F46E5); // Indigo 600
-  static const Color brandAccent = Color(0xFFF43F5E); // Rose 500
   static const Color brandTextDark = Color(0xFF0F172A); // Slate 900
   static const Color brandTextGrey = Color(0xFF64748B); // Slate 500
   static const Color brandCardBg = Colors.white;
 
   // Pagination State
   final int _expertsLimit = 40;
-  List<FemaleExpert> _liveExperts = [];
+  final List<FemaleExpert> _liveExperts = [];
   DocumentSnapshot? _lastExpertDoc;
   bool _isFetchingExperts = false;
   bool _hasMoreExperts = true;
@@ -69,6 +67,8 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
       } else {
         debugPrint('[MALE_DASH] already signed in uid=${FirebaseAuth.instance.currentUser?.uid}');
       }
+
+      if (!mounted) return;
 
       _setupMalePresenceAndCallListener();
       _fetchInitialWalletBalance();
@@ -167,7 +167,7 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
       List<FemaleExpert> newExperts = [];
       for (var doc in snapshot.docs) {
         try {
-          final data = doc.data() as Map<String, dynamic>;
+          final data = doc.data();
           String nickname = data['nickname']?.toString() ?? '';
           if (nickname.trim().isEmpty) nickname = doc.id;
 
@@ -634,7 +634,7 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
                   borderRadius: BorderRadius.circular(20),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.15),
+                      color: Colors.black.withValues(alpha: 0.15),
                       blurRadius: 16,
                       offset: const Offset(0, 6),
                     ),
@@ -646,7 +646,7 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF59E0B).withOpacity(0.15),
+                        color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(16),
                       ),
                       child: const Text('💰', style: TextStyle(fontSize: 26)),
@@ -720,7 +720,7 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
                     borderRadius: BorderRadius.circular(24),
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(0xFF7C3AED).withOpacity(0.35),
+                        color: const Color(0xFF7C3AED).withValues(alpha: 0.35),
                         blurRadius: 20,
                         offset: const Offset(0, 8),
                       ),
@@ -732,7 +732,7 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
                       Container(
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
+                          color: Colors.white.withValues(alpha: 0.2),
                           shape: BoxShape.circle,
                         ),
                         child: const Text('🎁', style: TextStyle(fontSize: 22)),
@@ -768,7 +768,7 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
                       Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
+                          color: Colors.white.withValues(alpha: 0.2),
                           shape: BoxShape.circle,
                         ),
                         child: const Icon(
@@ -903,7 +903,7 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
                     _isOnlineSwitch = val;
                   });
                 },
-                activeColor: Colors.white,
+                activeThumbColor: Colors.white,
                 activeTrackColor: brandPrimary,
                 inactiveThumbColor: Colors.white,
                 inactiveTrackColor: Colors.grey.shade300,
@@ -1095,7 +1095,7 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 3),
           ),

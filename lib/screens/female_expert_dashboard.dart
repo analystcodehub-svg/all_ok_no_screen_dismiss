@@ -5,7 +5,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
 import 'phone_auth_screen.dart';
-import 'active_call_page.dart';
 import 'incoming_call_screen.dart';
 import '../services/call_service.dart';
 import '../services/matchmaking_service.dart';
@@ -197,7 +196,7 @@ class _FemaleExpertDashboardState extends State<FemaleExpertDashboard> with Sing
                             height: 170 + (_pulseController.value * 30),
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: Colors.green.withOpacity(0.2 * (1 - _pulseController.value)),
+                              color: Colors.green.withValues(alpha: 0.2 * (1 - _pulseController.value)),
                             ),
                           );
                         },
@@ -298,10 +297,10 @@ class _FemaleExpertDashboardState extends State<FemaleExpertDashboard> with Sing
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                     decoration: BoxDecoration(
-                      color: isOnline ? Colors.green.withOpacity(0.08) : AppTheme.inputBg,
+                      color: isOnline ? Colors.green.withValues(alpha: 0.08) : AppTheme.inputBg,
                       borderRadius: BorderRadius.circular(15),
                       border: Border.all(
-                        color: isOnline ? Colors.green.withOpacity(0.3) : AppTheme.borderGrey,
+                        color: isOnline ? Colors.green.withValues(alpha: 0.3) : AppTheme.borderGrey,
                         width: 1.0,
                       ),
                     ),
@@ -318,9 +317,9 @@ class _FemaleExpertDashboardState extends State<FemaleExpertDashboard> with Sing
                         ),
                         Switch(
                           value: isOnline,
-                          activeColor: Colors.green,
+                          activeThumbColor: Colors.green,
                           inactiveThumbColor: Colors.grey,
-                          inactiveTrackColor: Colors.grey.withOpacity(0.2),
+                          inactiveTrackColor: Colors.grey.withValues(alpha: 0.2),
                           onChanged: (bool value) {
                             _updateOnlineStatus(value);
                           },

@@ -47,6 +47,7 @@ class _ReferralScreenState extends State<ReferralScreen> {
 
   Future<void> _copyCode(String code) async {
     await Clipboard.setData(ClipboardData(text: code));
+    if (!mounted) return;
     setState(() => _codeCopied = true);
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
@@ -133,7 +134,7 @@ class _ReferralScreenState extends State<ReferralScreen> {
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 13,
-                      color: Colors.white.withOpacity(0.85),
+                      color: Colors.white.withValues(alpha: 0.85),
                       height: 1.5,
                     ),
                   ),
@@ -310,7 +311,7 @@ class _ReferralScreenState extends State<ReferralScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 10,
             offset: const Offset(0, 3),
           ),
@@ -321,7 +322,7 @@ class _ReferralScreenState extends State<ReferralScreen> {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
+              color: color.withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
             child: Icon(icon, color: color, size: 22),
@@ -410,9 +411,7 @@ class _ReferralScreenState extends State<ReferralScreen> {
         });
 
         return Column(
-          children: sortedDocs.asMap().entries.map((entry) {
-            final idx = entry.key;
-            final doc = entry.value;
+          children: sortedDocs.map((doc) {
             final data = doc.data() as Map<String, dynamic>;
             final name = data['referredName'] ?? 'User';
             final phone = data['referredPhone'] ?? '';
@@ -435,7 +434,7 @@ class _ReferralScreenState extends State<ReferralScreen> {
                 borderRadius: BorderRadius.circular(14),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.03),
+                    color: Colors.black.withValues(alpha: 0.03),
                     blurRadius: 8,
                     offset: const Offset(0, 2),
                   ),

@@ -53,8 +53,6 @@ class _WalletRechargeScreenState extends State<WalletRechargeScreen> implements 
   // PayU Credentials — LIVE / Production
   final String _merchantKey = "8e0HBa";
   final String _merchantSalt = "vohCOn4XuJr0AHh2lojBj1WLv6euGVka";
-  final String _clientId = "16426f3965c087fbc3004957ece965dc2a00a5489bc52443edeb8a26c13f40d3";
-  final String _clientSecret = "47b9df9c14b7ac5ff94110056c2a0e19986340cbd249d5f2b443b26e56c85d7f";
   final String _environment = "0"; // "0" for Production, "1" for Test
 
   @override
@@ -295,7 +293,7 @@ class _WalletRechargeScreenState extends State<WalletRechargeScreen> implements 
                       borderRadius: BorderRadius.circular(20),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.02),
+                          color: Colors.black.withValues(alpha: 0.02),
                           blurRadius: 10,
                           offset: const Offset(0, 4),
                         ),
@@ -536,7 +534,7 @@ class _WalletRechargeScreenState extends State<WalletRechargeScreen> implements 
                   if (_showConfettiDialog)
                     Positioned.fill(
                       child: Container(
-                        color: Colors.black.withOpacity(0.5),
+                        color: Colors.black.withValues(alpha: 0.5),
                         child: Center(
                           child: Container(
                             width: 280,
@@ -708,7 +706,7 @@ class _WalletRechargeScreenState extends State<WalletRechargeScreen> implements 
                 borderRadius: BorderRadius.circular(24),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.02),
+                    color: Colors.black.withValues(alpha: 0.02),
                     blurRadius: 12,
                     offset: const Offset(0, 4),
                   ),
@@ -860,7 +858,7 @@ class _WalletRechargeScreenState extends State<WalletRechargeScreen> implements 
               color: Colors.white,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.04),
+                  color: Colors.black.withValues(alpha: 0.04),
                   blurRadius: 10,
                   offset: const Offset(0, -4),
                 ),

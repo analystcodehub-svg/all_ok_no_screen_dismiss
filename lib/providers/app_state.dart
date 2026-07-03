@@ -14,7 +14,7 @@ class AppState extends ChangeNotifier {
   String _nickname = '';
   String get nickname => _nickname;
 
-  String _uid = '';
+  final String _uid = '';
   String get uid {
     if (_uid.isNotEmpty) return _uid;
     return FirebaseAuth.instance.currentUser?.uid ?? '';
