@@ -20,8 +20,9 @@ except ImportError:
     print("Please install 'av' package: pip install av")
     exit(1)
 
-# Global variable to track the current person we are chatting with
+# Global variables
 active_caller_id = None
+pending_call_data = None
 
 # ==========================================
 # 1. LOCAL SQLITE STORAGE
@@ -156,6 +157,7 @@ def process_single_message(msg_id, msg_data, bot_uid):
 # 4. WEBRTC P2P SIGNALING
 # ==========================================
 async def handle_webrtc_offer(pc, offer_dict, caller_uid, bot_uid, room_id):
+    
     offer = RTCSessionDescription(sdp=offer_dict['sdp'], type=offer_dict['type'])
     await pc.setRemoteDescription(offer)
     
@@ -180,8 +182,7 @@ async def handle_webrtc_offer(pc, offer_dict, caller_uid, bot_uid, room_id):
         })
         
     await loop.run_in_executor(None, send_answer)
-    if loop:
-        loop.call_soon_threadsafe(lambda: print(f"\n[WebRTC] Answer sent for call {room_id} from {caller_uid}\n> ", end="", flush=True))
+    # The terminal print is now handled by the animation function
 
 def on_call_event(event, bot_uid):
     """
@@ -214,12 +215,18 @@ def on_call_event(event, bot_uid):
             if pc.iceConnectionState in ["failed", "closed"]:
                 pcs.discard(pc)
                 
-        # Schedule the async WebRTC negotiation
+        global pending_call_data
+        pending_call_data = {
+            'pc': pc,
+            'offer_dict': offer_dict,
+            'caller_uid': caller_uid,
+            'bot_uid': bot_uid,
+            'room_id': room_id
+        }
+        
+        # Show prompt to press Enter
         if loop:
-            asyncio.run_coroutine_threadsafe(
-                handle_webrtc_offer(pc, offer_dict, caller_uid, bot_uid, room_id), 
-                loop
-            )
+            loop.call_soon_threadsafe(lambda: print(f"\n\a\033[93m=========================================\n 📞 INCOMING CALL FROM: {caller_uid}\n ⏳ Press ENTER to accept the call...\n=========================================\033[0m\n> ", end="", flush=True))
 
     if path == '/':
         for room_id, call_data in data.items():
@@ -236,7 +243,7 @@ def on_call_event(event, bot_uid):
 # 5. ASYNC CHAT LOOP (OPERATOR INPUT)
 # ==========================================
 async def chat_loop(bot_uid):
-    global active_caller_id
+    global active_caller_id, pending_call_data
     print(f"\n[{bot_uid}] Ready for chat.")
     print("When you receive a message, you can just type your reply directly!")
     print("To switch user manually, use:  caller_id:message")
@@ -247,6 +254,16 @@ async def chat_loop(bot_uid):
             # Dynamic prompt based on active caller
             prompt = f"[{active_caller_id}]> " if active_caller_id else "> "
             line = await ainput(prompt)
+            
+            if pending_call_data and not line.strip():
+                print("\033[92m✅ Call Accepted! Audio stream live.\033[0m")
+                asyncio.run_coroutine_threadsafe(
+                    handle_webrtc_offer(**pending_call_data), 
+                    loop
+                )
+                pending_call_data = None
+                continue
+
             if not line:
                 continue
                 
@@ -315,7 +332,7 @@ async def main():
     parser.add_argument("--lang", help="Optional: Language (e.g. Hindi, English)")
     parser.add_argument("--age", type=int, help="Optional: Age")
     parser.add_argument("--cert", default="serviceAccountKey.json", help="Path to Firebase Service Account JSON")
-    parser.add_argument("--db-url", required=True, help="Firebase RTDB URL")
+    parser.add_argument("--db-url", default="https://zegochat-c44b0.asia-southeast1.firebasedatabase.app", help="Firebase RTDB URL")
     
     args = parser.parse_args()
     bot_uid = args.uid

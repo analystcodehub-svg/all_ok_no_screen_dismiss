@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class AppState extends ChangeNotifier {
   // Authentication state
@@ -12,6 +13,12 @@ class AppState extends ChangeNotifier {
   // Female Onboarding flow state
   String _nickname = '';
   String get nickname => _nickname;
+
+  String _uid = '';
+  String get uid {
+    if (_uid.isNotEmpty) return _uid;
+    return FirebaseAuth.instance.currentUser?.uid ?? '';
+  }
 
   int _birthYear = 2001;
   int get birthYear => _birthYear;

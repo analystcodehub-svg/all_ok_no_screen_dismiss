@@ -52,7 +52,7 @@ class _KycBankDetailsScreenState extends State<KycBankDetailsScreen> {
 
     setState(() => _isLoading = true);
     try {
-      final nickname = context.read<AppState>().nickname.toLowerCase();
+      final nickname = context.read<AppState>().uid;
       await FirebaseFirestore.instance.collection('kyc_requests').add({
         'expertId': nickname,
         'panName': widget.panName,

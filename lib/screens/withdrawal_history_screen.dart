@@ -10,7 +10,7 @@ class WithdrawalHistoryScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final expertId = context.read<AppState>().nickname.toLowerCase();
+    final expertId = context.read<AppState>().uid;
 
     return Scaffold(
       backgroundColor: AppColors.bgLight,

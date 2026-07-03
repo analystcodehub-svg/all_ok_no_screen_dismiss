@@ -73,7 +73,7 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
       _fetchExpertStats();
       final appState = context.read<AppState>();
       setState(() => _isAudioOn = appState.isOnline);
-      final String expertId = appState.nickname.toLowerCase();
+      final String expertId = appState.uid;
       if (appState.isOnline) {
         _startIncomingCallListener(expertId);
       }
@@ -100,7 +100,7 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
     if (!mounted) return;
     setState(() => _isLoadingStats = true);
     final appState = context.read<AppState>();
-    final expertId = appState.nickname.toLowerCase();
+    final expertId = appState.uid;
     if (expertId.isEmpty) {
       setState(() => _isLoadingStats = false);
       return;
@@ -138,7 +138,7 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
     appState.setOnlineStatus(value);
     setState(() => _isAudioOn = value);
 
-    final String expertId = appState.nickname.toLowerCase();
+    final String expertId = appState.uid;
     debugPrint('[STATUS] nickname=${appState.nickname} expertId=$expertId mobileNumber=${appState.mobileNumber} value=$value');
     if (expertId.isNotEmpty) {
       try {
@@ -209,7 +209,7 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
       return;
     }
 
-    final nickname = context.read<AppState>().nickname.toLowerCase();
+    final nickname = context.read<AppState>().uid;
 
     // Query KYC status from Firestore
     bool kycApproved = false;
@@ -230,7 +230,7 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
         for (final doc in all.docs) {
           final d = doc.data();
           final holder = (d['accountHolder'] ?? '').toString().toLowerCase();
-          final eid = (d['expertId'] ?? '').toString().toLowerCase();
+          final eid = (d['expertId'] ?? '').toString();
           if (holder == nickname || eid == nickname) {
             snap = await FirebaseFirestore.instance
                 .collection('kyc_requests')
@@ -301,7 +301,7 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
   }
 
   Future<void> _processWithdrawal() async {
-    final expertId = context.read<AppState>().nickname.toLowerCase();
+    final expertId = context.read<AppState>().uid;
     if (expertId.isEmpty) return;
     try {
       await FirebaseFirestore.instance.collection('withdrawal_requests').add({
@@ -330,7 +330,7 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
 
   void _logout() {
     final appState = context.read<AppState>();
-    final expertId = appState.nickname.toLowerCase();
+    final expertId = appState.uid;
     if (expertId.isNotEmpty) {
       _matchingService
           .setExpertOnlineStatus(
@@ -421,7 +421,7 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
                     ),
                   ),
                   child: LocalAvatarWidget(
-                    uid: appState.nickname.toLowerCase(),
+                    uid: appState.uid,
                     role: 'expert',
                     radius: 28,
                   ),
@@ -659,7 +659,7 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
 
   // ── 3. Stats Card ──────────────────────────────────────────────────────
   Widget _buildStatsCard() {
-    final String expertId = context.read<AppState>().nickname.toLowerCase();
+    final String expertId = context.read<AppState>().uid;
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(

@@ -68,7 +68,7 @@ class _AudioVerificationPageState extends State<AudioVerificationPage> with Sing
     final appState = context.read<AppState>();
     appState.setAudioVerified(true);
 
-    final String expertId = appState.nickname.toLowerCase();
+    final String expertId = appState.uid;
     if (expertId.isNotEmpty) {
       try {
         await FirebaseFirestore.instance

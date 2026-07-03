@@ -18,7 +18,7 @@ class ProfileScreen extends StatelessWidget {
       body: Consumer<AppState>(
         builder: (context, appState, child) {
           final nickname = appState.nickname.isNotEmpty ? appState.nickname : 'User';
-          final uid = appState.selectedGender == 'Female' ? appState.nickname.toLowerCase() : appState.mobileNumber;
+          final uid = appState.selectedGender == 'Female' ? appState.uid : appState.mobileNumber;
           final role = appState.selectedGender == 'Female' ? 'expert' : 'user';
               
           return SingleChildScrollView(
@@ -120,7 +120,7 @@ class ProfileScreen extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildKycStatusSection(context, appState.nickname),
+                      _buildKycStatusSection(context, uid, appState.nickname),
                       const SizedBox(height: 12),
                       _buildReferralTile(context),
                       const SizedBox(height: 24),
@@ -366,12 +366,11 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  // Reads KYC status from Firestore and shows the correct card
-  Widget _buildKycStatusSection(BuildContext context, String nickname) {
+  Widget _buildKycStatusSection(BuildContext context, String uid, String nickname) {
     // Query by expertId (new submissions) — no orderBy to avoid index requirement
     final stream = FirebaseFirestore.instance
         .collection('kyc_requests')
-        .where('expertId', isEqualTo: nickname.toLowerCase())
+        .where('expertId', isEqualTo: uid)
         .limit(1)
         .snapshots();
 
@@ -380,7 +379,7 @@ class ProfileScreen extends StatelessWidget {
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           // Fallback: query by accountHolder name for old documents
-          return _buildKycByAccountHolder(context, nickname);
+          return _buildKycByAccountHolder(context, nickname, uid);
         }
         if (snapshot.connectionState == ConnectionState.waiting) {
           return _buildKycButton(context);
@@ -389,7 +388,7 @@ class ProfileScreen extends StatelessWidget {
         final docs = snapshot.data?.docs ?? [];
         if (docs.isEmpty) {
           // No doc with expertId — try accountHolder for pre-fix submissions
-          return _buildKycByAccountHolder(context, nickname);
+          return _buildKycByAccountHolder(context, nickname, uid);
         }
 
         final data = docs.first.data() as Map<String, dynamic>;
@@ -399,7 +398,7 @@ class ProfileScreen extends StatelessWidget {
   }
 
   // Fallback query for documents submitted before expertId was added
-  Widget _buildKycByAccountHolder(BuildContext context, String nickname) {
+  Widget _buildKycByAccountHolder(BuildContext context, String nickname, String uid) {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('kyc_requests')
@@ -419,10 +418,10 @@ class ProfileScreen extends StatelessWidget {
           final d = doc.data() as Map<String, dynamic>;
           final holder = (d['accountHolder'] ?? '').toString().toLowerCase();
           final pan = (d['panName'] ?? '').toString().toLowerCase();
-          final eid = (d['expertId'] ?? '').toString().toLowerCase();
+          final eid = (d['expertId'] ?? '').toString();
           if (holder == nickname.toLowerCase() ||
               pan == nickname.toLowerCase() ||
-              eid == nickname.toLowerCase()) {
+              eid == uid) {
             match = doc;
             break;
           }

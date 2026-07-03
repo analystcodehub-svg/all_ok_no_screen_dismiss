@@ -54,11 +54,11 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
       final appState = context.read<AppState>();
       final String currentUserId;
       if (appState.selectedGender.toLowerCase() == 'female') {
-        currentUserId = appState.nickname.toLowerCase();
+        currentUserId = appState.uid;
       } else {
         currentUserId = appState.mobileNumber.isNotEmpty 
             ? appState.mobileNumber 
-            : appState.nickname.toLowerCase();
+            : appState.uid;
       }
       
       if (currentUserId.isNotEmpty) {
@@ -120,7 +120,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
     final appState = context.read<AppState>();
     final currentUserId = appState.mobileNumber.isNotEmpty 
         ? appState.mobileNumber 
-        : appState.nickname.toLowerCase();
+        : appState.uid;
     
     Navigator.pushReplacement(
       context,

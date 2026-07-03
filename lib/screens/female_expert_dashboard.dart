@@ -39,7 +39,7 @@ class _FemaleExpertDashboardState extends State<FemaleExpertDashboard> with Sing
       final appState = context.read<AppState>();
       _loadEarningsFromFirestore(appState);
       if (appState.isOnline) {
-        _startIncomingCallListener(appState.nickname.toLowerCase());
+        _startIncomingCallListener(appState.uid);
       }
     });
   }
@@ -88,7 +88,7 @@ class _FemaleExpertDashboardState extends State<FemaleExpertDashboard> with Sing
     final appState = context.read<AppState>();
     appState.setOnlineStatus(value);
     
-    final String expertId = appState.nickname.toLowerCase();
+    final String expertId = appState.uid;
     if (expertId.isNotEmpty) {
       try {
         await _matchingService.setExpertOnlineStatus(
@@ -137,7 +137,7 @@ class _FemaleExpertDashboardState extends State<FemaleExpertDashboard> with Sing
 
   void _logout() {
     final appState = context.read<AppState>();
-    final String expertId = appState.nickname.toLowerCase();
+    final String expertId = appState.uid;
     if (expertId.isNotEmpty) {
       _matchingService.setExpertOnlineStatus(
           expertId: expertId,
@@ -211,7 +211,7 @@ class _FemaleExpertDashboardState extends State<FemaleExpertDashboard> with Sing
                         ),
                       ),
                       child: LocalAvatarWidget(
-                        uid: appState.nickname.toLowerCase(),
+                        uid: appState.uid,
                         role: 'expert',
                         radius: 80,
                       ),

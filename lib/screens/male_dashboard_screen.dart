@@ -27,7 +27,7 @@ class MaleCallerDashboard extends StatefulWidget {
 }
 
 class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
-  final CallService _callService = CallService();
+  // Removed unused _callService
 
   // Navigation & filter states
   int _currentTab = 0; // 0 for Home, 1 for Recents, 2 for Chats
@@ -826,9 +826,9 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
     );
   }
 
-  void _triggerCallByNickname(String nickname) async {
+  void _triggerCallByExpertId(String expertId) async {
     try {
-      final doc = await FirebaseFirestore.instance.collection('experts').doc(nickname.toLowerCase()).get();
+      final doc = await FirebaseFirestore.instance.collection('experts').doc(expertId).get();
       if (doc.exists) {
         final data = doc.data() as Map<String, dynamic>;
         
@@ -838,7 +838,7 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
             app: FirebaseDatabase.instance.app,
             databaseURL: 'https://zegochat-c44b0.asia-southeast1.firebasedatabase.app',
           );
-          final event = await rtdb.ref('status/${nickname.toLowerCase()}/isOnline').once();
+          final event = await rtdb.ref('status/$expertId/isOnline').once();
           if (event.snapshot.value != null) {
             isOnline = event.snapshot.value == true;
           }
@@ -848,7 +848,7 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
 
         final expert = FemaleExpert(
           id: doc.id,
-          nickname: data['nickname'] ?? nickname,
+          nickname: data['nickname'] ?? 'Expert',
           pricePerMin: (data['pricePerMin'] as num?)?.toInt() ?? 5,
           languages: data['languages'] ?? 'Hindi',
           rating: (data['rating'] ?? 4.5).toDouble(),
@@ -1038,7 +1038,7 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
 
                           // Call Button
                           GestureDetector(
-                            onTap: () => _triggerCallByNickname(expertId),
+                            onTap: () => _triggerCallByExpertId(expertId),
                             child: Container(
                               width: 44,
                               height: 44,
@@ -1123,7 +1123,7 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
                         stream: FirebaseDatabase.instanceFor(
                           app: FirebaseDatabase.instance.app,
                           databaseURL: 'https://zegochat-c44b0.asia-southeast1.firebasedatabase.app',
-                        ).ref('status/${expert.nickname.toLowerCase()}/isOnline').onValue,
+                        ).ref('status/${expert.id}/isOnline').onValue,
                         builder: (context, snapshot) {
                           Color statusColor = Colors.grey;
 
@@ -1244,7 +1244,7 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
                                 MaterialPageRoute(
                                   builder: (context) => HybridChatScreen(
                                     myUid: myUid,
-                                    otherUid: expert.nickname.toLowerCase(),
+                                    otherUid: expert.id,
                                     otherUserName: expert.nickname,
                                   ),
                                 ),

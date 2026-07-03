@@ -3,7 +3,10 @@ import 'package:flutter/material.dart';
 import '../services/local_chat_database.dart';
 import '../services/hybrid_chat_service.dart';
 import '../theme/app_colors.dart';
-
+import 'package:provider/provider.dart';
+import '../providers/app_state.dart';
+import '../widgets/local_avatar_widget.dart';
+import 'package:firebase_database/firebase_database.dart';
 class HybridChatScreen extends StatefulWidget {
   final String myUid;
   final String otherUid;
@@ -110,6 +113,9 @@ class _HybridChatScreenState extends State<HybridChatScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final appState = context.read<AppState>();
+    final otherRole = appState.selectedGender == 'Female' ? 'user' : 'expert';
+
     return Scaffold(
       backgroundColor: const Color(0xFFF0F2F5), // WhatsApp-like background
       appBar: AppBar(
@@ -121,39 +127,40 @@ class _HybridChatScreenState extends State<HybridChatScreen> {
         ),
         title: Row(
           children: [
-            Builder(
-              builder: (context) {
-                final colors = [
-                  const Color(0xFFE91E63), // Pink
-                  const Color(0xFF9C27B0), // Purple
-                  const Color(0xFF3F51B5), // Indigo
-                  const Color(0xFF009688), // Teal
-                  const Color(0xFFFF9800), // Orange
-                  const Color(0xFF795548), // Brown
-                  const Color(0xFF607D8B), // Blue Grey
-                ];
-                final color = colors[widget.otherUserName.hashCode.abs() % colors.length];
-                
-                String initials = widget.otherUserName.length >= 2 
-                    ? widget.otherUserName.substring(0, 2).toUpperCase() 
-                    : widget.otherUserName.toUpperCase();
-                if (widget.otherUserName.startsWith('User ') && widget.otherUserName.length > 5) {
-                  initials = 'U' + widget.otherUserName.substring(widget.otherUserName.length - 1);
-                }
-
-                return CircleAvatar(
+            Stack(
+              children: [
+                LocalAvatarWidget(
+                  uid: widget.otherUid,
+                  role: otherRole,
                   radius: 20,
-                  backgroundColor: color,
-                  child: Text(
-                    initials,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
+                ),
+                Positioned(
+                  bottom: 0,
+                  right: 0,
+                  child: StreamBuilder<DatabaseEvent>(
+                    stream: FirebaseDatabase.instanceFor(
+                      app: FirebaseDatabase.instance.app,
+                      databaseURL: 'https://zegochat-c44b0.asia-southeast1.firebasedatabase.app',
+                    ).ref('status/${widget.otherUid}/isOnline').onValue,
+                    builder: (context, snapshot) {
+                      Color statusColor = Colors.grey;
+                      if (snapshot.hasData && snapshot.data!.snapshot.value != null) {
+                        final isOnline = snapshot.data!.snapshot.value == true;
+                        statusColor = isOnline ? Colors.green : Colors.grey;
+                      }
+                      return Container(
+                        width: 12,
+                        height: 12,
+                        decoration: BoxDecoration(
+                          color: statusColor,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: AppColors.primaryBlue, width: 2),
+                        ),
+                      );
+                    },
                   ),
-                );
-              }
+                ),
+              ],
             ),
             const SizedBox(width: 12),
             Expanded(

@@ -376,7 +376,7 @@ class CallService {
   /// Prevents race conditions if two users try to call simultaneously.
   Future<bool> lockExpertForCall(String expertId) async {
     try {
-      final DatabaseReference ref = _database.ref("status/${expertId.toLowerCase()}");
+      final DatabaseReference ref = _database.ref("status/$expertId");
       
       final TransactionResult result = await ref.runTransaction((Object? post) {
         if (post == null) {
@@ -404,7 +404,7 @@ class CallService {
       
       if (result.committed) {
         // Remove from experts queue so they stop receiving calls
-        await _database.ref('experts_queue/${expertId.toLowerCase()}').remove();
+        await _database.ref('experts_queue/$expertId').remove();
       }
       
       return result.committed;
@@ -451,7 +451,7 @@ class CallService {
   /// Reverts an expert's status to online and re-adds them to the experts queue if they were online.
   Future<void> unlockExpertFromCall(String expertId) async {
     try {
-      final DatabaseReference ref = _database.ref("status/${expertId.toLowerCase()}");
+      final DatabaseReference ref = _database.ref("status/$expertId");
       
       final snapshot = await ref.get();
       if (snapshot.exists) {
@@ -464,10 +464,10 @@ class CallService {
           });
           
           // Verify if they are actually an expert before adding to queue
-          final expertDoc = await FirebaseFirestore.instance.collection('experts').doc(expertId.toLowerCase()).get();
+          final expertDoc = await FirebaseFirestore.instance.collection('experts').doc(expertId).get();
           if (expertDoc.exists) {
-            await _database.ref('experts_queue/${expertId.toLowerCase()}').set({
-              'expertId': expertId.toLowerCase(),
+            await _database.ref('experts_queue/$expertId').set({
+              'expertId': expertId,
               'status': 'waiting',
               'timestamp': ServerValue.timestamp,
             });

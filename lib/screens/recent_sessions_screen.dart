@@ -21,7 +21,7 @@ class _RecentSessionsScreenState extends State<RecentSessionsScreen> {
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
     final currentUserMobile = appState.mobileNumber;
-    final currentNickname = appState.nickname.toLowerCase();
+    final currentNickname = appState.uid;
     
     return Scaffold(
       backgroundColor: AppColors.bgLight,
@@ -204,7 +204,7 @@ class _RecentSessionsScreenState extends State<RecentSessionsScreen> {
     
     if (!context.mounted) return;
     final appState = context.read<AppState>();
-    final currentUser = appState.mobileNumber.isNotEmpty ? appState.mobileNumber : appState.nickname.toLowerCase();
+    final currentUser = appState.mobileNumber.isNotEmpty ? appState.mobileNumber : appState.uid;
     
     // Lock self
     if (targetLocked) {

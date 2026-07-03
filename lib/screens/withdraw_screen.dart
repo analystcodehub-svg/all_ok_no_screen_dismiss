@@ -41,7 +41,7 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
 
     setState(() => _isLoading = true);
     try {
-      final expertId = context.read<AppState>().nickname.toLowerCase();
+      final expertId = context.read<AppState>().uid;
       await FirebaseFirestore.instance.collection('withdrawal_requests').add({
         'expertId': expertId,
         'amount': widget.amount,

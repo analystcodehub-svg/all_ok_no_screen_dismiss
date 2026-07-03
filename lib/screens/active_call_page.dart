@@ -218,16 +218,15 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
     if (_tierResolved) return;
     _tierResolved = true;
     try {
-      final expertId = widget.receiverId.toLowerCase();
-      final expertSnap = await FirebaseFirestore.instance
+      final expertId = widget.receiverId;
+      final expertDoc = await FirebaseFirestore.instance
           .collection('experts')
-          .where('nickname', isEqualTo: expertId)
-          .limit(1)
+          .doc(expertId)
           .get();
 
-      if (expertSnap.docs.isEmpty) return;
+      if (!expertDoc.exists) return;
 
-      final tier = expertSnap.docs.first.data()['tier'] as String? ?? 'bronze';
+      final tier = expertDoc.data()?['tier'] as String? ?? 'bronze';
       if (mounted) {
         setState(() {
           _expertEarningRate = tier == 'silver' ? 1.6 : 1.0;
@@ -324,7 +323,7 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
 
   Future<void> _updateExpertStats(double earned, int seconds) async {
     try {
-      final expertId = widget.receiverId.toLowerCase();
+      final expertId = widget.receiverId;
       if (expertId.isEmpty) return;
       final docRef = FirebaseFirestore.instance.collection('experts').doc(expertId);
       

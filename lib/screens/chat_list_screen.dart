@@ -66,7 +66,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
 
     // Dynamic ID logic: Females use nickname.toLowerCase(), Males use mobileNumber
     String myUid = appState.selectedGender == 'Female' 
-        ? appState.nickname.toLowerCase() 
+        ? appState.uid 
         : _currentUserMobile;
         
     if (myUid.isEmpty) myUid = _currentUserMobile;
