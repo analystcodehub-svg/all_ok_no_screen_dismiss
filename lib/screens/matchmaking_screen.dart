@@ -31,6 +31,7 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> with SingleTicker
   // ValueNotifiers to avoid setState rebuilds
   final ValueNotifier<String> _statusMessage = ValueNotifier<String>('Connecting...');
   final ValueNotifier<int> _ringingTimer = ValueNotifier<int>(0);
+  Completer<bool>? _ringingCompleter;
   
   bool _isDisposed = false;
   bool _isSearchCancelled = false;
@@ -59,6 +60,9 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> with SingleTicker
     _callStatusSub?.cancel();
     _statusMessage.dispose();
     _ringingTimer.dispose();
+    if (_ringingCompleter != null && !_ringingCompleter!.isCompleted) {
+      _ringingCompleter!.complete(false);
+    }
     super.dispose();
   }
 
@@ -83,12 +87,17 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> with SingleTicker
       bool isLocked = await _matchingService.lockExpertForCall(matchedExpertUid, callerUid);
       if (!isLocked) {
         if (!_isDisposed && mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('${widget.requestedExpert!.nickname} is currently busy. Please try again later.')),
-          );
-          Navigator.pop(context);
+          _statusMessage.value = '${widget.requestedExpert!.nickname} is busy. Finding another expert...';
+          await Future.delayed(const Duration(seconds: 1)); // brief pause for UI
+          
+          if (!_isDisposed && !_isSearchCancelled) {
+            matchedExpertUid = await _matchingService.findAndLockExpert(callerUid, 'female', preferredLanguage);
+          } else {
+            return;
+          }
+        } else {
+          return;
         }
-        return;
       }
     } 
     // Random Matchmaking Mode
@@ -134,14 +143,14 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> with SingleTicker
       // 2. Start 15-second strict UI Timer
       _ringingTimer.value = 15;
       
-      final completer = Completer<bool>();
+      _ringingCompleter = Completer<bool>();
       
       _timer = Timer.periodic(const Duration(seconds: 1), (timer) async {
         if (_ringingTimer.value > 0) {
           _ringingTimer.value--;
         } else {
           timer.cancel();
-          if (!completer.isCompleted) completer.complete(false); // Timeout failed
+          if (!_ringingCompleter!.isCompleted) _ringingCompleter!.complete(false); // Timeout failed
         }
       });
 
@@ -153,14 +162,14 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> with SingleTicker
       
       _callStatusSub = db.ref('calls/$callRoomId/status').onValue.listen((event) {
         if (event.snapshot.value == 'connected') {
-          if (!completer.isCompleted) completer.complete(true); // Success
+          if (!_ringingCompleter!.isCompleted) _ringingCompleter!.complete(true); // Success
         } else if (event.snapshot.value == 'ended') {
-          if (!completer.isCompleted) completer.complete(false); // Rejected/Ended
+          if (!_ringingCompleter!.isCompleted) _ringingCompleter!.complete(false); // Rejected/Ended
         }
       });
 
       // Await answer or timeout
-      bool expertAnswered = await completer.future;
+      bool expertAnswered = await _ringingCompleter!.future;
 
       _timer?.cancel();
       await _callStatusSub?.cancel();

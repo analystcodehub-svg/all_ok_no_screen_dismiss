@@ -62,6 +62,15 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
       }
       
       if (currentUserId.isNotEmpty) {
+        // Crucial for MatchmakingService: set 'status' to 'ringing' in active_calls lock
+        FirebaseDatabase.instanceFor(
+          app: FirebaseDatabase.instance.app,
+          databaseURL: 'https://zegochat-c44b0.asia-southeast1.firebasedatabase.app',
+        ).ref('active_calls/$currentUserId').update({
+          'status': 'ringing',
+        }).catchError((e) => debugPrint('Error setting active_calls status: $e'));
+
+        // Keep the existing profile status update as well
         FirebaseDatabase.instanceFor(
           app: FirebaseDatabase.instance.app,
           databaseURL: 'https://zegochat-c44b0.asia-southeast1.firebasedatabase.app',

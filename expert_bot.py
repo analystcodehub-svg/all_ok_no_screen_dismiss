@@ -239,6 +239,24 @@ def on_call_event(event, bot_uid):
         if '/' not in room_id and isinstance(data, dict):
             process_call(room_id, data)
 
+def on_active_calls_event(event, bot_uid):
+    """
+    Callback for MatchmakingService locking the bot in active_calls.
+    When a user wants to connect via Random Matchmaking, they lock us and wait for 'ringing'.
+    """
+    if not event.data:
+        return
+    
+    # If the event data is a dict and has status 'locked', we update it to 'ringing'
+    if isinstance(event.data, dict) and event.data.get('status') == 'locked':
+        caller_uid = event.data.get('callerUid', 'unknown')
+        if loop:
+            loop.call_soon_threadsafe(lambda: print(f"\n[Random Matchmaking]: Locked by {caller_uid}. Sending 'ringing' signal..."))
+        # Tell the flutter app we are alive and ringing
+        db.reference(f'active_calls/{bot_uid}').update({
+            'status': 'ringing'
+        })
+
 # ==========================================
 # 5. ASYNC CHAT LOOP (OPERATOR INPUT)
 # ==========================================
@@ -402,6 +420,10 @@ async def main():
     # WebRTC Listener (listen to all calls and filter in callback)
     calls_ref = db.reference('calls')
     calls_ref.listen(lambda event: on_call_event(event, bot_uid))
+    
+    # Active Calls Lock Listener (for random matchmaking ringing response)
+    active_calls_ref = db.reference(f'active_calls/{bot_uid}')
+    active_calls_ref.listen(lambda event: on_active_calls_event(event, bot_uid))
     
     # Enter Async Terminal Interaction
     try:

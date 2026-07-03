@@ -480,6 +480,9 @@ class CallService {
           });
         }
       }
+      
+      // Crucial Fix: Clear the active_calls lock so the expert is not permanently stuck as busy
+      await _database.ref('active_calls/$expertId').remove();
     } catch (e) {
       debugPrint('Error unlocking expert $expertId: $e');
     }
