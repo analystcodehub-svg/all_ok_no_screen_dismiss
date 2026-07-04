@@ -7,6 +7,7 @@ import '../models/female_expert.dart';
 import '../providers/app_state.dart';
 import '../services/call_service.dart';
 import '../services/matchmaking_service.dart';
+import '../widgets/local_avatar_widget.dart';
 import 'active_call_page.dart';
 
 class MatchmakingScreen extends StatefulWidget {
@@ -31,8 +32,10 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> with SingleTicker
   // ValueNotifiers to avoid setState rebuilds
   final ValueNotifier<String> _statusMessage = ValueNotifier<String>('Connecting...');
   final ValueNotifier<int> _ringingTimer = ValueNotifier<int>(0);
+  final ValueNotifier<String?> _matchedExpertUidNotifier = ValueNotifier<String?>(null);
   Completer<bool>? _ringingCompleter;
   
+  String _callerUid = '';
   bool _isDisposed = false;
   bool _isSearchCancelled = false;
   Timer? _timer;
@@ -60,6 +63,7 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> with SingleTicker
     _callStatusSub?.cancel();
     _statusMessage.dispose();
     _ringingTimer.dispose();
+    _matchedExpertUidNotifier.dispose();
     if (_ringingCompleter != null && !_ringingCompleter!.isCompleted) {
       _ringingCompleter!.complete(false);
     }
@@ -74,6 +78,7 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> with SingleTicker
     final String callerUid = appState.mobileNumber.isNotEmpty 
         ? appState.mobileNumber 
         : (appState.nickname.isNotEmpty ? appState.uid : 'caller_1');
+    _callerUid = callerUid;
     final String preferredLanguage = appState.primaryLanguage;
     final hasUsedFreeCall = appState.hasUsedFreeCall;
 
@@ -132,6 +137,9 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> with SingleTicker
       }
       return;
     }
+
+    // Update UI to show the expert's avatar
+    _matchedExpertUidNotifier.value = matchedExpertUid;
 
     // WE HAVE A LOCKED EXPERT. Start Ringing process!
     _statusMessage.value = 'Ringing...';
@@ -259,65 +267,16 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> with SingleTicker
           children: [
             const Spacer(),
             
-            // Radar Animation
-            Center(
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  // Expanding rings
-                  AnimatedBuilder(
-                    animation: _radarController,
-                    builder: (context, child) {
-                      return Stack(
-                        alignment: Alignment.center,
-                        children: List.generate(3, (index) {
-                          final delay = index * 0.33;
-                          double progress = (_radarController.value + delay) % 1.0;
-                          return Transform.scale(
-                            scale: 1.0 + (progress * 2.5),
-                            child: Opacity(
-                              opacity: (1.0 - progress).clamp(0.0, 1.0),
-                              child: Container(
-                                width: 100,
-                                height: 100,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: const Color(0xFFF43F5E), // Rose accent
-                                    width: 2,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          );
-                        }),
-                      );
-                    },
-                  ),
-                  
-                  // Center Avatar
-                  Container(
-                    width: 80,
-                    height: 80,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: const Color(0xFF1E293B), // Slate 800
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFFF43F5E).withValues(alpha: 0.5),
-                          blurRadius: 24,
-                          spreadRadius: 4,
-                        ),
-                      ],
-                    ),
-                    child: const Icon(
-                      Icons.search_rounded,
-                      color: Colors.white,
-                      size: 40,
-                    ),
-                  ),
-                ],
-              ),
+            // Dynamic UI: Radar when searching, Avatars when ringing
+            ValueListenableBuilder<String?>(
+              valueListenable: _matchedExpertUidNotifier,
+              builder: (context, matchedUid, child) {
+                if (matchedUid == null) {
+                  return _buildSearchingRadar();
+                } else {
+                  return _buildRingingAvatars(matchedUid);
+                }
+              },
             ),
             
             const Spacer(),
@@ -388,6 +347,152 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> with SingleTicker
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildSearchingRadar() {
+    return Center(
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // Expanding rings
+          AnimatedBuilder(
+            animation: _radarController,
+            builder: (context, child) {
+              return Stack(
+                alignment: Alignment.center,
+                children: List.generate(3, (index) {
+                  final delay = index * 0.33;
+                  double progress = (_radarController.value + delay) % 1.0;
+                  return Transform.scale(
+                    scale: 1.0 + (progress * 2.5),
+                    child: Opacity(
+                      opacity: (1.0 - progress).clamp(0.0, 1.0),
+                      child: Container(
+                        width: 100,
+                        height: 100,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: const Color(0xFFF43F5E), // Rose accent
+                            width: 2,
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                }),
+              );
+            },
+          ),
+          
+          // Center Avatar (Caller)
+          Container(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFFF43F5E).withValues(alpha: 0.5),
+                  blurRadius: 24,
+                  spreadRadius: 4,
+                ),
+              ],
+            ),
+            child: LocalAvatarWidget(
+              uid: _callerUid,
+              role: 'user',
+              radius: 40,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRingingAvatars(String expertUid) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 40),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          // Caller Avatar
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white24, width: 3),
+                ),
+                child: LocalAvatarWidget(
+                  uid: _callerUid,
+                  role: 'user',
+                  radius: 40,
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'You',
+                style: TextStyle(
+                  color: Colors.white70,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+
+          // Pulsing connection icon
+          AnimatedBuilder(
+            animation: _radarController,
+            builder: (context, child) {
+              double opacity = 0.4 + (0.6 * ((_radarController.value * 2) % 1.0));
+              return Opacity(
+                opacity: opacity,
+                child: const Icon(
+                  Icons.phone_forwarded_rounded,
+                  color: Color(0xFF10B981), // Green accent for connection
+                  size: 32,
+                ),
+              );
+            },
+          ),
+
+          // Expert Avatar
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: const Color(0xFFF43F5E), width: 3),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFFF43F5E).withValues(alpha: 0.4),
+                      blurRadius: 16,
+                      spreadRadius: 2,
+                    ),
+                  ],
+                ),
+                child: LocalAvatarWidget(
+                  uid: expertUid,
+                  role: 'expert',
+                  radius: 40,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                widget.requestedExpert?.nickname ?? 'Expert',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
