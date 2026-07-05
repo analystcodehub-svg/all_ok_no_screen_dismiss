@@ -17,6 +17,8 @@ import '../services/notification_service.dart';
 import '../services/hybrid_chat_service.dart';
 import 'chat_list_screen.dart';
 import 'hybrid_chat_screen.dart';
+import '../utils/auto_start_helper.dart';
+import '../services/foreground_task_service.dart';
 
 class MaleCallerDashboard extends StatefulWidget {
   const MaleCallerDashboard({super.key});
@@ -76,6 +78,12 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
       final appState = context.read<AppState>();
       final myUid = appState.mobileNumber.isNotEmpty ? appState.mobileNumber : "test_mobile";
       HybridChatService().initListeners(myUid);
+      
+      // Check for auto-start permissions (Infinix, Xiaomi, etc.)
+      AutoStartHelper.checkAndRequestAutoStart(context);
+      
+      // Keep app alive in background (always ON for male users)
+      ForegroundTaskService.startService();
     });
   }
 

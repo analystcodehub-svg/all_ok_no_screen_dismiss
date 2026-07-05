@@ -9,6 +9,8 @@ import 'incoming_call_screen.dart';
 import '../services/call_service.dart';
 import '../services/matchmaking_service.dart';
 import '../widgets/local_avatar_widget.dart';
+import '../utils/auto_start_helper.dart';
+import '../services/foreground_task_service.dart';
 
 
 class FemaleExpertDashboard extends StatefulWidget {
@@ -109,10 +111,18 @@ class _FemaleExpertDashboardState extends State<FemaleExpertDashboard> with Sing
       }
     }
 
+    if (!mounted) return;
+
     if (value) {
       _startIncomingCallListener(expertId);
+      // Ask for auto-start permission when they go online, so they receive background calls.
+      AutoStartHelper.checkAndRequestAutoStart(context);
+      // Keep app alive in background while online
+      ForegroundTaskService.startService();
     } else {
       _stopIncomingCallListener();
+      // Stop background service when offline to save battery
+      ForegroundTaskService.stopService();
     }
   }
 

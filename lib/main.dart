@@ -7,6 +7,7 @@ import 'theme/app_theme.dart';
 import 'screens/active_call_page.dart';
 import 'screens/auth_wrapper.dart';
 import 'services/notification_service.dart';
+import 'services/foreground_task_service.dart';
 
 /// Global navigator key — used by NotificationService to navigate
 /// after a call is accepted from the background / lock screen.
@@ -30,6 +31,8 @@ void main() async {
   // ── 2. Initialize Notification Service (FCM + CallKit) ─────────────────
   if (firebaseInitialized) {
     await NotificationService.instance.initialize(navKey: navigatorKey);
+    // Initialize Foreground Task Service
+    await ForegroundTaskService().initializeService();
   }
 
   runApp(
