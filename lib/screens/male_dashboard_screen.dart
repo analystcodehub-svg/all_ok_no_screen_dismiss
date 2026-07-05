@@ -267,6 +267,33 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
   }
 
   void _triggerCall(FemaleExpert expert) async {
+    try {
+      final rtdb = FirebaseDatabase.instanceFor(
+        app: FirebaseDatabase.instance.app,
+        databaseURL: 'https://zegochat-c44b0.asia-southeast1.firebasedatabase.app',
+      );
+      final event = await rtdb.ref('status/${expert.id}/isOnline').once();
+      bool isOnline = false;
+      if (event.snapshot.value != null) {
+        isOnline = event.snapshot.value == true;
+      } else {
+        isOnline = expert.isOnline; // fallback to firestore
+      }
+      
+      if (!isOnline) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('${expert.nickname} is currently offline. Routing to another expert...')),
+          );
+          _startRandomMatchmaking();
+        }
+        return;
+      }
+    } catch (e) {
+      debugPrint('Error checking RTDB status: $e');
+    }
+
+    if (!mounted) return;
     final appState = context.read<AppState>();
     final balance = appState.walletBalance;
     final hasUsedFreeCall = appState.hasUsedFreeCall;
@@ -1135,19 +1162,16 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
                         builder: (context, snapshot) {
                           Color statusColor = Colors.grey;
 
-                          if (snapshot.hasData && snapshot.data!.snapshot.value != null) {
-                            bool isOnline = snapshot.data!.snapshot.value == true;
-                            if (isOnline) {
+                          if (snapshot.connectionState == ConnectionState.waiting) {
+                            if (expert.isOnline) {
+                              statusColor = const Color(0xFF22C55E); // Green
+                            }
+                          } else {
+                            if (snapshot.hasData && snapshot.data!.snapshot.value == true) {
                               statusColor = const Color(0xFF22C55E); // Green
                             } else {
                               statusColor = Colors.grey; // Offline
                             }
-                          } else if (expert.isOnline) {
-                            // Fallback to Firestore static data if RTDB is empty
-                            statusColor = const Color(0xFF22C55E);
-                          } else {
-                            // Offline
-                            return const SizedBox.shrink(); 
                           }
 
                           return Container(

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -18,20 +19,33 @@ class AuthWrapper extends StatefulWidget {
 class _AuthWrapperState extends State<AuthWrapper> {
   bool _isLoading = true;
   Widget _homeWidget = const PhoneAuthScreen();
+  StreamSubscription<User?>? _authSubscription;
 
   @override
   void initState() {
     super.initState();
-    _checkAuthState();
+    _setupAuthListener();
   }
 
-  Future<void> _checkAuthState() async {
-    final user = FirebaseAuth.instance.currentUser;
+  void _setupAuthListener() {
+    _authSubscription = FirebaseAuth.instance.authStateChanges().listen((User? user) {
+      _checkAuthState(user);
+    });
+  }
+
+  @override
+  void dispose() {
+    _authSubscription?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _checkAuthState(User? user) async {
+    final String? rawPhone = user?.phoneNumber ?? user?.displayName;
     
-    if (user != null && user.phoneNumber != null) {
+    if (user != null && rawPhone != null && rawPhone.isNotEmpty) {
       // User is logged in, check if they have a profile in Firestore
       try {
-        final String mobileNumber = user.phoneNumber!.replaceAll('+91', '');
+        final String mobileNumber = rawPhone.replaceAll('+91', '');
         
         final userDoc = await FirebaseFirestore.instance
             .collection('users')

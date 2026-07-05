@@ -134,6 +134,10 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
       // then skip OTP and go directly to next screen
       try {
         await FirebaseAuth.instance.signInAnonymously();
+        final user = FirebaseAuth.instance.currentUser;
+        if (user != null) {
+          await user.updateDisplayName(phone);
+        }
         
         final userDoc = await FirebaseFirestore.instance.collection('users').doc(phone).get();
         if (userDoc.exists) {
