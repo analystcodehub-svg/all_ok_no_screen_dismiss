@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -8,6 +9,7 @@ import 'phone_auth_screen.dart';
 import 'main_navigation.dart';
 import 'gender_selection_screen.dart';
 import '../theme/app_theme.dart';
+import 'male_dashboard_screen.dart';
 
 class AuthWrapper extends StatefulWidget {
   const AuthWrapper({super.key});
@@ -40,7 +42,26 @@ class _AuthWrapperState extends State<AuthWrapper> {
   }
 
   Future<void> _checkAuthState(User? user) async {
-    final String? rawPhone = user?.phoneNumber ?? user?.displayName;
+    final prefs = await SharedPreferences.getInstance();
+    final String? savedPhone = prefs.getString('saved_mobile');
+    
+    final String? savedEmail = prefs.getString('saved_email');
+    final String? savedPassword = prefs.getString('saved_password');
+    
+    // Auto-restore email session if Firebase dropped it
+    if (user == null && savedEmail != null && savedPassword != null) {
+      try {
+        await FirebaseAuth.instance.signInWithEmailAndPassword(
+          email: savedEmail,
+          password: savedPassword,
+        );
+        user = FirebaseAuth.instance.currentUser;
+      } catch (e) {
+        debugPrint("Auto-login failed: $e");
+      }
+    }
+    
+    final String? rawPhone = user?.phoneNumber ?? user?.displayName ?? savedPhone;
     
     if (user != null && rawPhone != null && rawPhone.isNotEmpty) {
       // User is logged in, check if they have a profile in Firestore
@@ -64,7 +85,9 @@ class _AuthWrapperState extends State<AuthWrapper> {
             appState.setNickname(data['nickname'] ?? '');
             
             setState(() {
-              _homeWidget = const MainNavigation();
+              _homeWidget = gender == 'male' 
+                  ? const MaleCallerDashboard() 
+                  : const MainNavigation();
               _isLoading = false;
             });
           } else {

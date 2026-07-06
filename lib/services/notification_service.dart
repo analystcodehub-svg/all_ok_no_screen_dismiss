@@ -275,13 +275,22 @@ class NotificationService {
         debugPrint('[CallKit] Accepted: $callRoomId');
 
         // Navigate to active call screen
-        navigatorKey?.currentState?.pushNamed(
-          '/active-call',
-          arguments: <String, dynamic>{
-            'callRoomId': callRoomId,
-            'callerName': 'Caller',
-          },
-        );
+        // If app was killed, navigatorKey.currentState might be null briefly.
+        // We poll for it to become ready before pushing.
+        void pushRoute() {
+          if (navigatorKey?.currentState != null) {
+            navigatorKey!.currentState!.pushNamed(
+              '/active-call',
+              arguments: <String, dynamic>{
+                'callRoomId': callRoomId,
+                'callerName': 'Caller',
+              },
+            );
+          } else {
+            Future.delayed(const Duration(milliseconds: 200), pushRoute);
+          }
+        }
+        pushRoute();
       } else if (event is CallEventActionCallDecline) {
         final callRoomId = event.id;
         debugPrint('[CallKit] Declined: $callRoomId');
