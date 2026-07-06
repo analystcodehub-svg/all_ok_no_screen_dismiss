@@ -50,7 +50,8 @@ dependencies:
   sqflite: ^2.4.3
   path_provider: ^2.1.6
   path: ^1.9.1
-  auto_start_flutter: ^1.4.0
+  auto_start_flutter:
+    path: packages/auto_start_flutter
   flutter_background_service: ^5.1.0
 
 

@@ -31,7 +31,7 @@ class AutoStartHelper {
                     try {
                       await getAutoStartPermission();
                     } catch (e) {
-                      debugPrint("AutoStart permission Error: \$e");
+                      debugPrint("AutoStart permission Error: $e");
                     }
                   },
                 ),
@@ -41,9 +41,9 @@ class AutoStartHelper {
         );
       }
     } on PlatformException catch (e) {
-      debugPrint("AutoStart Error: \$e");
+      debugPrint("AutoStart Error: $e");
     } catch (e) {
-      debugPrint("AutoStart Unknown Error: \$e");
+      debugPrint("AutoStart Unknown Error: $e");
     }
   }
 }
