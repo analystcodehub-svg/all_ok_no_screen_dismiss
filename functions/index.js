@@ -161,21 +161,22 @@ exports.onCallInitiated = functions.region("asia-south1").firestore
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CLOUD FUNCTION 2: onMessageSent
-// Triggered when a new message is written to `chats/{chatId}/messages/{msgId}`.
+// Triggered when a new message is written to `transit/messages/{receiverId}/{msgId}` in RTDB.
 // ─────────────────────────────────────────────────────────────────────────────
 
-exports.onMessageSent = functions.region("asia-south1").firestore
-  .document("chats/{chatId}/messages/{messageId}")
+exports.onMessageSent = functions.region("asia-south1").database
+  .instance('zegochat-c44b0')
+  .ref("transit/messages/{receiverId}/{msgId}")
   .onCreate(async (snap, context) => {
-    const msgData  = snap.data();
-    const chatId   = context.params.chatId;
+    const msgData = snap.val();
+    const receiverId = context.params.receiverId;
+    const msgId = context.params.msgId;
 
-    const senderId     = msgData.senderId;
-    const receiverId   = msgData.receiverId;
-    const messageText  = msgData.text || "New message";
-    const senderName   = msgData.senderName || senderId;
+    const senderId = msgData.senderId;
+    const messageText = msgData.text || "New message";
+    const roomId = msgData.roomId;
 
-    functions.logger.info(`[onMessageSent] chatId=${chatId}, from=${senderId}, to=${receiverId}`);
+    functions.logger.info(`[onMessageSent] msgId=${msgId}, roomId=${roomId}, from=${senderId}, to=${receiverId}`);
 
     if (!receiverId || !senderId) {
       functions.logger.warn("Missing senderId or receiverId — aborting.");
@@ -183,7 +184,6 @@ exports.onMessageSent = functions.region("asia-south1").firestore
     }
 
     // ── Step 1: Determine receiver's collection and fetch their doc ────────
-    // Try 'experts' first; fall back to 'users'
     let receiverDoc = await db.collection("experts").doc(receiverId).get();
     let receiverData;
     let isExpert = false;
@@ -206,7 +206,6 @@ exports.onMessageSent = functions.region("asia-south1").firestore
 
     // ── Step 2: Business Logic Gate ────────────────────────────────────────
     // Female/Expert: do NOT notify if offline
-    // Male/User: always notify
     if (gender === "female" && isOnline === false) {
       functions.logger.info(
         `Expert '${receiverId}' is offline. Suppressing message notification.`
@@ -219,16 +218,28 @@ exports.onMessageSent = functions.region("asia-south1").firestore
       return null;
     }
 
-    // ── Step 3: Build FCM data payload ─────────────────────────────────────
+    // ── Step 3: Fetch Sender Name ──────────────────────────────────────────
+    let senderName = senderId;
+    let senderDoc = await db.collection("users").doc(senderId).get();
+    if (senderDoc.exists) {
+      senderName = senderDoc.data().nickname || senderId;
+    } else {
+      senderDoc = await db.collection("experts").doc(senderId).get();
+      if (senderDoc.exists) {
+        senderName = senderDoc.data().nickname || senderId;
+      }
+    }
+
+    // ── Step 4: Build FCM data payload ─────────────────────────────────────
     const fcmData = {
       type:       "message",
-      chatId:     chatId,
+      roomId:     roomId || "",
       senderId:   senderId,
       senderName: senderName,
       body:       messageText,
     };
 
-    // ── Step 4: Send notification ───────────────────────────────────────────
+    // ── Step 5: Send notification ───────────────────────────────────────────
     const notificationPayload = {
       title: senderName,
       body: messageText,
