@@ -81,7 +81,6 @@ class _AudioVerificationPageState extends State<AudioVerificationPage> with Sing
           'pricePerMin': 5,
           'languages': appState.primaryLanguage,
           'rating': 4.8,
-          'isOnline': false, // Offline by default when onboarded
         }, SetOptions(merge: true));
       } catch (e) {
         debugPrint('Error saving expert profile at onboarding: $e');

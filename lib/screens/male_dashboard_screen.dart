@@ -17,6 +17,7 @@ import '../services/notification_service.dart';
 import '../services/hybrid_chat_service.dart';
 import 'chat_list_screen.dart';
 import 'hybrid_chat_screen.dart';
+import 'expert_feed_screen.dart';
 import '../utils/auto_start_helper.dart';
 import '../services/foreground_task_service.dart';
 
@@ -41,21 +42,13 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
   static const Color brandTextGrey = Color(0xFF64748B); // Slate 500
   static const Color brandCardBg = Colors.white;
 
-  // Pagination State
-  final int _expertsLimit = 40;
-  final List<FemaleExpert> _liveExperts = [];
-  DocumentSnapshot? _lastExpertDoc;
-  bool _isFetchingExperts = false;
-  bool _hasMoreExperts = true;
-  final ScrollController _scrollController = ScrollController();
+  // (Pagination and old expert list removed for RTDB bucket system)
   
   StreamSubscription? _incomingCallSubscription;
 
   @override
   void initState() {
     super.initState();
-    _scrollController.addListener(_onScroll);
-    _fetchExperts();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       // Ensure we have a valid Firebase Auth session (anonymous) so Firestore
       // rules (request.auth != null) are satisfied before any reads.
@@ -130,89 +123,10 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
   void dispose() {
     HybridChatService().dispose();
     _incomingCallSubscription?.cancel();
-    _scrollController.dispose();
     super.dispose();
   }
 
-  void _onScroll() {
-    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
-      _fetchExperts();
-    }
-  }
-
-  Future<void> _refreshExperts() async {
-    setState(() {
-      _liveExperts.clear();
-      _lastExpertDoc = null;
-      _hasMoreExperts = true;
-      _isFetchingExperts = false;
-    });
-    await _fetchExperts();
-  }
-
-  Future<void> _fetchExperts() async {
-    if (_isFetchingExperts || !_hasMoreExperts) return;
-    
-    setState(() {
-      _isFetchingExperts = true;
-    });
-
-    try {
-      var query = FirebaseFirestore.instance.collection('experts')
-          .where('isOnline', isEqualTo: true)
-          .limit(_expertsLimit);
-      
-      if (_lastExpertDoc != null) {
-        query = query.startAfterDocument(_lastExpertDoc!);
-      }
-
-      final snapshot = await query.get();
-
-      if (snapshot.docs.length < _expertsLimit) {
-        _hasMoreExperts = false;
-      }
-
-      List<FemaleExpert> newExperts = [];
-      for (var doc in snapshot.docs) {
-        try {
-          final data = doc.data();
-          String nickname = data['nickname']?.toString() ?? '';
-          if (nickname.trim().isEmpty) nickname = doc.id;
-
-          newExperts.add(
-            FemaleExpert(
-              id: doc.id,
-              nickname: nickname,
-              pricePerMin: (data['pricePerMin'] as num?)?.toInt() ?? 5,
-              languages: data['languages']?.toString() ?? 'Hindi',
-              rating: (() {
-                final totalSecs = (data['totalTalkSeconds'] as num?)?.toDouble() ?? 0;
-                final computed = 3.5 + (totalSecs / 36000.0) * 1.5;
-                final stored = (data['rating'] as num?)?.toDouble();
-                return double.parse((stored ?? computed.clamp(3.5, 5.0)).toStringAsFixed(1));
-              })(),
-              isOnline: data['isOnline'] == true,
-            ),
-          );
-        } catch (e) {
-          debugPrint('Error parsing expert doc: $e');
-        }
-      }
-
-      if (snapshot.docs.isNotEmpty) {
-        _lastExpertDoc = snapshot.docs.last;
-        _liveExperts.addAll(newExperts);
-      }
-    } catch (e) {
-      debugPrint('Error fetching experts: $e');
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isFetchingExperts = false;
-        });
-      }
-    }
-  }
+  // (Old _onScroll, _refreshExperts, _fetchExperts removed)
 
   Future<void> _fetchInitialWalletBalance() async {
     final appState = context.read<AppState>();
@@ -276,8 +190,6 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
       bool isOnline = false;
       if (event.snapshot.value != null) {
         isOnline = event.snapshot.value == true;
-      } else {
-        isOnline = expert.isOnline; // fallback to firestore
       }
       
       if (!isOnline) {
@@ -553,21 +465,10 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
   Widget _buildHomeTab() {
     final appState = context.watch<AppState>();
 
-    final allAvailableExperts = _liveExperts;
-
-    final expertsList = allAvailableExperts.where((expert) {
-      if (expert.nickname.trim().isEmpty) return false;
-      if (!expert.isOnline) return false;
-      return true;
-    }).toList();
-
-    return RefreshIndicator(
-      onRefresh: _refreshExperts,
-      child: SingleChildScrollView(
-        controller: _scrollController,
-        child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
+    return SingleChildScrollView(
+      child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
             // Redesigned Top Custom Header Row
             Padding(
               padding: const EdgeInsets.all(16.0),
@@ -580,11 +481,6 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
                       fontWeight: FontWeight.bold,
                       color: brandTextDark,
                     ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.refresh_rounded, color: brandPrimary),
-                    onPressed: _refreshExperts,
-                    tooltip: 'Refresh Experts',
                   ),
                   const Spacer(),
                   // Wallet Pill (Redesigned with Slate 800 + Amber tag)
@@ -834,31 +730,11 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
 
 
 
-            // Redesigned Experts List view
-            expertsList.isEmpty && _isFetchingExperts
-                ? const Padding(padding: EdgeInsets.all(40), child: Center(child: CircularProgressIndicator()))
-                : expertsList.isEmpty
-                    ? const Padding(padding: EdgeInsets.all(40), child: Center(child: Text('No experts available in this category')))
-                    : ListView.builder(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        itemCount: expertsList.length + (_hasMoreExperts ? 1 : 0),
-                        itemBuilder: (context, index) {
-                          if (index == expertsList.length) {
-                            return const Padding(
-                              padding: EdgeInsets.symmetric(vertical: 16.0),
-                              child: Center(child: CircularProgressIndicator()),
-                            );
-                          }
-                          final expert = expertsList[index];
-                          return _buildExpertItemRedesigned(expert);
-                        },
-                      ),
+            // Integrated Expert Feed Screen (Fetch Once)
+            const ExpertFeedScreen(),
           ],
         ),
-      ),
-    );
+      );
   }
 
   void _triggerCallByExpertId(String expertId) async {

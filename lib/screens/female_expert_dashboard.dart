@@ -98,14 +98,6 @@ class _FemaleExpertDashboardState extends State<FemaleExpertDashboard> with Sing
           gender: 'female',
           language: appState.primaryLanguage,
         );
-        await FirebaseFirestore.instance.collection('experts').doc(expertId).set({
-          'nickname': appState.nickname,
-          'mobileNumber': appState.mobileNumber,
-          'age': 2026 - appState.birthYear,
-          'pricePerMin': 5,
-          'languages': appState.primaryLanguage,
-          'isOnline': value,
-        }, SetOptions(merge: true));
       } catch (e) {
         debugPrint('Error updating online status: $e');
       }

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_database/firebase_database.dart';
 import '../providers/app_state.dart';
 import '../services/call_service.dart';
 import '../widgets/local_avatar_widget.dart';
@@ -205,6 +206,14 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
     }
   }
 
+  void _markFreeCallUsed() async {
+    final appState = context.read<AppState>();
+    final mobile = appState.mobileNumber;
+    appState.setHasUsedFreeCall(true);
+    await FirebaseFirestore.instance.collection('users').doc(mobile).set({
+      'hasUsedFreeCall': true,
+    }, SetOptions(merge: true));
+  }
 
   Future<void> _resolveExpertTier() async {
     if (_tierResolved) return;
@@ -236,9 +245,6 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
       setState(() {
         _duration++;
       });
-
-      /*
-      // Commented out for testing purposes
 
       if (_duration == 1 && widget.isCaller && widget.isFirstFreeCall) {
         _markFreeCallUsed();
@@ -278,7 +284,6 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
         }
         // Expert earnings are credited at call end in _hangupLocal()
       }
-      */
     });
   }
 
@@ -304,12 +309,16 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
       if (widget.isCaller) {
         _saveCallLog();
       }
-      // Credit expert earnings and update talk time at end of call (only if > 50 seconds)
-      if (!widget.isCaller && _duration > 50) {
-        final earned = _expertEarningRate * (_duration / 60.0);
+      // Credit expert earnings and update talk time at end of call (only if >= 50 seconds)
+      if (!widget.isCaller && _duration >= 50) {
+        int callMinutes = _duration ~/ 60;
+        if (_duration % 60 >= 50) {
+          callMinutes += 1;
+        }
+        final earned = _expertEarningRate * callMinutes;
         final appState = context.read<AppState>();
         appState.addEarnings(earned);
-        debugPrint('Expert earned: ₹${earned.toStringAsFixed(2)} (${_duration}s at ₹$_expertEarningRate/min)');
+        debugPrint('Expert earned: ₹${earned.toStringAsFixed(2)} (${_duration}s at ₹$_expertEarningRate/min, billed as $callMinutes min)');
         // Update all stats in Firestore
         _updateExpertStats(earned, _duration);
       }
@@ -327,7 +336,10 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
       if (docSnap.exists) {
         final currentSeconds = (docSnap.data()?['totalTalkSeconds'] as num?)?.toInt() ?? 0;
         final newSeconds = currentSeconds + seconds;
-        final newMinutes = newSeconds ~/ 60;
+        int newMinutes = newSeconds ~/ 60;
+        if (newSeconds % 60 >= 50) {
+          newMinutes += 1;
+        }
         
         await docRef.set({
           'totalEarnings': FieldValue.increment(earned),
@@ -335,6 +347,19 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
           'totalTalkSeconds': FieldValue.increment(seconds),
           'totalTalktimeMinutes': newMinutes,
         }, SetOptions(merge: true));
+
+        // Also update totalTalkSeconds in RTDB for fast retrieval in male UI
+        try {
+          final rtdb = FirebaseDatabase.instanceFor(
+            app: FirebaseDatabase.instance.app,
+            databaseURL: 'https://zegochat-c44b0.asia-southeast1.firebasedatabase.app',
+          );
+          await rtdb.ref('status/$expertId').update({
+            'totalTalkSeconds': ServerValue.increment(seconds),
+          });
+        } catch (rtdbError) {
+          debugPrint('Error updating RTDB stats: $rtdbError');
+        }
       }
     } catch (e) {
       debugPrint('Error updating expert stats: $e');

@@ -12,6 +12,21 @@ class MatchmakingService {
         ) {
     // Cache Optimization (keepSynced): Ensure the matchmaking pool is cached in RAM
     _db.ref('queues').keepSynced(true);
+    initDemandListener();
+  }
+
+  int _currentActiveMales = 0;
+
+  void initDemandListener() {
+    _db.ref('stats/active_searching_males').onValue.listen((event) {
+      if (event.snapshot.value != null) {
+        _currentActiveMales = int.tryParse(event.snapshot.value.toString()) ?? 0;
+      }
+    });
+  }
+
+  int _getInstantPoolSize() {
+    return (_currentActiveMales * 3).clamp(30, 2000);
   }
 
   /// Female Expert Logic (Joining/Leaving the Queue)
@@ -108,11 +123,11 @@ class MatchmakingService {
       }
 
       try {
-        // Query & Pool Size: Fetch the longest-waiting experts using limitToFirst(200)
+        // Query & Pool Size: Fetch the longest-waiting experts using dynamic limit
         final DataSnapshot snapshot = await _db
             .ref(bucketPath)
             .orderByValue()
-            .limitToFirst(200)
+            .limitToFirst(_getInstantPoolSize())
             .get();
 
         if (snapshot.exists && snapshot.value != null) {
