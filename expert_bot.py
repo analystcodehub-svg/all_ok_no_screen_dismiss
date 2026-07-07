@@ -389,7 +389,6 @@ async def main():
     # Upsert Profile
     profile_data = {
         'nickname': name,
-        'isOnline': True,
         'pricePerMin': 5,
         'rating': 5.0,
         'languages': lang,

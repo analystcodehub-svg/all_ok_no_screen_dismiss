@@ -158,7 +158,6 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
           'pricePerMin': 5,
           'languages': appState.primaryLanguage,
           'rating': 4.8,
-          'isOnline': value,
         }, SetOptions(merge: true));
         debugPrint('[STATUS] Firestore updated experts/$expertId');
       } catch (e) {
