@@ -357,6 +357,15 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
           await rtdb.ref('status/$expertId').update({
             'totalTalkSeconds': ServerValue.increment(seconds),
           });
+          
+          final lang = docSnap.data()?['languages']?.toString().toLowerCase() ?? 'hindi';
+          final queueRef = rtdb.ref('queues/female_$lang/$expertId');
+          final queueSnap = await queueRef.get();
+          if (queueSnap.exists) {
+            await queueRef.update({
+              'totalTalkSeconds': ServerValue.increment(seconds),
+            });
+          }
         } catch (rtdbError) {
           debugPrint('Error updating RTDB stats: $rtdbError');
         }

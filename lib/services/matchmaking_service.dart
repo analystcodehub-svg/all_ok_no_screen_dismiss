@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/foundation.dart';
+import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
 
 class MatchmakingService {
   final FirebaseDatabase _db;
@@ -42,8 +43,18 @@ class MatchmakingService {
       final presenceRef = _db.ref('status/$expertId');
       
       if (isOnline) {
+        int talkSeconds = 0;
+        try {
+          final doc = await FirebaseFirestore.instance.collection('experts').doc(expertId).get();
+          if (doc.exists) {
+            talkSeconds = (doc.data()?['totalTalkSeconds'] as num?)?.toInt() ?? 0;
+          }
+        } catch (e) {
+          debugPrint('Error fetching totalTalkSeconds: $e');
+        }
+
         // Set presence first, and set callStatus to available
-        await presenceRef.set({
+        await presenceRef.update({
           'isOnline': true,
           'callStatus': 'available',
           'lastChanged': ServerValue.timestamp,
@@ -55,7 +66,10 @@ class MatchmakingService {
         });
 
         // Add to language queue with timestamp for ordering
-        await docRef.set(ServerValue.timestamp);
+        await docRef.update({
+          'timestamp': ServerValue.timestamp,
+          'totalTalkSeconds': talkSeconds,
+        });
         await docRef.onDisconnect().remove();
         debugPrint('Expert $expertId added to $bucketPath.');
       } else {
@@ -126,7 +140,7 @@ class MatchmakingService {
         // Query & Pool Size: Fetch the longest-waiting experts using dynamic limit
         final DataSnapshot snapshot = await _db
             .ref(bucketPath)
-            .orderByValue()
+            .orderByChild('timestamp')
             .limitToFirst(_getInstantPoolSize())
             .get();
 

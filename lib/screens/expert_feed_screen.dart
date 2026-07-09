@@ -33,8 +33,12 @@ class _ExpertFeedScreenState extends State<ExpertFeedScreen> {
     
     const int limit = 150; // Hardcoded Smart Limit
     
-    final snapshot = await FirebaseDatabase.instance
-        .ref('queues/$bucket')
+    final db = FirebaseDatabase.instanceFor(
+      app: FirebaseDatabase.instance.app,
+      databaseURL: 'https://zegochat-c44b0.asia-southeast1.firebasedatabase.app',
+    );
+    final snapshot = await db
+        .ref('queues/female_$bucket')
         .orderByChild('totalTalkSeconds')
         .limitToLast(limit)
         .get();
@@ -43,7 +47,16 @@ class _ExpertFeedScreenState extends State<ExpertFeedScreen> {
     if (snapshot.exists) {
       for (var child in snapshot.children) {
         if (child.value != null) {
-          Map<dynamic, dynamic> data = Map<dynamic, dynamic>.from(child.value as Map);
+          Map<dynamic, dynamic> data = {};
+          
+          if (child.value is Map) {
+            data = Map<dynamic, dynamic>.from(child.value as Map);
+          } else {
+            // Real experts set from MatchmakingService just put a ServerValue.timestamp
+            data['timestamp'] = child.value;
+            data['nickname'] = 'Expert'; // Fallback if no nickname is in the payload
+          }
+          
           data['id'] = child.key;
           expertList.add(data);
         }
