@@ -403,8 +403,9 @@ class CallService {
       });
       
       if (result.committed) {
-        // Remove from experts queue so they stop receiving calls
-        await _database.ref('experts_queue/$expertId').remove();
+        // We no longer remove from a global queue here because the queue is language-specific 
+        // (e.g., queues/female_hindi) and handled by MatchmakingService. 
+        // The expert's 'status': 'busy' in the status node is enough to prevent concurrent calls.
       }
       
       return result.committed;
@@ -463,15 +464,9 @@ class CallService {
             'lastChanged': ServerValue.timestamp,
           });
           
-          // Verify if they are actually an expert before adding to queue
-          final expertDoc = await FirebaseFirestore.instance.collection('experts').doc(expertId).get();
-          if (expertDoc.exists) {
-            await _database.ref('experts_queue/$expertId').set({
-              'expertId': expertId,
-              'status': 'waiting',
-              'timestamp': ServerValue.timestamp,
-            });
-          }
+          // We no longer add to experts_queue because the app uses dynamic language queues 
+          // (like queues/female_hindi) managed by MatchmakingService. The expert is still in 
+          // that queue, and their 'status' is now 'online', making them available again.
         } else {
           // They toggled offline during the call, just set status offline
           await ref.update({
