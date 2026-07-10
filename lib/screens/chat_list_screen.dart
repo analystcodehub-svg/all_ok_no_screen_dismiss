@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../theme/app_colors.dart';
 import '../providers/app_state.dart';
 import '../services/local_chat_database.dart';
+import '../widgets/local_avatar_widget.dart';
 import 'hybrid_chat_screen.dart';
 
 class ChatListScreen extends StatefulWidget {
@@ -33,25 +34,35 @@ class _ChatListScreenState extends State<ChatListScreen> {
       final otherUser = data['otherUserId'] as String;
       
       String displayName = otherUser;
-      if (RegExp(r'^\+?[0-9]{10,15}$').hasMatch(otherUser)) {
-        try {
+      String role = 'user'; // default
+
+      try {
+        // Try experts collection first
+        final expertDoc = await FirebaseFirestore.instance.collection('experts').doc(otherUser).get();
+        if (expertDoc.exists && expertDoc.data() != null) {
+          final expertData = expertDoc.data()!;
+          displayName = expertData['nickname'] ?? displayName;
+          role = 'expert';
+        } else {
+          // Try users collection
           final userDoc = await FirebaseFirestore.instance.collection('users').doc(otherUser).get();
           if (userDoc.exists && userDoc.data() != null) {
             final userData = userDoc.data()!;
             if (userData['nickname'] != null && userData['nickname'].toString().isNotEmpty) {
               displayName = userData['nickname'].toString();
             } else {
-              displayName = 'User ${otherUser.substring(otherUser.length - 4)}';
+              displayName = 'User ${otherUser.length >= 4 ? otherUser.substring(otherUser.length - 4) : otherUser}';
             }
           } else {
-            displayName = 'User ${otherUser.substring(otherUser.length - 4)}';
+            displayName = 'User ${otherUser.length >= 4 ? otherUser.substring(otherUser.length - 4) : otherUser}';
           }
-        } catch (e) {
-          displayName = 'User ${otherUser.substring(otherUser.length - 4)}';
         }
+      } catch (e) {
+        displayName = 'User ${otherUser.length >= 4 ? otherUser.substring(otherUser.length - 4) : otherUser}';
       }
       
       data['displayName'] = displayName;
+      data['role'] = role;
       enrichedDocs.add(data);
     }
     
@@ -133,7 +144,11 @@ class _ChatListScreenState extends State<ChatListScreen> {
                             dayText = '${dt.day}/${dt.month}';
                           }
 
+                          final role = data['role'] as String? ?? 'user';
+
                           return _buildChatCard(
+                            uid: otherUser,
+                            role: role,
                             name: displayName,
                             lastMessage: lastMessage,
                             dayText: dayText,
@@ -213,27 +228,14 @@ class _ChatListScreenState extends State<ChatListScreen> {
   }
 
   Widget _buildChatCard({
+    required String uid,
+    required String role,
     required String name,
     required String lastMessage,
     required String dayText,
     required int unreadCount,
     required VoidCallback onTap,
   }) {
-    final colors = [
-      const Color(0xFFE91E63), // Pink
-      const Color(0xFF9C27B0), // Purple
-      const Color(0xFF3F51B5), // Indigo
-      const Color(0xFF009688), // Teal
-      const Color(0xFFFF9800), // Orange
-      const Color(0xFF795548), // Brown
-      const Color(0xFF607D8B), // Blue Grey
-    ];
-    final color = colors[name.hashCode.abs() % colors.length];
-    
-    String initials = name.length >= 2 ? name.substring(0, 2).toUpperCase() : name.toUpperCase();
-    if (name.startsWith('User ') && name.length > 5) {
-      initials = 'U${name.substring(name.length - 1)}';
-    }
 
     return GestureDetector(
       onTap: onTap,
@@ -254,16 +256,15 @@ class _ChatListScreenState extends State<ChatListScreen> {
         ),
         child: Row(
           children: [
-            CircleAvatar(
-              radius: 28,
-              backgroundColor: color,
-              child: Text(
-                initials,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
+            Container(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.blue.shade100, width: 1.5),
+              ),
+              child: LocalAvatarWidget(
+                uid: uid,
+                role: role,
+                radius: 28,
               ),
             ),
             const SizedBox(width: 16),

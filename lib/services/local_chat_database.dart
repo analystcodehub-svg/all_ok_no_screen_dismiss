@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class LocalChatDatabase {
   static final LocalChatDatabase instance = LocalChatDatabase._init();
@@ -26,8 +28,23 @@ class LocalChatDatabase {
 
     return await openDatabase(
       path,
-      version: 1,
+      version: 2, // Upgraded for call logs
       onCreate: _createDB,
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          await db.execute('''
+            CREATE TABLE call_logs (
+              logId TEXT PRIMARY KEY,
+              callerId TEXT NOT NULL,
+              receiverId TEXT NOT NULL,
+              durationSeconds INTEGER NOT NULL,
+              status TEXT NOT NULL,
+              timestamp INTEGER NOT NULL
+            )
+          ''');
+          await db.execute('CREATE INDEX idx_call_timestamp ON call_logs (timestamp DESC)');
+        }
+      },
     );
   }
 
@@ -44,6 +61,18 @@ class LocalChatDatabase {
     ''');
     // Index to speed up roomId queries
     await db.execute('CREATE INDEX idx_roomId ON messages (roomId)');
+
+    await db.execute('''
+      CREATE TABLE call_logs (
+        logId TEXT PRIMARY KEY,
+        callerId TEXT NOT NULL,
+        receiverId TEXT NOT NULL,
+        durationSeconds INTEGER NOT NULL,
+        status TEXT NOT NULL,
+        timestamp INTEGER NOT NULL
+      )
+    ''');
+    await db.execute('CREATE INDEX idx_call_timestamp ON call_logs (timestamp DESC)');
   }
 
   // Generate a deterministic room ID
@@ -135,6 +164,75 @@ class LocalChatDatabase {
       mutableRow['otherUserId'] = getOtherUserIdFromRoomId(row['roomId'] as String, myUid);
       return mutableRow;
     }).toList();
+  }
+
+  Future<void> saveCallLogLocally(Map<String, dynamic> log) async {
+    final db = await instance.database;
+    await db.insert(
+      'call_logs',
+      log,
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+    _updateController.add(null);
+  }
+
+  Future<List<Map<String, dynamic>>> getRecentCallLogs(String myId) async {
+    final db = await instance.database;
+    return await db.query(
+      'call_logs',
+      where: 'callerId = ? OR receiverId = ?',
+      whereArgs: [myId, myId],
+      orderBy: 'timestamp DESC',
+    );
+  }
+
+  // Sync last 50 call logs from Firestore (Only once per install/login)
+  Future<void> syncCallLogsFromFirestore(String myId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final hasSynced = prefs.getBool('has_synced_call_logs_$myId') ?? false;
+
+      if (hasSynced) {
+        return; // Already synced once
+      }
+
+      final snapshot = await FirebaseFirestore.instance
+          .collection('call_logs')
+          .where(Filter.or(
+            Filter('callerId', isEqualTo: myId),
+            Filter('receiverId', isEqualTo: myId),
+          ))
+          .orderBy('timestamp', descending: true)
+          .limit(50)
+          .get();
+
+      if (snapshot.docs.isNotEmpty) {
+        final db = await instance.database;
+        final batch = db.batch();
+        for (var doc in snapshot.docs) {
+          final data = doc.data();
+          batch.insert(
+            'call_logs',
+            {
+              'logId': doc.id,
+              'callerId': data['callerId'] ?? '',
+              'receiverId': data['receiverId'] ?? '',
+              'durationSeconds': data['durationSeconds'] ?? 0,
+              'status': data['status'] ?? 'unknown',
+              'timestamp': data['timestamp'] ?? DateTime.now().millisecondsSinceEpoch,
+            },
+            conflictAlgorithm: ConflictAlgorithm.replace,
+          );
+        }
+        await batch.commit(noResult: true);
+        _updateController.add(null);
+      }
+      
+      // Mark as synced
+      await prefs.setBool('has_synced_call_logs_$myId', true);
+    } catch (e) {
+      print('Error syncing call logs: $e');
+    }
   }
 
   Future<void> close() async {

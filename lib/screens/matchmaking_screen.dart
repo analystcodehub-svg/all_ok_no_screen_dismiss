@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -261,9 +262,21 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> with SingleTicker
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A), // Dark slate background
-      body: SafeArea(
-        child: Column(
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFF0F172A), // Dark slate
+              Color(0xFF1E1B4B), // Deep indigo
+              Color(0xFF0F172A), // Dark slate
+            ],
+            stops: [0.0, 0.5, 1.0],
+          ),
+        ),
+        child: SafeArea(
+          child: Column(
           children: [
             const Spacer(),
             
@@ -290,11 +303,19 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> with SingleTicker
                   return Text(
                     statusMsg,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.95),
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.5,
                       height: 1.4,
+                      shadows: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.5),
+                          blurRadius: 10,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
                     ),
                   );
                 },
@@ -307,14 +328,32 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> with SingleTicker
               builder: (context, timerValue, child) {
                 if (timerValue > 0) {
                   return Padding(
-                    padding: const EdgeInsets.only(top: 16),
-                    child: Text(
-                      '00:${timerValue.toString().padLeft(2, '0')}',
-                      style: const TextStyle(
-                        color: Color(0xFFF43F5E),
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 2,
+                    padding: const EdgeInsets.only(top: 24),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF43F5E).withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: const Color(0xFFF43F5E).withValues(alpha: 0.4),
+                          width: 1.5,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFFF43F5E).withValues(alpha: 0.1),
+                            blurRadius: 15,
+                            spreadRadius: 2,
+                          ),
+                        ],
+                      ),
+                      child: Text(
+                        '00:${timerValue.toString().padLeft(2, '0')}',
+                        style: const TextStyle(
+                          color: Color(0xFFF43F5E),
+                          fontSize: 32,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 3,
+                        ),
                       ),
                     ),
                   );
@@ -330,23 +369,44 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> with SingleTicker
               onTap: _cancelSearch,
               child: Container(
                 margin: const EdgeInsets.only(bottom: 40),
-                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.1),
+                  gradient: LinearGradient(
+                    colors: [
+                      Colors.white.withValues(alpha: 0.15),
+                      Colors.white.withValues(alpha: 0.05),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
                   borderRadius: BorderRadius.circular(30),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.25),
+                    width: 1.5,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.2),
+                      blurRadius: 15,
+                      spreadRadius: 2,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
                 ),
                 child: const Text(
                   'Cancel',
                   style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 16,
+                    color: Colors.white,
+                    fontSize: 17,
                     fontWeight: FontWeight.bold,
+                    letterSpacing: 1.2,
                   ),
                 ),
               ),
             ),
           ],
         ),
+      ),
       ),
     );
   }
@@ -387,23 +447,64 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> with SingleTicker
             },
           ),
           
-          // Center Avatar (Caller)
-          Container(
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFFF43F5E).withValues(alpha: 0.5),
-                  blurRadius: 24,
-                  spreadRadius: 4,
+          // Revolving (Orbiting) Avatars
+          AnimatedBuilder(
+            animation: _radarController,
+            builder: (context, child) {
+              return Stack(
+                alignment: Alignment.center,
+                children: List.generate(4, (index) {
+                  // Orbit angle over time. 
+                  // Multiply by 2 * PI for full rotation, add offset based on index.
+                  double angle = (_radarController.value * 2 * math.pi) + (index * math.pi / 2);
+                  // Dynamic radius moving outward then looping
+                  double radius = 60.0 + ((_radarController.value + index * 0.25) % 1.0) * 60.0;
+                  
+                  return Transform.translate(
+                    offset: Offset(math.cos(angle) * radius, math.sin(angle) * radius),
+                    child: Opacity(
+                      // Fade out as they get further away
+                      opacity: (1.0 - ((radius - 60) / 60)).clamp(0.0, 1.0),
+                      child: CircleAvatar(
+                        radius: 14,
+                        backgroundImage: AssetImage('assets/avatars/female_${index + 1}.png'),
+                        backgroundColor: Colors.white,
+                      ),
+                    ),
+                  );
+                }),
+              );
+            },
+          ),
+
+          // Center Avatar (Slower Spinner)
+          AnimatedBuilder(
+            animation: _radarController,
+            builder: (context, child) {
+              // Cycle through 6 avatars slowly (2 times per radar cycle instead of 30)
+              int avatarIndex = ((_radarController.value * 4).toInt() % 6) + 1;
+              return Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: const Color(0xFFF43F5E),
+                    width: 2,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFFF43F5E).withValues(alpha: 0.5),
+                      blurRadius: 24,
+                      spreadRadius: 4,
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            child: LocalAvatarWidget(
-              uid: _callerUid,
-              role: 'user',
-              radius: 40,
-            ),
+                child: CircleAvatar(
+                  radius: 40,
+                  backgroundImage: AssetImage('assets/avatars/female_$avatarIndex.png'),
+                  backgroundColor: Colors.white,
+                ),
+              );
+            },
           ),
         ],
       ),
@@ -411,86 +512,84 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> with SingleTicker
   }
 
   Widget _buildRingingAvatars(String expertUid) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 40),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    String nickname = widget.requestedExpert?.nickname ?? 'Expert';
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          // Caller Avatar
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white24, width: 3),
-                ),
-                child: LocalAvatarWidget(
-                  uid: _callerUid,
-                  role: 'user',
-                  radius: 40,
-                ),
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                'You',
-                style: TextStyle(
-                  color: Colors.white70,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-
-          // Pulsing connection icon
+          // Pulsing Avatar
           AnimatedBuilder(
             animation: _radarController,
             builder: (context, child) {
-              double opacity = 0.4 + (0.6 * ((_radarController.value * 2) % 1.0));
-              return Opacity(
-                opacity: opacity,
-                child: const Icon(
-                  Icons.phone_forwarded_rounded,
-                  color: Color(0xFF10B981), // Green accent for connection
-                  size: 32,
-                ),
+              return Stack(
+                alignment: Alignment.center,
+                children: [
+                  // Outer ripple
+                  Transform.scale(
+                    scale: 1.0 + (_radarController.value * 0.5),
+                    child: Opacity(
+                      opacity: (1.0 - _radarController.value).clamp(0.0, 1.0),
+                      child: Container(
+                        width: 140,
+                        height: 140,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: const Color(0xFFF43F5E).withValues(alpha: 0.3),
+                        ),
+                      ),
+                    ),
+                  ),
+                  // Inner ripple
+                  Transform.scale(
+                    scale: 1.0 + (((_radarController.value + 0.5) % 1.0) * 0.4),
+                    child: Opacity(
+                      opacity: (1.0 - ((_radarController.value + 0.5) % 1.0)).clamp(0.0, 1.0),
+                      child: Container(
+                        width: 140,
+                        height: 140,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: const Color(0xFFF43F5E).withValues(alpha: 0.6),
+                            width: 2,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  // Expert Avatar
+                  Container(
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(color: const Color(0xFFF43F5E), width: 4),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFFF43F5E).withValues(alpha: 0.6),
+                          blurRadius: 30,
+                          spreadRadius: 8,
+                        ),
+                      ],
+                    ),
+                    child: LocalAvatarWidget(
+                      uid: expertUid,
+                      role: 'expert',
+                      radius: 64, // Prominent large avatar
+                    ),
+                  ),
+                ],
               );
             },
           ),
-
-          // Expert Avatar
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: const Color(0xFFF43F5E), width: 3),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFFF43F5E).withValues(alpha: 0.4),
-                      blurRadius: 16,
-                      spreadRadius: 2,
-                    ),
-                  ],
-                ),
-                child: LocalAvatarWidget(
-                  uid: expertUid,
-                  role: 'expert',
-                  radius: 40,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                widget.requestedExpert?.nickname ?? 'Expert',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
+          const SizedBox(height: 24),
+          // Expert Name
+          Text(
+            nickname,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 28,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 1.2,
+            ),
           ),
         ],
       ),

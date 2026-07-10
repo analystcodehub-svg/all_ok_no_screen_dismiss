@@ -71,6 +71,7 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
       final appState = context.read<AppState>();
       final myUid = appState.mobileNumber.isNotEmpty ? appState.mobileNumber : "test_mobile";
       HybridChatService().initListeners(myUid);
+      LocalChatDatabase.instance.syncCallLogsFromFirestore(myUid);
       
       // Check for auto-start permissions (Infinix, Xiaomi, etc.)
       AutoStartHelper.checkAndRequestAutoStart(context);
@@ -537,19 +538,6 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  // Profile Avatar with colored ring
-                  Container(
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(color: brandPrimary, width: 1.5),
-                    ),
-                    child: LocalAvatarWidget(
-                      uid: appState.mobileNumber,
-                      role: 'user',
-                      radius: 17,
-                    ),
-                  ),
                 ],
               ),
             ),
@@ -797,73 +785,34 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
                 ),
               ),
               const Spacer(),
-              // Online Label and Switch
-              Text(
-                'Online',
-                style: TextStyle(
-                  color: _isOnlineSwitch ? brandPrimary : brandTextGrey,
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Switch(
-                value: _isOnlineSwitch,
-                onChanged: (val) {
-                  setState(() {
-                    _isOnlineSwitch = val;
-                  });
-                },
-                activeThumbColor: Colors.white,
-                activeTrackColor: brandPrimary,
-                inactiveThumbColor: Colors.white,
-                inactiveTrackColor: Colors.grey.shade300,
-              ),
-              PopupMenuButton<String>(
-                icon: const Icon(Icons.more_vert, color: brandTextDark),
-                onSelected: (value) {
-                  if (value == 'logout') {
-                    _logout();
-                  }
-                },
-                itemBuilder: (BuildContext context) {
-                  return [
-                    const PopupMenuItem<String>(
-                      value: 'logout',
-                      child: Text('Logout'),
-                    ),
-                  ];
-                },
-              ),
+
+
             ],
           ),
           const SizedBox(height: 16),
           
           Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('call_logs')
-                  .where('callerId', isEqualTo: appState.mobileNumber)
-                  .snapshots(),
+            child: StreamBuilder<void>(
+              stream: LocalChatDatabase.instance.updates,
               builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
+                return FutureBuilder<List<Map<String, dynamic>>>(
+                  future: LocalChatDatabase.instance.getRecentCallLogs(appState.mobileNumber),
+                  builder: (context, futureSnapshot) {
+                if (futureSnapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
                 }
-                final docs = snapshot.hasData ? snapshot.data!.docs : [];
+                final docs = futureSnapshot.data ?? [];
                 if (docs.isEmpty) {
                   return const Center(
                     child: Text('No recent calls', style: TextStyle(color: brandTextGrey)),
                   );
                 }
 
-                // Sort removed due to createdAt deprecation
-                final sortedDocs = List<QueryDocumentSnapshot>.from(docs);
-
                 return ListView.builder(
-                  itemCount: sortedDocs.length,
+                  itemCount: docs.length,
                   itemBuilder: (context, index) {
-                    final data = sortedDocs[index].data() as Map<String, dynamic>;
-                    final expertId = data['expertId'] ?? 'Unknown';
+                    final data = docs[index];
+                    final expertId = data['receiverId'] == appState.mobileNumber ? data['callerId'] : data['receiverId'];
                     final durationSeconds = data['durationSeconds'] ?? 0;
                     
                     final m = durationSeconds ~/ 60;
@@ -871,6 +820,15 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
                     final durationStr = '${m}m ${s}s';
                     
                     String formattedTime = 'Just now';
+                    if (data['timestamp'] != null) {
+                      final dt = DateTime.fromMillisecondsSinceEpoch(data['timestamp']);
+                      final now = DateTime.now();
+                      if (dt.year == now.year && dt.month == now.month && dt.day == now.day) {
+                        formattedTime = TimeOfDay.fromDateTime(dt).format(context);
+                      } else {
+                        formattedTime = '${dt.day}/${dt.month}';
+                      }
+                    }
 
                     return FutureBuilder<DocumentSnapshot>(
                       future: FirebaseFirestore.instance.collection('experts').doc(expertId).get(),

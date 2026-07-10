@@ -7,6 +7,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_database/firebase_database.dart';
 import '../providers/app_state.dart';
 import '../services/call_service.dart';
+import '../services/local_chat_database.dart';
 import '../widgets/local_avatar_widget.dart';
 
 class ActiveCallPage extends StatefulWidget {
@@ -384,12 +385,23 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
   Future<void> _saveCallLog() async {
     try {
       final status = _duration > 0 ? 'ended' : 'missed';
-      await FirebaseFirestore.instance.collection('call_logs').add({
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final logId = 'log_${widget.callerId}_${widget.receiverId}_$timestamp';
+      
+      final logData = {
+        'logId': logId,
         'callerId': widget.callerId,
         'receiverId': widget.receiverId,
         'durationSeconds': _duration,
         'status': status,
-      });
+        'timestamp': timestamp,
+      };
+
+      // 1. Save locally for instant Recents tab loading
+      await LocalChatDatabase.instance.saveCallLogLocally(logData);
+
+      // 2. Save to Firestore for cross-device sync
+      await FirebaseFirestore.instance.collection('call_logs').doc(logId).set(logData);
     } catch (e) {
       debugPrint('Error saving call log: $e');
     }

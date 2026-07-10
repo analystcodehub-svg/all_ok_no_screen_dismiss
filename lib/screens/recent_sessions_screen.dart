@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../theme/app_colors.dart';
 import '../providers/app_state.dart';
 import '../services/call_service.dart';
+import '../services/local_chat_database.dart';
 import '../widgets/local_avatar_widget.dart';
 import 'active_call_page.dart';
 
@@ -87,90 +88,93 @@ class _RecentSessionsScreenState extends State<RecentSessionsScreen> {
               ),
             ),
 
-            // List View connected to Firestore 'call_logs' collection
+            // List View connected to local 'call_logs' table
             Expanded(
-              child: StreamBuilder<QuerySnapshot>(
-                stream: FirebaseFirestore.instance
-                    .collection('call_logs')
-                    .snapshots(),
+              child: StreamBuilder<void>(
+                stream: LocalChatDatabase.instance.updates,
                 builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-
-                  if (snapshot.hasError) {
-                    return Center(child: Text('Error loading calls: ${snapshot.error}'));
-                  }
-
-                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                    return _buildEmptyState();
-                  }
-
-                  // Filter calls relevant to current user and the selected filter
-                  final userCalls = snapshot.data!.docs.where((doc) {
-                     final data = doc.data() as Map<String, dynamic>;
-                     final matchesUser = data['callerId'] == currentUserMobile || 
-                                         data['receiverId'] == currentUserMobile ||
-                                         data['receiverId'] == currentNickname ||
-                                         data['callerId'] == currentNickname;
-                     if (!matchesUser) return false;
-
-                     if (_filter == 'Missed') {
-                       return data['status'] == 'missed';
-                     }
-                     return true; // 'All'
-                  }).toList();
-
-                  // Sort removed due to createdAt deprecation
-
-                  if (userCalls.isEmpty) {
-                    return _buildEmptyState();
-                  }
-
-                  return ListView.builder(
-                    padding: const EdgeInsets.all(20),
-                    itemCount: userCalls.length,
-                    itemBuilder: (context, index) {
-                      final doc = userCalls[index];
-                      final data = doc.data() as Map<String, dynamic>;
-                      
-                      final isCaller = data['callerId'] == currentUserMobile;
-                      final String? otherUserId = (isCaller ? data['receiverId'] : data['callerId'])?.toString();
-                      final isMissed = data['status'] == 'missed';
-                      
-                      String timeText = 'Just now';
-
-                      // Determine duration text
-                      String durationText = isMissed ? 'Missed Call' : 'Ended';
-                      if (!isMissed && data['durationSeconds'] != null) {
-                        final sec = data['durationSeconds'] as int;
-                        final m = sec ~/ 60;
-                        final s = sec % 60;
-                        durationText = '${m}m ${s}s';
+                  return FutureBuilder<List<Map<String, dynamic>>>(
+                    future: LocalChatDatabase.instance.getRecentCallLogs(currentUserMobile),
+                    builder: (context, futureSnapshot) {
+                      if (futureSnapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
                       }
 
-                      final collectionName = isCaller ? 'experts' : 'users';
-                      
-                      return FutureBuilder<DocumentSnapshot>(
-                        future: FirebaseFirestore.instance.collection(collectionName).doc(otherUserId).get(),
-                        builder: (context, profileSnapshot) {
-                          String displayName = otherUserId ?? 'Unknown';
+                      if (futureSnapshot.hasError) {
+                        return Center(child: Text('Error loading calls: ${futureSnapshot.error}'));
+                      }
 
-                          if (profileSnapshot.hasData && profileSnapshot.data!.exists) {
-                            final profileData = profileSnapshot.data!.data() as Map<String, dynamic>;
-                            if (profileData['nickname'] != null && profileData['nickname'].toString().isNotEmpty) {
-                              displayName = profileData['nickname'];
+                      final allCalls = futureSnapshot.data ?? [];
+                      if (allCalls.isEmpty) {
+                        return _buildEmptyState();
+                      }
+
+                      // Filter calls relevant to the selected filter
+                      final userCalls = allCalls.where((data) {
+                        if (_filter == 'Missed') {
+                          return data['status'] == 'missed';
+                        }
+                        return true; // 'All'
+                      }).toList();
+
+                      if (userCalls.isEmpty) {
+                        return _buildEmptyState();
+                      }
+
+                      return ListView.builder(
+                        padding: const EdgeInsets.all(20),
+                        itemCount: userCalls.length,
+                        itemBuilder: (context, index) {
+                          final data = userCalls[index];
+                          
+                          final isCaller = data['callerId'] == currentUserMobile;
+                          final String? otherUserId = (isCaller ? data['receiverId'] : data['callerId'])?.toString();
+                          final isMissed = data['status'] == 'missed';
+                          
+                          String timeText = 'Just now';
+                          if (data['timestamp'] != null) {
+                            final dt = DateTime.fromMillisecondsSinceEpoch(data['timestamp']);
+                            final now = DateTime.now();
+                            if (dt.year == now.year && dt.month == now.month && dt.day == now.day) {
+                              timeText = TimeOfDay.fromDateTime(dt).format(context);
+                            } else {
+                              timeText = '${dt.day}/${dt.month}';
                             }
                           }
 
-                          return _buildCallCard(
-                            name: displayName,
-                            timeText: timeText,
-                            duration: durationText,
-                            cost: isMissed ? '₹0' : 'Ended',
-                            isMissed: isMissed,
-                            otherUserId: otherUserId ?? '',
-                            isCaller: isCaller,
+                          // Determine duration text
+                          String durationText = isMissed ? 'Missed Call' : 'Ended';
+                          if (!isMissed && data['durationSeconds'] != null) {
+                            final sec = data['durationSeconds'] as int;
+                            final m = sec ~/ 60;
+                            final s = sec % 60;
+                            durationText = '${m}m ${s}s';
+                          }
+
+                          final collectionName = isCaller ? 'experts' : 'users';
+                          
+                          return FutureBuilder<DocumentSnapshot>(
+                            future: FirebaseFirestore.instance.collection(collectionName).doc(otherUserId).get(),
+                            builder: (context, profileSnapshot) {
+                              String displayName = otherUserId ?? 'Unknown';
+
+                              if (profileSnapshot.hasData && profileSnapshot.data!.exists) {
+                                final profileData = profileSnapshot.data!.data() as Map<String, dynamic>;
+                                if (profileData['nickname'] != null && profileData['nickname'].toString().isNotEmpty) {
+                                  displayName = profileData['nickname'];
+                                }
+                              }
+
+                              return _buildCallCard(
+                                name: displayName,
+                                timeText: timeText,
+                                duration: durationText,
+                                cost: isMissed ? '₹0' : 'Ended',
+                                isMissed: isMissed,
+                                otherUserId: otherUserId ?? '',
+                                isCaller: isCaller,
+                              );
+                            },
                           );
                         },
                       );

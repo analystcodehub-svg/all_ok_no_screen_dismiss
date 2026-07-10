@@ -28,13 +28,39 @@ class _ExpertFeedScreenState extends State<ExpertFeedScreen> {
   }
 
   Future<List<Map<dynamic, dynamic>>> _fetchExperts() async {
-    String languageCode = Localizations.localeOf(context).languageCode;
+    final appState = context.read<AppState>();
+    String mobile = appState.mobileNumber.isNotEmpty ? appState.mobileNumber : "test_mobile";
+
     String bucket = 'hindi'; // Default bucket
     
-    if (languageCode == 'pa') {
-      bucket = 'punjabi';
-    } else if (languageCode == 'hi') {
-      bucket = 'hindi';
+    // First try to get from Firestore user profile
+    try {
+      final docSnap = await FirebaseFirestore.instance.collection('users').doc(mobile).get();
+      if (docSnap.exists && docSnap.data() != null) {
+        String lang = (docSnap.data()!['primaryLanguage'] as String?)?.toLowerCase() ?? '';
+        if (lang.isNotEmpty) {
+          if (lang == 'english') bucket = 'english';
+          else if (lang == 'punjabi') bucket = 'punjabi';
+          else if (lang == 'bengali') bucket = 'bengali';
+          else if (lang == 'marathi') bucket = 'marathi';
+          else if (lang == 'gujarati') bucket = 'gujarati';
+          else if (lang == 'tamil') bucket = 'tamil';
+          else if (lang == 'telugu') bucket = 'telugu';
+          else if (lang == 'kannada') bucket = 'kannada';
+          else if (lang == 'malayalam') bucket = 'malayalam';
+          else bucket = 'hindi';
+        }
+      }
+    } catch (e) {
+      debugPrint('Error fetching primary language: $e');
+    }
+
+    // Fallback to device locale if bucket is still hindi and we want to check locale
+    if (bucket == 'hindi') {
+      String languageCode = Localizations.localeOf(context).languageCode;
+      if (languageCode == 'pa') {
+        bucket = 'punjabi';
+      }
     }
     
     const int limit = 150; // Hardcoded Smart Limit
@@ -64,7 +90,10 @@ class _ExpertFeedScreenState extends State<ExpertFeedScreen> {
           }
           
           data['id'] = child.key;
-          data['language'] = bucket == 'punjabi' ? 'Punjabi' : 'Hindi';
+          
+          // Capitalize first letter for display
+          String displayLang = bucket.isEmpty ? 'Hindi' : bucket[0].toUpperCase() + bucket.substring(1);
+          data['language'] = displayLang;
           
           expertList.add(data);
         }
