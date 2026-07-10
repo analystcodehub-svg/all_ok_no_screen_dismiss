@@ -210,7 +210,7 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
     final appState = context.read<AppState>();
     final balance = appState.walletBalance;
     final hasUsedFreeCall = appState.hasUsedFreeCall;
-    if (false) { // TODO: Disabled payment gateway and free call logic for now
+    if (balance < expert.pricePerMin && hasUsedFreeCall) {
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
@@ -259,7 +259,7 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
     final balance = appState.walletBalance;
     final hasUsedFreeCall = appState.hasUsedFreeCall;
     const pricePerMin = 5.0;
-    if (false) { // TODO: Disabled payment gateway and free call logic for now
+    if (balance < pricePerMin && hasUsedFreeCall) {
       showDialog(
         context: context,
         builder: (context) => AlertDialog(

@@ -247,49 +247,43 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
         _duration++;
       });
 
-      if (false) { // TODO: Disabled payment gateway and free call logic for now
-        // if (_duration == 1 && widget.isCaller && widget.isFirstFreeCall) {
-        //   _markFreeCallUsed();
-        // }
+      if (_duration == 1 && widget.isCaller && widget.isFirstFreeCall) {
+        _markFreeCallUsed();
       }
 
-      if (false) { // TODO: Disabled payment gateway and free call logic for now
-        // // At exactly 2 min (120s): free period ends, check balance immediately
-        // if (_duration == 120 && widget.isCaller && widget.isFirstFreeCall) {
-        //   final balance = context.read<AppState>().walletBalance;
-        //   if (balance < widget.pricePerMin) {
-        //     _triggerHangup();
-        //     ScaffoldMessenger.of(context).showSnackBar(
-        //       const SnackBar(
-        //         content: Text('Free 2 minutes over! Recharge to keep talking.'),
-        //         backgroundColor: Colors.orange,
-        //         duration: Duration(seconds: 4),
-        //       ),
-        //     );
-        //     return;
-        //   }
-        // }
+      // At exactly 2 min (120s): free period ends, check balance immediately
+      if (_duration == 120 && widget.isCaller && widget.isFirstFreeCall) {
+        final balance = context.read<AppState>().walletBalance;
+        if (balance < widget.pricePerMin) {
+          _triggerHangup();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Free 2 minutes over! Recharge to keep talking.'),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 4),
+            ),
+          );
+          return;
+        }
       }
 
-      if (false) { // TODO: Disabled payment gateway and free call logic for now
-        // // Deduct balances every 60 seconds (after free period)
-        // if (_duration > 0 && _duration % 60 == 0) {
-        //   if (widget.isCaller) {
-        //     if (widget.isFirstFreeCall && _duration <= 120) {
-        //       // First 2 minutes are free, do not deduct wallet
-        //     } else {
-        //       context.read<AppState>().deductWalletBalance(widget.pricePerMin);
-        //       final balance = context.read<AppState>().walletBalance;
-        //       if (balance < widget.pricePerMin) {
-        //         _triggerHangup();
-        //         ScaffoldMessenger.of(context).showSnackBar(
-        //           const SnackBar(content: Text('Call ended: Insufficient wallet balance')),
-        //         );
-        //       }
-        //     }
-        //   }
-        //   // Expert earnings are credited at call end in _hangupLocal()
-        // }
+      // Deduct balances every 60 seconds (after free period)
+      if (_duration > 0 && _duration % 60 == 0) {
+        if (widget.isCaller) {
+          if (widget.isFirstFreeCall && _duration <= 120) {
+            // First 2 minutes are free, do not deduct wallet
+          } else {
+            context.read<AppState>().deductWalletBalance(widget.pricePerMin);
+            final balance = context.read<AppState>().walletBalance;
+            if (balance < widget.pricePerMin) {
+              _triggerHangup();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Call ended: Insufficient wallet balance')),
+              );
+            }
+          }
+        }
+        // Expert earnings are credited at call end in _hangupLocal()
       }
     });
   }
