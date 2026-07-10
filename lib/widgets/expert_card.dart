@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_database/firebase_database.dart';
 import 'local_avatar_widget.dart';
 
 class ExpertCard extends StatelessWidget {
@@ -7,6 +8,7 @@ class ExpertCard extends StatelessWidget {
   final String language;
   final VoidCallback onCallTap;
   final VoidCallback onChatTap;
+  final bool isOnline;
 
   const ExpertCard({
     Key? key,
@@ -15,6 +17,7 @@ class ExpertCard extends StatelessWidget {
     required this.language,
     required this.onCallTap,
     required this.onChatTap,
+    this.isOnline = true,
   }) : super(key: key);
 
   int get displayAge {
@@ -75,7 +78,23 @@ class ExpertCard extends StatelessWidget {
                             Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Icon(Icons.fiber_manual_record, size: 10, color: Colors.green),
+                                StreamBuilder<DatabaseEvent>(
+                                  stream: FirebaseDatabase.instanceFor(
+                                    app: FirebaseDatabase.instance.app,
+                                    databaseURL: 'https://zegochat-c44b0.asia-southeast1.firebasedatabase.app',
+                                  ).ref('status/$expertId/isOnline').onValue,
+                                  builder: (context, snapshot) {
+                                    bool currentOnline = isOnline; // default to initial
+                                    if (snapshot.hasData && snapshot.data!.snapshot.value != null) {
+                                      currentOnline = snapshot.data!.snapshot.value == true;
+                                    }
+                                    return Icon(
+                                      Icons.fiber_manual_record,
+                                      size: 10,
+                                      color: currentOnline ? Colors.green : Colors.grey,
+                                    );
+                                  },
+                                ),
                                 const SizedBox(width: 4),
                                 Text(
                                   '$displayAge Yrs',

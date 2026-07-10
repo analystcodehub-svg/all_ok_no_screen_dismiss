@@ -71,6 +71,16 @@ class _ExpertFeedScreenState extends State<ExpertFeedScreen> {
       }
     }
     
+    // Fetch isOnline status for all fetched experts in parallel
+    await Future.wait(expertList.map((expert) async {
+      try {
+        final statusEvent = await db.ref('status/${expert['id']}/isOnline').once();
+        expert['isOnline'] = statusEvent.snapshot.value == true;
+      } catch (e) {
+        expert['isOnline'] = true; // Fallback
+      }
+    }));
+
     // Client-side shuffle in RAM to randomize the top 150
     expertList.shuffle();
     
@@ -114,11 +124,13 @@ class _ExpertFeedScreenState extends State<ExpertFeedScreen> {
               final expert = experts[index];
               final String nickname = expert['nickname'] ?? 'Unknown';
               final String language = expert['language'] ?? 'Hindi';
+              final bool isOnline = expert['isOnline'] ?? true;
               
               return ExpertCard(
                 expertId: expert['id'] ?? '',
                 nickname: nickname,
                 language: language,
+                isOnline: isOnline,
                 onCallTap: () async {
                   debugPrint('Call button tapped for ${expert['nickname']} with ID ${expert['id']}');
                   final expertId = expert['id'];
@@ -139,7 +151,7 @@ class _ExpertFeedScreenState extends State<ExpertFeedScreen> {
                       final balance = appState.walletBalance;
                       final hasUsedFreeCall = appState.hasUsedFreeCall;
                       
-                      if (balance < expertObj.pricePerMin && hasUsedFreeCall) {
+                      if (false) { // TODO: Disabled payment gateway and free call logic for now
                         showDialog(
                           context: context,
                           builder: (context) => AlertDialog(
