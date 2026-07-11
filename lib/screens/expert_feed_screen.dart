@@ -107,11 +107,20 @@ class _ExpertFeedScreenState extends State<ExpertFeedScreen> {
       }
     }
     
-    // Fetch isOnline status for all fetched experts in parallel
+    // Fetch isOnline status and fallback nickname for all fetched experts in parallel
     await Future.wait(expertList.map((expert) async {
       try {
         final statusEvent = await db.ref('status/${expert['id']}/isOnline').once();
         expert['isOnline'] = statusEvent.snapshot.value == true;
+        
+        // Fallback for nickname if not present in RTDB (e.g. older expert app versions)
+        if (expert['nickname'] == null || expert['nickname'] == 'Unknown' || expert['nickname'] == 'Expert') {
+          final doc = await FirebaseFirestore.instance.collection('experts').doc(expert['id']).get();
+          if (doc.exists && doc.data() != null) {
+             final data = doc.data()!;
+             expert['nickname'] = data['nickname'] ?? data['name'] ?? 'Expert';
+          }
+        }
       } catch (e) {
         expert['isOnline'] = true; // Fallback
       }
