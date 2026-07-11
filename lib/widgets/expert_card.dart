@@ -11,14 +11,14 @@ class ExpertCard extends StatelessWidget {
   final bool isOnline;
 
   const ExpertCard({
-    Key? key,
+    super.key,
     required this.expertId,
     required this.nickname,
     required this.language,
     required this.onCallTap,
     required this.onChatTap,
     this.isOnline = true,
-  }) : super(key: key);
+  });
 
   int get displayAge {
     if (expertId.isEmpty) return 22;
@@ -39,7 +39,7 @@ class ExpertCard extends StatelessWidget {
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: Colors.grey.withOpacity(0.2)),
+        side: BorderSide(color: Colors.grey.withValues(alpha: 0.2)),
       ),
       child: Padding(
         padding: const EdgeInsets.all(16.0),

@@ -6,6 +6,13 @@ import '../providers/app_state.dart';
 import 'kyc_pan_screen.dart';
 import 'referral_screen.dart';
 import 'withdrawal_history_screen.dart';
+import 'payment_history_screen.dart';
+import '../widgets/local_avatar_widget.dart';
+import 'terms_condition_screen.dart';
+import 'refund_cancellation_screen.dart';
+import 'privacy_policy_screen.dart';
+
+import 'wallet_recharge_screen.dart';
 import '../widgets/local_avatar_widget.dart';
 
 class ProfileScreen extends StatelessWidget {
@@ -30,7 +37,7 @@ class ProfileScreen extends StatelessWidget {
                   children: [
                     // Top Blue Background
                     Container(
-                      height: 220,
+                      height: 120,
                       width: double.infinity,
                       decoration: const BoxDecoration(
                         color: AppColors.primaryBlue,
@@ -39,71 +46,30 @@ class ProfileScreen extends StatelessWidget {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           const SizedBox(height: 20),
-                          // Avatar with Edit Button
-                          Stack(
-                            clipBehavior: Clip.none,
+                          // Username and Edit Icon
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Container(
-                                padding: const EdgeInsets.all(4),
-                                decoration: const BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  gradient: LinearGradient(
-                                    colors: [AppColors.gradientLightBlueStart, AppColors.gradientBlueEnd],
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight,
-                                  ),
-                                ),
-                                child: CircleAvatar(
-                                  radius: 50,
-                                  backgroundColor: Colors.white,
-                                  child: LocalAvatarWidget(
-                                    uid: uid,
-                                    role: role,
-                                    radius: 46,
-                                  ),
+                              Text(
+                                nickname,
+                                style: const TextStyle(
+                                  fontSize: 28,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
                                 ),
                               ),
-                              // Edit FAB
-                              Positioned(
-                                bottom: 0,
-                                right: -5,
-                                child: InkWell(
-                                  onTap: () {
-                                    // Note: Implement Edit Profile
-                                  },
-                                  child: Container(
-                                    width: 32,
-                                    height: 32,
-                                    decoration: const BoxDecoration(
-                                      color: AppColors.primaryBlue,
-                                      shape: BoxShape.circle,
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.black26,
-                                          blurRadius: 4,
-                                          offset: Offset(0, 2),
-                                        ),
-                                      ],
-                                    ),
-                                    child: const Icon(
-                                      Icons.edit,
-                                      color: Colors.white,
-                                      size: 16,
-                                    ),
-                                  ),
+                              const SizedBox(width: 8),
+                              InkWell(
+                                onTap: () {
+                                  // Note: Implement Edit Profile
+                                },
+                                child: const Icon(
+                                  Icons.edit,
+                                  color: Colors.white70,
+                                  size: 20,
                                 ),
                               ),
                             ],
-                          ),
-                          const SizedBox(height: 12),
-                          // Username
-                          Text(
-                            nickname,
-                            style: const TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
                           ),
                         ],
                       ),
@@ -120,43 +86,44 @@ class ProfileScreen extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildKycStatusSection(context, uid, appState.nickname),
-                      const SizedBox(height: 12),
-                      _buildReferralTile(context),
-                      const SizedBox(height: 24),
+                      if (role == 'expert') ...[
+                        _buildKycStatusSection(context, uid, appState.nickname),
+                        const SizedBox(height: 12),
+                      ] else ...[
+                        _buildWalletShortcut(context, appState.coinBalance),
+                        const SizedBox(height: 12),
+                      ],
                       
-                      // Transaction Ledger Section
-                      Row(
-                        children: [
-                          Container(
-                            width: 4,
-                            height: 20,
-                            color: Colors.green.shade600,
-                          ),
-                          const SizedBox(width: 8),
-                          const Text(
-                            'Transaction Ledger',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.textDark,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      _buildSettingsTile(
-                        title: 'Withdrawal History',
-                        icon: Icons.history_rounded,
-                        iconColor: AppColors.primaryBlue,
-                        iconBgColor: AppColors.primaryBlue.withValues(alpha: 0.1),
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (_) => const WithdrawalHistoryScreen()),
-                          );
-                        },
-                      ),
+
+                      
+                      // History Section
+                      if (role == 'expert') ...[
+                        _buildSettingsTile(
+                          title: 'Withdrawal History',
+                          icon: Icons.history_rounded,
+                          iconColor: AppColors.primaryBlue,
+                          iconBgColor: AppColors.primaryBlue.withValues(alpha: 0.1),
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => const WithdrawalHistoryScreen()),
+                            );
+                          },
+                        ),
+                      ] else ...[
+                        _buildSettingsTile(
+                          title: 'Payment History',
+                          icon: Icons.history_rounded,
+                          iconColor: AppColors.primaryBlue,
+                          iconBgColor: AppColors.primaryBlue.withValues(alpha: 0.1),
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => const PaymentHistoryScreen()),
+                            );
+                          },
+                        ),
+                      ],
                       const SizedBox(height: 24),
 
                       // Settings & Support Section
@@ -184,6 +151,12 @@ class ProfileScreen extends StatelessWidget {
                         icon: Icons.description,
                         iconColor: Colors.orange,
                         iconBgColor: Colors.orange.withValues(alpha: 0.1),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const TermsConditionScreen()),
+                          );
+                        },
                       ),
                       const SizedBox(height: 12),
                       _buildSettingsTile(
@@ -191,6 +164,69 @@ class ProfileScreen extends StatelessWidget {
                         icon: Icons.attach_money,
                         iconColor: AppColors.successGreen,
                         iconBgColor: AppColors.successGreen.withValues(alpha: 0.1),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const RefundCancellationScreen()),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      _buildSettingsTile(
+                        title: 'Privacy Policy',
+                        icon: Icons.privacy_tip_outlined,
+                        iconColor: AppColors.primaryBlue,
+                        iconBgColor: AppColors.primaryBlue.withValues(alpha: 0.1),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const PrivacyPolicyScreen()),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Customer Care Section
+                      Theme(
+                        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: AppColors.primaryBlue.withValues(alpha: 0.05),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: AppColors.primaryBlue.withValues(alpha: 0.2)),
+                          ),
+                          child: const ExpansionTile(
+                            tilePadding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                            childrenPadding: EdgeInsets.only(left: 16, right: 16, bottom: 16),
+                            title: Text(
+                              'Customer Care Support',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.textDark,
+                              ),
+                            ),
+                            iconColor: AppColors.primaryBlue,
+                            collapsedIconColor: AppColors.primaryBlue,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(Icons.phone, size: 18, color: AppColors.primaryBlue),
+                                  SizedBox(width: 8),
+                                  Text('+91 8987108642', style: TextStyle(fontSize: 14, color: AppColors.textDark)),
+                                ],
+                              ),
+                              SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  Icon(Icons.email_outlined, size: 18, color: AppColors.primaryBlue),
+                                  SizedBox(width: 8),
+                                  Text('analystcodehub@gmail.com', style: TextStyle(fontSize: 14, color: AppColors.textDark)),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                       const SizedBox(height: 30),
                     ],
@@ -213,8 +249,6 @@ class ProfileScreen extends StatelessWidget {
   }) {
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.cardWhite,
-        borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.03),
@@ -224,26 +258,40 @@ class ProfileScreen extends StatelessWidget {
           ),
         ],
       ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        leading: Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: iconBgColor,
-            borderRadius: BorderRadius.circular(12),
+      child: Material(
+        color: AppColors.cardWhite,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: onTap ?? () {},
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: iconBgColor,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(icon, color: iconColor, size: 24),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textDark,
+                    ),
+                  ),
+                ),
+                const Icon(Icons.chevron_right, color: Colors.grey),
+              ],
+            ),
           ),
-          child: Icon(icon, color: iconColor, size: 24),
         ),
-        title: Text(
-          title,
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            color: AppColors.textDark,
-          ),
-        ),
-        trailing: const Icon(Icons.chevron_right, color: Colors.grey),
-        onTap: onTap ?? () {},
       ),
     );
   }
@@ -608,6 +656,73 @@ class ProfileScreen extends StatelessWidget {
                 ),
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWalletShortcut(BuildContext context, int coinBalance) {
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const WalletRechargeScreen()),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFF3B82F6), Color(0xFF1E3A8A)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF3B82F6).withValues(alpha: 0.3),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: const Text('₹', style: TextStyle(fontSize: 28, color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'My Wallet',
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '₹ ${(coinBalance / 10).toStringAsFixed(1)}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white, size: 20),
           ],
         ),
       ),

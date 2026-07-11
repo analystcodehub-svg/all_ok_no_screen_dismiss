@@ -40,8 +40,8 @@ class AppState extends ChangeNotifier {
   double get totalEarnings => _totalEarnings;
 
   // Male Caller Dashboard state
-  double _walletBalance = 0.0;
-  double get walletBalance => _walletBalance;
+  int _coinBalance = 0;
+  int get coinBalance => _coinBalance;
 
   bool _hasUsedFreeCall = false;
   bool get hasUsedFreeCall => _hasUsedFreeCall;
@@ -101,8 +101,8 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setWalletBalance(double balance) {
-    _walletBalance = balance;
+  void setCoinBalance(int balance) {
+    _coinBalance = balance;
     notifyListeners();
   }
 
@@ -111,16 +111,16 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  void addWalletBalance(double amount) {
-    _walletBalance += amount;
+  void addCoinBalance(int amount) {
+    _coinBalance += amount;
     notifyListeners();
   }
 
-  void deductWalletBalance(double amount) {
-    if (_walletBalance >= amount) {
-      _walletBalance -= amount;
+  void deductCoinBalance(int amount) {
+    if (_coinBalance >= amount) {
+      _coinBalance -= amount;
     } else {
-      _walletBalance = 0;
+      _coinBalance = 0;
     }
     notifyListeners();
   }
@@ -135,7 +135,7 @@ class AppState extends ChangeNotifier {
     _isAudioVerified = false;
     _isOnline = false;
     _totalEarnings = 0.0;
-    _walletBalance = 0.0;
+    _coinBalance = 0;
     _hasUsedFreeCall = false;
     notifyListeners();
   }

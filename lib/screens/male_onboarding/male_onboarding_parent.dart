@@ -43,7 +43,7 @@ class _MaleOnboardingParentState extends State<MaleOnboardingParent> {
           'nickname': nickname,
           'gender': 'male',
           'primaryLanguage': appState.primaryLanguage,
-          'walletBalance': appState.walletBalance,
+          'coinBalance': appState.coinBalance,
           'hasUsedFreeCall': appState.hasUsedFreeCall,
         }, SetOptions(merge: true));
 

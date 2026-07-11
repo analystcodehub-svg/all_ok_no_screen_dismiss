@@ -54,6 +54,7 @@ dependencies:
   auto_start_flutter:
     path: packages/auto_start_flutter
   flutter_background_service: ^5.1.0
+  in_app_purchase: ^3.3.0
 
 
 dev_dependencies:

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
@@ -231,7 +232,7 @@ class LocalChatDatabase {
       // Mark as synced
       await prefs.setBool('has_synced_call_logs_$myId', true);
     } catch (e) {
-      print('Error syncing call logs: $e');
+      debugPrint('Error syncing call logs: $e');
     }
   }
 

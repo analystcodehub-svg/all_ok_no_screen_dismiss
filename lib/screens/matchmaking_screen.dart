@@ -36,7 +36,6 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> with SingleTicker
   final ValueNotifier<String?> _matchedExpertUidNotifier = ValueNotifier<String?>(null);
   Completer<bool>? _ringingCompleter;
   
-  String _callerUid = '';
   bool _isDisposed = false;
   bool _isSearchCancelled = false;
   Timer? _timer;
@@ -79,7 +78,6 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> with SingleTicker
     final String callerUid = appState.mobileNumber.isNotEmpty 
         ? appState.mobileNumber 
         : (appState.nickname.isNotEmpty ? appState.uid : 'caller_1');
-    _callerUid = callerUid;
     final String preferredLanguage = appState.primaryLanguage;
     final hasUsedFreeCall = appState.hasUsedFreeCall;
 

@@ -5,11 +5,10 @@ import 'package:provider/provider.dart';
 import '../providers/app_state.dart';
 import '../models/female_expert.dart';
 import 'matchmaking_screen.dart';
-import 'wallet_recharge_screen.dart';
 import 'hybrid_chat_screen.dart';
 import '../widgets/expert_card.dart';
 class ExpertFeedScreen extends StatefulWidget {
-  const ExpertFeedScreen({Key? key}) : super(key: key);
+  const ExpertFeedScreen({super.key});
 
   @override
   State<ExpertFeedScreen> createState() => _ExpertFeedScreenState();
@@ -21,15 +20,13 @@ class _ExpertFeedScreenState extends State<ExpertFeedScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Fetch experts only once when the screen loads
-    if (_expertsFuture == null) {
-      _expertsFuture = _fetchExperts();
-    }
+    _expertsFuture ??= _fetchExperts();
   }
 
   Future<List<Map<dynamic, dynamic>>> _fetchExperts() async {
     final appState = context.read<AppState>();
     String mobile = appState.mobileNumber.isNotEmpty ? appState.mobileNumber : "test_mobile";
+    String languageCode = Localizations.localeOf(context).languageCode;
 
     String bucket = 'hindi'; // Default bucket
     
@@ -39,16 +36,27 @@ class _ExpertFeedScreenState extends State<ExpertFeedScreen> {
       if (docSnap.exists && docSnap.data() != null) {
         String lang = (docSnap.data()!['primaryLanguage'] as String?)?.toLowerCase() ?? '';
         if (lang.isNotEmpty) {
-          if (lang == 'english') bucket = 'english';
-          else if (lang == 'punjabi') bucket = 'punjabi';
-          else if (lang == 'bengali') bucket = 'bengali';
-          else if (lang == 'marathi') bucket = 'marathi';
-          else if (lang == 'gujarati') bucket = 'gujarati';
-          else if (lang == 'tamil') bucket = 'tamil';
-          else if (lang == 'telugu') bucket = 'telugu';
-          else if (lang == 'kannada') bucket = 'kannada';
-          else if (lang == 'malayalam') bucket = 'malayalam';
-          else bucket = 'hindi';
+          if (lang == 'english') {
+            bucket = 'english';
+          } else if (lang == 'punjabi') {
+            bucket = 'punjabi';
+          } else if (lang == 'bengali') {
+            bucket = 'bengali';
+          } else if (lang == 'marathi') {
+            bucket = 'marathi';
+          } else if (lang == 'gujarati') {
+            bucket = 'gujarati';
+          } else if (lang == 'tamil') {
+            bucket = 'tamil';
+          } else if (lang == 'telugu') {
+            bucket = 'telugu';
+          } else if (lang == 'kannada') {
+            bucket = 'kannada';
+          } else if (lang == 'malayalam') {
+            bucket = 'malayalam';
+          } else {
+            bucket = 'hindi';
+          }
         }
       }
     } catch (e) {
@@ -57,7 +65,6 @@ class _ExpertFeedScreenState extends State<ExpertFeedScreen> {
 
     // Fallback to device locale if bucket is still hindi and we want to check locale
     if (bucket == 'hindi') {
-      String languageCode = Localizations.localeOf(context).languageCode;
       if (languageCode == 'pa') {
         bucket = 'punjabi';
       }
@@ -176,43 +183,16 @@ class _ExpertFeedScreenState extends State<ExpertFeedScreen> {
                         isOnline: true,
                       );
                       
-                      final appState = context.read<AppState>();
-                      final balance = appState.walletBalance;
-                      final hasUsedFreeCall = appState.hasUsedFreeCall;
                       
-                      if (false) { // TODO: Disabled payment gateway and free call logic for now
-                        showDialog(
-                          context: context,
-                          builder: (context) => AlertDialog(
-                            title: const Text('Insufficient Balance', style: TextStyle(fontWeight: FontWeight.bold)),
-                            content: Text('Your wallet balance is ₹${balance.toStringAsFixed(2)}. You need at least ₹${expertObj.pricePerMin} to place a call.'),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(context),
-                                child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
-                              ),
-                              ElevatedButton(
-                                onPressed: () {
-                                  Navigator.pop(context);
-                                  Navigator.push(context, MaterialPageRoute(builder: (context) => const WalletRechargeScreen()));
-                                },
-                                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4F46E5)),
-                                child: const Text('Recharge'),
-                              ),
-                            ],
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => MatchmakingScreen(
+                            requestedExpert: expertObj,
+                            isRandomMode: false,
                           ),
-                        );
-                      } else {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => MatchmakingScreen(
-                              requestedExpert: expertObj,
-                              isRandomMode: false,
-                            ),
-                          ),
-                        );
-                      }
+                        ),
+                      );
                     } else if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Expert details not found in Firestore.')));
                     }

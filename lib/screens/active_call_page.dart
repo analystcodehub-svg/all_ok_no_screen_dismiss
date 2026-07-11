@@ -253,8 +253,8 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
 
       // At exactly 2 min (120s): free period ends, check balance immediately
       if (_duration == 120 && widget.isCaller && widget.isFirstFreeCall) {
-        final balance = context.read<AppState>().walletBalance;
-        if (balance < widget.pricePerMin) {
+        final balance = context.read<AppState>().coinBalance;
+        if (balance < (widget.pricePerMin * 10).toInt()) {
           _triggerHangup();
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -273,12 +273,13 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
           if (widget.isFirstFreeCall && _duration <= 120) {
             // First 2 minutes are free, do not deduct wallet
           } else {
-            context.read<AppState>().deductWalletBalance(widget.pricePerMin);
-            final balance = context.read<AppState>().walletBalance;
-            if (balance < widget.pricePerMin) {
+            final requiredCoins = (widget.pricePerMin * 10).toInt();
+            context.read<AppState>().deductCoinBalance(requiredCoins);
+            final balance = context.read<AppState>().coinBalance;
+            if (balance < requiredCoins) {
               _triggerHangup();
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Call ended: Insufficient wallet balance')),
+                const SnackBar(content: Text('Call ended: Insufficient balance')),
               );
             }
           }

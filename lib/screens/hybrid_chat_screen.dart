@@ -7,6 +7,9 @@ import 'package:provider/provider.dart';
 import '../providers/app_state.dart';
 import '../widgets/local_avatar_widget.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'wallet_recharge_screen.dart';
+
 class HybridChatScreen extends StatefulWidget {
   final String myUid;
   final String otherUid;
@@ -89,6 +92,64 @@ class _HybridChatScreenState extends State<HybridChatScreen> {
   void _sendMessage() async {
     final text = _textController.text.trim();
     if (text.isEmpty) return;
+
+    final appState = context.read<AppState>();
+    
+    // If the sender is a Male User, deduct 20 coins
+    if (appState.selectedGender == 'Male') {
+      if (appState.coinBalance < 20) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: const Row(
+              children: [
+                Icon(Icons.account_balance_wallet_rounded, color: Colors.red, size: 28),
+                SizedBox(width: 10),
+                Text('Low Balance', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
+              ],
+            ),
+            content: const Text(
+              'You need 20 paise to send a message. Please recharge your wallet to continue chatting.',
+              style: TextStyle(fontSize: 15, color: Colors.black87, height: 1.4),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(context); // close dialog
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const WalletRechargeScreen()),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primaryBlue,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                ),
+                child: const Text('Recharge Now', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        );
+        return;
+      }
+      
+      // Deduct locally for immediate UI update
+      appState.deductCoinBalance(20);
+      
+      // Persist deduction to Firestore
+      final mobile = appState.mobileNumber.isNotEmpty ? appState.mobileNumber : "test_mobile";
+      FirebaseFirestore.instance.collection('users').doc(mobile).update({
+        'coinBalance': FieldValue.increment(-20),
+      }).catchError((e) {
+        debugPrint('Failed to deduct coins in Firestore: $e');
+      });
+    }
 
     _textController.clear();
     

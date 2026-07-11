@@ -7,10 +7,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../providers/app_state.dart';
 import '../models/female_expert.dart';
-import 'phone_auth_screen.dart';
 import 'wallet_recharge_screen.dart';
 import 'matchmaking_screen.dart';
 import 'incoming_call_screen.dart';
+import 'profile_screen.dart';
 import '../widgets/local_avatar_widget.dart';
 import '../services/call_service.dart';
 import '../services/notification_service.dart';
@@ -20,6 +20,7 @@ import 'hybrid_chat_screen.dart';
 import 'expert_feed_screen.dart';
 import '../utils/auto_start_helper.dart';
 import '../services/foreground_task_service.dart';
+import '../services/local_chat_database.dart';
 
 class MaleCallerDashboard extends StatefulWidget {
   const MaleCallerDashboard({super.key});
@@ -33,7 +34,6 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
 
   // Navigation & filter states
   int _currentTab = 0; // 0 for Home, 1 for Recents, 2 for Chats
-  bool _isOnlineSwitch = true;
 
   // Modern Color Palette Constants
   static const Color brandBg = Color(0xFFF8FAFC); // Slate 50
@@ -135,23 +135,38 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
     try {
       final docSnap = await FirebaseFirestore.instance.collection('users').doc(mobile).get();
       if (docSnap.exists) {
-        final balance = (docSnap.data()?['walletBalance'] as num?)?.toDouble() ?? 0.0;
-        final hasUsedFreeCall = docSnap.data()?['hasUsedFreeCall'] as bool? ?? false;
-        appState.setWalletBalance(balance);
+        final data = docSnap.data()!;
+        int coinBalance = 0;
+        
+        // Lazy Migration
+        if (data.containsKey('walletBalance')) {
+          double oldBalance = (data['walletBalance'] as num?)?.toDouble() ?? 0.0;
+          coinBalance = (oldBalance * 10).toInt();
+          
+          await FirebaseFirestore.instance.collection('users').doc(mobile).update({
+            'coinBalance': coinBalance,
+            'walletBalance': FieldValue.delete(),
+          });
+        } else {
+          coinBalance = (data['coinBalance'] as num?)?.toInt() ?? 0;
+        }
+
+        final hasUsedFreeCall = data['hasUsedFreeCall'] as bool? ?? false;
+        appState.setCoinBalance(coinBalance);
         appState.setHasUsedFreeCall(hasUsedFreeCall);
         
-        final nickname = docSnap.data()?['nickname'] as String? ?? '';
+        final nickname = data['nickname'] as String? ?? '';
         if (nickname.isNotEmpty) {
           appState.setNickname(nickname);
         }
       } else {
         await FirebaseFirestore.instance.collection('users').doc(mobile).set({
           'mobileNumber': mobile,
-          'walletBalance': 0.0,
+          'coinBalance': 0,
           'hasUsedFreeCall': false,
           'gender': 'male',
         }, SetOptions(merge: true));
-        appState.setWalletBalance(0.0);
+        appState.setCoinBalance(0);
         appState.setHasUsedFreeCall(false);
       }
       
@@ -161,17 +176,8 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
         collection: 'users',
       );
     } catch (e) {
-      debugPrint("Error fetching wallet balance: $e");
+      debugPrint("Error fetching initial balance: $e");
     }
-  }
-
-  void _logout() {
-    context.read<AppState>().reset();
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (context) => const PhoneAuthScreen()),
-      (route) => false,
-    );
   }
 
   void _addMoneyDialog() {
@@ -208,9 +214,9 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
 
     if (!mounted) return;
     final appState = context.read<AppState>();
-    final balance = appState.walletBalance;
+    final balance = appState.coinBalance;
     final hasUsedFreeCall = appState.hasUsedFreeCall;
-    if (balance < expert.pricePerMin && hasUsedFreeCall) {
+    if (balance < (expert.pricePerMin * 10).toInt() && hasUsedFreeCall) {
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
@@ -219,7 +225,7 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
             style: TextStyle(fontWeight: FontWeight.bold),
           ),
           content: Text(
-            'Your wallet balance is ₹${balance.toStringAsFixed(2)}. You need at least ₹${expert.pricePerMin} to place a call.',
+            'Your balance is ₹${(balance / 10).toStringAsFixed(1)}. You need at least ₹${expert.pricePerMin} to place a call.',
           ),
           actions: [
             TextButton(
@@ -256,10 +262,10 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
 
   void _startRandomMatchmaking() {
     final appState = context.read<AppState>();
-    final balance = appState.walletBalance;
+    final balance = appState.coinBalance;
     final hasUsedFreeCall = appState.hasUsedFreeCall;
-    const pricePerMin = 5.0;
-    if (balance < pricePerMin && hasUsedFreeCall) {
+    const requiredCoins = 50; // equivalent to ₹5/min
+    if (balance < requiredCoins && hasUsedFreeCall) {
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
@@ -268,7 +274,7 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
             style: TextStyle(fontWeight: FontWeight.bold),
           ),
           content: Text(
-            'Your wallet balance is ₹${balance.toStringAsFixed(2)}. You need at least ₹$pricePerMin to place a call.',
+            'Your balance is ₹${(balance / 10).toStringAsFixed(1)}. You need at least ₹${(requiredCoins / 10).toStringAsFixed(1)} to start random matchmaking.',
           ),
           actions: [
             TextButton(
@@ -302,16 +308,22 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
     );
   }
 
+  Widget _buildBody() {
+    switch (_currentTab) {
+      case 0: return _buildHomeTab();
+      case 1: return _buildRecentsTab();
+      case 2: return const ChatListScreen();
+      case 3: return const ProfileScreen();
+      default: return _buildHomeTab();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: brandBg,
       body: SafeArea(
-        child: _currentTab == 0 
-            ? _buildHomeTab() 
-            : _currentTab == 1 
-                ? _buildRecentsTab() 
-                : const ChatListScreen(),
+        child: _buildBody(),
       ),
       bottomNavigationBar: Container(
         height: 64,
@@ -456,6 +468,48 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
                 ),
               ),
             ),
+            // Profile Tab Button
+            GestureDetector(
+              onTap: () {
+                setState(() {
+                  _currentTab = 3;
+                });
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+                decoration: _currentTab == 3
+                    ? BoxDecoration(
+                        color: brandPrimary.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(16),
+                      )
+                    : null,
+                child: Row(
+                  children: [
+                    Icon(
+                      _currentTab == 3
+                          ? Icons.person_rounded
+                          : Icons.person_outline_rounded,
+                      color: _currentTab == 3 ? brandPrimary : brandTextGrey,
+                      size: 22,
+                    ),
+                    if (_currentTab == 3) ...[
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Profile',
+                        style: TextStyle(
+                          color: brandPrimary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -511,7 +565,7 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: const Text(
-                              '% Sale',
+                              '₹ Wallet',
                               style: TextStyle(
                                 color: Colors.white,
                                 fontSize: 9,
@@ -521,7 +575,7 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            '₹${appState.walletBalance.toStringAsFixed(2)}',
+                            (appState.coinBalance / 10).toStringAsFixed(1),
                             style: const TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.bold,
@@ -929,239 +983,22 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
                               ),
                             ),
                           ),
-                        ],
-                      ),
-                    );
+                            ],
+                          ),
+                        );
                       },
                     );
                   },
                 );
               },
-            ),
-          ),
-        ],
+            );
+          },
+        ),
       ),
-    );
-  }
+    ],
+  ),
+);
+}
 
-  // Redesigned Expert List Card (60-70% similar, organic rounded shape, soft styling)
-  Widget _buildExpertItemRedesigned(FemaleExpert expert) {
-    // Pick a soft accent color per expert based on name hash
-    final accentColors = [
-      const Color(0xFFEC4899), // pink
-      const Color(0xFF8B5CF6), // purple
-      const Color(0xFF06B6D4), // cyan
-      const Color(0xFFF59E0B), // amber
-      const Color(0xFF10B981), // emerald
-      const Color(0xFFF43F5E), // rose
-    ];
-    final accentColor = accentColors[expert.nickname.hashCode.abs() % accentColors.length];
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(14),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                // Avatar with live online indicator (RTDB - Low Cost)
-                Stack(
-                  children: [
-                    LocalAvatarWidget(
-                      uid: expert.id,
-                      role: 'expert',
-                      radius: 32,
-                    ),
-                    Positioned(
-                      bottom: 2,
-                      right: 2,
-                      child: StreamBuilder<DatabaseEvent>(
-                        stream: FirebaseDatabase.instanceFor(
-                          app: FirebaseDatabase.instance.app,
-                          databaseURL: 'https://zegochat-c44b0.asia-southeast1.firebasedatabase.app',
-                        ).ref('status/${expert.id}/isOnline').onValue,
-                        builder: (context, snapshot) {
-                          Color statusColor = Colors.grey;
-
-                          if (snapshot.connectionState == ConnectionState.waiting) {
-                            if (expert.isOnline) {
-                              statusColor = const Color(0xFF22C55E); // Green
-                            }
-                          } else {
-                            if (snapshot.hasData && snapshot.data!.snapshot.value == true) {
-                              statusColor = const Color(0xFF22C55E); // Green
-                            } else {
-                              statusColor = Colors.grey; // Offline
-                            }
-                          }
-
-                          return Container(
-                            width: 11,
-                            height: 11,
-                            decoration: BoxDecoration(
-                              color: statusColor,
-                              shape: BoxShape.circle,
-                              border: Border.all(color: Colors.white, width: 2),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(width: 12),
-
-                // Details
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Name row
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              expert.nickname,
-                              style: const TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w800,
-                                color: brandTextDark,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          // Rating pill
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFFFFBEB),
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(color: const Color(0xFFFCD34D), width: 1),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(Icons.star_rounded, size: 11, color: Color(0xFFF59E0B)),
-                                const SizedBox(width: 2),
-                                Text(
-                                  expert.rating.toStringAsFixed(1),
-                                  style: const TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                    color: Color(0xFFB45309),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      // Age, language in one line
-                      Text(
-                        '${expert.displayAge}y · ${expert.languages}',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: brandTextGrey,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 10),
-
-                // Right: Price + Call button
-                Column(
-                  children: [
-                    Text(
-                      '₹${expert.pricePerMin}/min',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w800,
-                        color: accentColor,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // Chat Button
-                        GestureDetector(
-                          onTap: () {
-                             final appState = context.read<AppState>();
-                             final myUid = appState.mobileNumber.isNotEmpty ? appState.mobileNumber : "test_mobile";
-                             Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => HybridChatScreen(
-                                    myUid: myUid,
-                                    otherUid: expert.id,
-                                    otherUserName: expert.nickname,
-                                  ),
-                                ),
-                              );
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-                            decoration: BoxDecoration(
-                              color: accentColor.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            child: Icon(Icons.chat_bubble_rounded, color: accentColor, size: 16),
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        // Call Button
-                        GestureDetector(
-                          onTap: () => _triggerCall(expert),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-                            decoration: BoxDecoration(
-                              color: accentColor,
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            child: const Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.call_rounded, color: Colors.white, size: 14),
-                                SizedBox(width: 4),
-                                Text(
-                                  'Call',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
 

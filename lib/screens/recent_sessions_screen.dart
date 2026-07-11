@@ -22,7 +22,6 @@ class _RecentSessionsScreenState extends State<RecentSessionsScreen> {
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
     final currentUserMobile = appState.mobileNumber;
-    final currentNickname = appState.uid;
     
     return Scaffold(
       backgroundColor: AppColors.bgLight,

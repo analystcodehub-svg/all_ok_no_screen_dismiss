@@ -490,9 +490,9 @@ class CallService {
     await unlockExpertFromCall(userId);
   }
 
-  /// Cloud Firestore Transaction to safely deduct wallet balance.
+  /// Cloud Firestore Transaction to safely deduct coin balance.
   /// Validates sufficient balance and prevents concurrent deduction race conditions.
-  Future<void> deductWalletBalance({required String userId, required double callCost}) async {
+  Future<void> deductCoinBalance({required String userId, required int callCost}) async {
     final DocumentReference userRef = FirebaseFirestore.instance.collection('users').doc(userId);
     
     try {
@@ -504,20 +504,20 @@ class CallService {
         }
         
         final data = snapshot.data() as Map<String, dynamic>?;
-        double currentBalance = (data?['walletBalance'] as num?)?.toDouble() ?? 0.0;
+        int currentBalance = (data?['coinBalance'] as num?)?.toInt() ?? 0;
         
         if (currentBalance < callCost) {
           throw Exception("Insufficient balance. Required: $callCost, Available: $currentBalance");
         }
         
         // Safe deduction within transaction lock
-        double newBalance = currentBalance - callCost;
-        transaction.update(userRef, {'walletBalance': newBalance});
+        int newBalance = currentBalance - callCost;
+        transaction.update(userRef, {'coinBalance': newBalance});
       });
       
-      debugPrint('Successfully deducted $callCost from user $userId. Transaction completed.');
+      debugPrint('Successfully deducted $callCost coins from user $userId. Transaction completed.');
     } catch (e) {
-      debugPrint('Error deducting wallet balance for $userId: $e');
+      debugPrint('Error deducting coin balance for $userId: $e');
       rethrow; // Rethrow so the caller knows the transaction failed and can terminate the call
     }
   }
