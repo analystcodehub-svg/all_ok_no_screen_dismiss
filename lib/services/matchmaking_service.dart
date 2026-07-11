@@ -44,12 +44,13 @@ class MatchmakingService {
       
       if (isOnline) {
         int talkSeconds = 0;
-        String nickname = 'Unknown';
+        String nickname = '';
         try {
           final doc = await FirebaseFirestore.instance.collection('experts').doc(expertId).get();
           if (doc.exists) {
-            talkSeconds = (doc.data()?['totalTalkSeconds'] as num?)?.toInt() ?? 0;
-            nickname = doc.data()?['name'] as String? ?? doc.data()?['nickname'] as String? ?? 'Expert';
+            final data = doc.data();
+            talkSeconds = (data?['totalTalkSeconds'] as num?)?.toInt() ?? 0;
+            nickname = data?['nickname'] as String? ?? 'Expert';
           }
         } catch (e) {
           debugPrint('Error fetching expert data: $e');
