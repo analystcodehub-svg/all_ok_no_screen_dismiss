@@ -241,6 +241,7 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
   }
 
   void _startCallTimer() {
+    if (_timer != null && _timer!.isActive) return;
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!mounted) return;
       setState(() {
@@ -308,9 +309,7 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
       _timer?.cancel();
       _ringingTimer?.cancel();
       
-      if (widget.isCaller) {
-        _saveCallLog();
-      }
+      _saveCallLog();
       // Credit expert earnings and update talk time at end of call (only if >= 50 seconds)
       if (!widget.isCaller && _duration >= 50) {
         int callMinutes = _duration ~/ 60;
@@ -381,7 +380,8 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
     try {
       final status = _duration > 0 ? 'ended' : 'missed';
       final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final logId = 'log_${widget.callerId}_${widget.receiverId}_$timestamp';
+      // Use roomId to ensure consistent logId between caller and receiver, avoiding duplicate Firestore records
+      final logId = 'log_${_roomId ?? timestamp}';
       
       final logData = {
         'logId': logId,
@@ -395,8 +395,10 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
       // 1. Save locally for instant Recents tab loading
       await LocalChatDatabase.instance.saveCallLogLocally(logData);
 
-      // 2. Save to Firestore for cross-device sync
-      await FirebaseFirestore.instance.collection('call_logs').doc(logId).set(logData);
+      // 2. Save to Firestore for cross-device sync (Only caller writes to avoid duplicate writes)
+      if (widget.isCaller) {
+        await FirebaseFirestore.instance.collection('call_logs').doc(logId).set(logData);
+      }
     } catch (e) {
       debugPrint('Error saving call log: $e');
     }

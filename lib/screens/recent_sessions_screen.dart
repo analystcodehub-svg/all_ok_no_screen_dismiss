@@ -16,12 +16,12 @@ class RecentSessionsScreen extends StatefulWidget {
 }
 
 class _RecentSessionsScreenState extends State<RecentSessionsScreen> {
-  String _filter = 'All'; // 'All' or 'Missed'
-
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
-    final currentUserMobile = appState.mobileNumber;
+    final String currentUserMobile = appState.mobileNumber.isNotEmpty 
+        ? appState.mobileNumber 
+        : (appState.nickname.isNotEmpty ? appState.uid : 'caller_1');
     
     return Scaffold(
       backgroundColor: AppColors.bgLight,
@@ -39,29 +39,6 @@ class _RecentSessionsScreenState extends State<RecentSessionsScreen> {
                   fontWeight: FontWeight.bold,
                   color: AppColors.textDark,
                 ),
-              ),
-            ),
-
-            // Filters
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-              child: Row(
-                children: [
-                  _buildFilterChip(
-                    'All', 
-                    isActive: _filter == 'All',
-                    onTap: () => setState(() => _filter = 'All'),
-                  ),
-                  const SizedBox(width: 10),
-                  _buildFilterChip(
-                    'Missed', 
-                    isActive: _filter == 'Missed',
-                    icon: Icons.phone_missed, 
-                    iconColor: _filter == 'Missed' ? Colors.white : Colors.red,
-                    onTap: () => setState(() => _filter = 'Missed'),
-                  ),
-                ],
               ),
             ),
 
@@ -108,23 +85,15 @@ class _RecentSessionsScreenState extends State<RecentSessionsScreen> {
                         return _buildEmptyState();
                       }
 
-                      // Filter calls relevant to the selected filter
-                      final userCalls = allCalls.where((data) {
-                        if (_filter == 'Missed') {
-                          return data['status'] == 'missed';
-                        }
-                        return true; // 'All'
-                      }).toList();
-
-                      if (userCalls.isEmpty) {
+                      if (allCalls.isEmpty) {
                         return _buildEmptyState();
                       }
 
                       return ListView.builder(
                         padding: const EdgeInsets.all(20),
-                        itemCount: userCalls.length,
+                        itemCount: allCalls.length,
                         itemBuilder: (context, index) {
-                          final data = userCalls[index];
+                          final data = allCalls[index];
                           
                           final isCaller = data['callerId'] == currentUserMobile;
                           final String? otherUserId = (isCaller ? data['receiverId'] : data['callerId'])?.toString();
@@ -141,13 +110,28 @@ class _RecentSessionsScreenState extends State<RecentSessionsScreen> {
                             }
                           }
 
-                          // Determine duration text
+                          // Determine duration text and cost
                           String durationText = isMissed ? 'Missed Call' : 'Ended';
+                          String costText = isMissed ? '₹0' : 'Ended';
+                          
                           if (!isMissed && data['durationSeconds'] != null) {
                             final sec = data['durationSeconds'] as int;
                             final m = sec ~/ 60;
                             final s = sec % 60;
                             durationText = '${m}m ${s}s';
+                            
+                            int callMinutes = sec ~/ 60;
+                            if (sec % 60 >= 50) {
+                              callMinutes += 1;
+                            }
+                            
+                            if (isCaller) {
+                              // Caller is User (Male), uses Coins
+                              costText = '-${callMinutes * 50} Coins';
+                            } else {
+                              // Receiver is Expert (Female), earns Rupees
+                              costText = '+₹${callMinutes.toStringAsFixed(1)}';
+                            }
                           }
 
                           final collectionName = isCaller ? 'experts' : 'users';
@@ -168,7 +152,7 @@ class _RecentSessionsScreenState extends State<RecentSessionsScreen> {
                                 name: displayName,
                                 timeText: timeText,
                                 duration: durationText,
-                                cost: isMissed ? '₹0' : 'Ended',
+                                cost: costText,
                                 isMissed: isMissed,
                                 otherUserId: otherUserId ?? '',
                                 isCaller: isCaller,
@@ -271,39 +255,6 @@ class _RecentSessionsScreenState extends State<RecentSessionsScreen> {
             style: TextStyle(fontSize: 18, color: AppColors.textGrey),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildFilterChip(String label, {bool isActive = false, IconData? icon, Color? iconColor, VoidCallback? onTap}) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: isActive ? AppColors.primaryBlue : Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: isActive ? AppColors.primaryBlue : Colors.grey.shade300,
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (icon != null) ...[
-              Icon(icon, size: 16, color: iconColor),
-              const SizedBox(width: 4),
-            ],
-            Text(
-              label,
-              style: TextStyle(
-                color: isActive ? Colors.white : AppColors.textGrey,
-                fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
-                fontSize: 14,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -413,7 +364,9 @@ class _RecentSessionsScreenState extends State<RecentSessionsScreen> {
 
           // Actions
           Column(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
+              /*
               GestureDetector(
                 onTap: () => _triggerCall(context, otherUserId, !isCaller),
                 child: Container(
@@ -427,6 +380,7 @@ class _RecentSessionsScreenState extends State<RecentSessionsScreen> {
                 ),
               ),
               const SizedBox(height: 8),
+              */
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                 decoration: BoxDecoration(

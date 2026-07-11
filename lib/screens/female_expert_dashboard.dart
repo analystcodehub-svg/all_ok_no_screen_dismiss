@@ -8,6 +8,7 @@ import 'phone_auth_screen.dart';
 import 'incoming_call_screen.dart';
 import '../services/call_service.dart';
 import '../services/matchmaking_service.dart';
+import '../services/local_chat_database.dart';
 import '../widgets/local_avatar_widget.dart';
 import '../utils/auto_start_helper.dart';
 import '../services/foreground_task_service.dart';
@@ -39,6 +40,11 @@ class _FemaleExpertDashboardState extends State<FemaleExpertDashboard> with Sing
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final appState = context.read<AppState>();
       _loadEarningsFromFirestore(appState);
+      
+      // Sync call logs from Firestore to local database
+      final currentUserId = appState.mobileNumber.isNotEmpty ? appState.mobileNumber : appState.uid;
+      LocalChatDatabase.instance.syncCallLogsFromFirestore(currentUserId);
+
       if (appState.isOnline) {
         _startIncomingCallListener(appState.uid);
       }

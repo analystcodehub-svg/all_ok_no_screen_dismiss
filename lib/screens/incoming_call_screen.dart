@@ -29,6 +29,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
   StreamSubscription<DatabaseEvent>? _callSub;
   bool _isDismissing = false;
   late Future<String> _callerNameFuture;
+  String _callerName = "User";
 
   Future<String> _fetchCallerName() async {
     try {
@@ -36,7 +37,13 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
       if (doc.exists && doc.data() != null) {
         final data = doc.data()!;
         if (data['nickname'] != null && data['nickname'].toString().isNotEmpty) {
-          return data['nickname'].toString();
+          final name = data['nickname'].toString();
+          if (mounted) {
+            setState(() {
+              _callerName = name;
+            });
+          }
+          return name;
         }
       }
     } catch (e) {
@@ -138,7 +145,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
           callRoomId: widget.callRoomId,
           receiverId: currentUserId,
           callerId: widget.callerId,
-          nickname: 'User', // Will update in ActiveCallPage or can pass 'User'
+          nickname: _callerName,
           pricePerMin: 5.0,
           isCaller: false,
         ),
