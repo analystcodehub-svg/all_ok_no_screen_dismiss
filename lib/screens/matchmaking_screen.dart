@@ -200,15 +200,17 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> with SingleTicker
 
       if (expertAnswered) {
         // SUCCESS: Proceed with WebRTC stream
-        final doc = await FirebaseFirestore.instance.collection('experts').doc(matchedExpertUid).get();
-        
         String nickname = widget.requestedExpert?.nickname ?? matchedExpertUid.toUpperCase();
-        double pricePerMin = widget.requestedExpert?.pricePerMin.toDouble() ?? 5.0;
+        double pricePerMin = 5.0; // Fixed price
 
-        if (doc.exists && doc.data() != null) {
-          final data = doc.data()!;
-          nickname = data['nickname'] ?? nickname;
-          pricePerMin = (data['pricePerMin'] as num?)?.toDouble() ?? 5.0;
+        try {
+          final qSnapshot = await FirebaseDatabase.instance.ref('queues/female_${preferredLanguage.toLowerCase()}/$matchedExpertUid').get();
+          if (qSnapshot.exists && qSnapshot.value != null) {
+            final data = qSnapshot.value as Map<dynamic, dynamic>;
+            nickname = data['nickname']?.toString() ?? nickname;
+          }
+        } catch (e) {
+          debugPrint('Error fetching expert details from RTDB: $e');
         }
 
         if (!_isDisposed && mounted) {
