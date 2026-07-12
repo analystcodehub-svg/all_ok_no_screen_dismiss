@@ -321,54 +321,55 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
         appState.addEarnings(earned);
         debugPrint('Expert earned: ₹${earned.toStringAsFixed(2)} (${_duration}s at ₹$_expertEarningRate/min, billed as $callMinutes min)');
         // Update all stats in Firestore
-        _updateExpertStats(earned, _duration, appState.primaryLanguage);
+        _updateExpertStats(earned, _duration);
       }
       Navigator.pop(context);
     }
   }
 
-  Future<void> _updateExpertStats(double earned, int seconds, String language) async {
+  Future<void> _updateExpertStats(double earned, int seconds) async {
     try {
       final expertId = widget.receiverId;
       if (expertId.isEmpty) return;
       final docRef = FirebaseFirestore.instance.collection('experts').doc(expertId);
       
-      int minutesToAdd = seconds ~/ 60;
-      if (seconds % 60 >= 50) {
-        minutesToAdd += 1;
-      }
-      
-      // 1. Direct Firestore Update using FieldValue.increment
-      await docRef.set({
-        'totalEarnings': FieldValue.increment(earned),
-        'redeemableBalance': FieldValue.increment(earned),
-        'totalTalkSeconds': FieldValue.increment(seconds),
-        'totalTalktimeMinutes': FieldValue.increment(minutesToAdd),
-      }, SetOptions(merge: true));
+      final docSnap = await docRef.get();
+      if (docSnap.exists) {
+        final currentSeconds = (docSnap.data()?['totalTalkSeconds'] as num?)?.toInt() ?? 0;
+        final newSeconds = currentSeconds + seconds;
+        int newMinutes = newSeconds ~/ 60;
+        if (newSeconds % 60 >= 50) {
+          newMinutes += 1;
+        }
+        
+        await docRef.set({
+          'totalEarnings': FieldValue.increment(earned),
+          'redeemableBalance': FieldValue.increment(earned),
+          'totalTalkSeconds': FieldValue.increment(seconds),
+          'totalTalktimeMinutes': newMinutes,
+        }, SetOptions(merge: true));
 
-      // 2. Direct RTDB Update using ServerValue.increment
-      try {
-        final rtdb = FirebaseDatabase.instanceFor(
-          app: FirebaseDatabase.instance.app,
-          databaseURL: 'https://zegochat-c44b0.asia-southeast1.firebasedatabase.app',
-        );
-        
-        // Update presence status node
-        await rtdb.ref('status/$expertId').update({
-          'totalTalkSeconds': ServerValue.increment(seconds),
-        });
-        
-        // Safely update queue node if it exists (so we don't create ghost nodes for offline experts)
-        final lang = language.isNotEmpty ? language.toLowerCase() : 'hindi';
-        final queueRef = rtdb.ref('queues/female_$lang/$expertId');
-        final queueSnap = await queueRef.get();
-        if (queueSnap.exists) {
-          await queueRef.update({
+        // Also update totalTalkSeconds in RTDB for fast retrieval in male UI
+        try {
+          final rtdb = FirebaseDatabase.instanceFor(
+            app: FirebaseDatabase.instance.app,
+            databaseURL: 'https://zegochat-c44b0.asia-southeast1.firebasedatabase.app',
+          );
+          await rtdb.ref('status/$expertId').update({
             'totalTalkSeconds': ServerValue.increment(seconds),
           });
+          
+          final lang = docSnap.data()?['languages']?.toString().toLowerCase() ?? 'hindi';
+          final queueRef = rtdb.ref('queues/female_$lang/$expertId');
+          final queueSnap = await queueRef.get();
+          if (queueSnap.exists) {
+            await queueRef.update({
+              'totalTalkSeconds': ServerValue.increment(seconds),
+            });
+          }
+        } catch (rtdbError) {
+          debugPrint('Error updating RTDB stats: $rtdbError');
         }
-      } catch (rtdbError) {
-        debugPrint('Error updating RTDB stats: $rtdbError');
       }
     } catch (e) {
       debugPrint('Error updating expert stats: $e');
