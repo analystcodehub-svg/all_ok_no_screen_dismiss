@@ -204,7 +204,7 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> with SingleTicker
         double pricePerMin = 5.0; // Fixed price
 
         try {
-          final qSnapshot = await FirebaseDatabase.instance.ref('queues/female_${preferredLanguage.toLowerCase()}/$matchedExpertUid').get();
+          final qSnapshot = await db.ref('queues/female_${preferredLanguage.toLowerCase()}/$matchedExpertUid').get();
           if (qSnapshot.exists && qSnapshot.value != null) {
             final data = qSnapshot.value as Map<dynamic, dynamic>;
             nickname = data['nickname']?.toString() ?? nickname;
