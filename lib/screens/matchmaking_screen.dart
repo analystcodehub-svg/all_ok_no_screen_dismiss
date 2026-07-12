@@ -34,6 +34,7 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> with SingleTicker
   final ValueNotifier<String> _statusMessage = ValueNotifier<String>('Connecting...');
   final ValueNotifier<int> _ringingTimer = ValueNotifier<int>(0);
   final ValueNotifier<String?> _matchedExpertUidNotifier = ValueNotifier<String?>(null);
+  String _matchedExpertNickname = 'Expert';
   Completer<bool>? _ringingCompleter;
   
   bool _isDisposed = false;
@@ -137,6 +138,27 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> with SingleTicker
       return;
     }
 
+    // Fetch the matched expert's nickname before ringing
+    String resolvedNickname = widget.requestedExpert?.nickname ?? matchedExpertUid.toUpperCase();
+    
+    if (widget.isRandomMode || (widget.requestedExpert != null && widget.requestedExpert!.id != matchedExpertUid)) {
+      try {
+        final db = FirebaseDatabase.instanceFor(
+          app: FirebaseDatabase.instance.app,
+          databaseURL: 'https://zegochat-c44b0.asia-southeast1.firebasedatabase.app',
+        );
+        final qSnapshot = await db.ref('queues/female_${preferredLanguage.toLowerCase()}/$matchedExpertUid').get();
+        if (qSnapshot.exists && qSnapshot.value != null) {
+          final data = qSnapshot.value as Map<dynamic, dynamic>;
+          resolvedNickname = data['nickname']?.toString() ?? matchedExpertUid.toUpperCase();
+        }
+      } catch (e) {
+        debugPrint('Error fetching expert nickname: $e');
+      }
+    }
+
+    _matchedExpertNickname = resolvedNickname;
+
     // Update UI to show the expert's avatar
     _matchedExpertUidNotifier.value = matchedExpertUid;
 
@@ -200,18 +222,7 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> with SingleTicker
 
       if (expertAnswered) {
         // SUCCESS: Proceed with WebRTC stream
-        String nickname = widget.requestedExpert?.nickname ?? matchedExpertUid.toUpperCase();
         double pricePerMin = 5.0; // Fixed price
-
-        try {
-          final qSnapshot = await db.ref('queues/female_${preferredLanguage.toLowerCase()}/$matchedExpertUid').get();
-          if (qSnapshot.exists && qSnapshot.value != null) {
-            final data = qSnapshot.value as Map<dynamic, dynamic>;
-            nickname = data['nickname']?.toString() ?? nickname;
-          }
-        } catch (e) {
-          debugPrint('Error fetching expert details from RTDB: $e');
-        }
 
         if (!_isDisposed && mounted) {
           Navigator.pushReplacement(
@@ -221,7 +232,7 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> with SingleTicker
                 callRoomId: callRoomId,
                 receiverId: matchedExpertUid ?? '', // We know it's not null here
                 callerId: callerUid,
-                nickname: nickname,
+                nickname: _matchedExpertNickname,
                 pricePerMin: pricePerMin,
                 isCaller: true,
                 preStartedCallService: _callService,
@@ -512,7 +523,6 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> with SingleTicker
   }
 
   Widget _buildRingingAvatars(String expertUid) {
-    String nickname = widget.requestedExpert?.nickname ?? 'Expert';
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -583,7 +593,7 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> with SingleTicker
           const SizedBox(height: 24),
           // Expert Name
           Text(
-            nickname,
+            _matchedExpertNickname,
             style: const TextStyle(
               color: Colors.white,
               fontSize: 28,
