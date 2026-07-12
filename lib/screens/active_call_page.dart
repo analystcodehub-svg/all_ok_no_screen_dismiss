@@ -358,15 +358,21 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
           'totalTalkSeconds': ServerValue.increment(seconds),
         });
         
-        // Safely update queue node if it exists (so we don't create ghost nodes for offline experts)
+        // Safely update queue node if it exists using a transaction (100% ghost node proof)
         final lang = language.isNotEmpty ? language.toLowerCase() : 'hindi';
         final queueRef = rtdb.ref('queues/female_$lang/$expertId');
-        final queueSnap = await queueRef.get();
-        if (queueSnap.exists) {
-          await queueRef.update({
-            'totalTalkSeconds': ServerValue.increment(seconds),
-          });
-        }
+        
+        await queueRef.runTransaction((Object? mutableData) {
+          if (mutableData == null) {
+            return Transaction.abort(); // Node doesn't exist, don't create ghost node
+          }
+          
+          Map<Object?, Object?> data = Map<Object?, Object?>.from(mutableData as Map);
+          int currentSeconds = (data['totalTalkSeconds'] as num?)?.toInt() ?? 0;
+          data['totalTalkSeconds'] = currentSeconds + seconds;
+          
+          return Transaction.success(data);
+        });
       } catch (rtdbError) {
         debugPrint('Error updating RTDB stats: $rtdbError');
       }
