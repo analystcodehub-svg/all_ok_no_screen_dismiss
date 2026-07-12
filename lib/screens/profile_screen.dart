@@ -7,13 +7,11 @@ import 'kyc_pan_screen.dart';
 import 'referral_screen.dart';
 import 'withdrawal_history_screen.dart';
 import 'payment_history_screen.dart';
-import '../widgets/local_avatar_widget.dart';
 import 'terms_condition_screen.dart';
 import 'refund_cancellation_screen.dart';
 import 'privacy_policy_screen.dart';
 
 import 'wallet_recharge_screen.dart';
-import '../widgets/local_avatar_widget.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -296,73 +294,7 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildReferralTile(BuildContext context) {
-    return GestureDetector(
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => const ReferralScreen()),
-      ),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFF7C3AED), Color(0xFF4F46E5)],
-            begin: Alignment.centerLeft,
-            end: Alignment.centerRight,
-          ),
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF7C3AED).withValues(alpha: 0.25),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Icon(
-                Icons.card_giftcard_rounded,
-                color: Colors.white,
-                size: 22,
-              ),
-            ),
-            const SizedBox(width: 14),
-            const Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Refer & Earn',
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                  SizedBox(height: 2),
-                  Text(
-                    'Invite friends and grow your network',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.white70,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const Icon(Icons.chevron_right, color: Colors.white70),
-          ],
-        ),
-      ),
-    );
-  }
+
 
   Widget _buildKycStatusSection(BuildContext context, String uid, String nickname) {
     // Query by expertId (new submissions) — no orderBy to avoid index requirement

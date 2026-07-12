@@ -7,8 +7,7 @@ import 'package:provider/provider.dart';
 import '../providers/app_state.dart';
 import '../widgets/local_avatar_widget.dart';
 import 'package:firebase_database/firebase_database.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'wallet_recharge_screen.dart';
+
 
 class HybridChatScreen extends StatefulWidget {
   final String myUid;
@@ -93,7 +92,7 @@ class _HybridChatScreenState extends State<HybridChatScreen> {
     final text = _textController.text.trim();
     if (text.isEmpty) return;
 
-    final appState = context.read<AppState>();
+
     
     // If the sender is a Male User, deduct 20 coins
     /*

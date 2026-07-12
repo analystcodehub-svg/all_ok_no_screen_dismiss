@@ -172,76 +172,7 @@ class _RecentSessionsScreenState extends State<RecentSessionsScreen> {
     );
   }
   
-  void _triggerCall(BuildContext context, String targetId, bool isTargetExpert) async {
-    final callService = CallService();
-    
-    // Show loading
-    showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator()));
 
-    bool targetLocked = false;
-    bool selfLocked = false;
-
-    // Lock target
-    if (isTargetExpert) {
-      targetLocked = await callService.lockExpertForCall(targetId);
-    } else {
-      targetLocked = await callService.lockUserForCall(targetId);
-    }
-    
-    
-    if (!context.mounted) return;
-    final appState = context.read<AppState>();
-    final currentUser = appState.mobileNumber.isNotEmpty ? appState.mobileNumber : appState.uid;
-    
-    // Lock self
-    if (targetLocked) {
-      if (isTargetExpert) {
-        selfLocked = await callService.lockUserForCall(currentUser);
-      } else {
-        selfLocked = await callService.lockExpertForCall(currentUser);
-      }
-    }
-
-    if (context.mounted) Navigator.pop(context); // remove loading
-
-    if (!targetLocked) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('User is busy try after sometime')));
-      }
-      return;
-    }
-    
-    if (!selfLocked) {
-      // Unlock target because we couldn't lock ourselves
-      if (isTargetExpert) {
-        callService.unlockExpertFromCall(targetId);
-      } else {
-        callService.unlockUserFromCall(targetId);
-      }
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('You have an incoming call or are currently busy.')));
-      }
-      return;
-    }
-
-    if (!context.mounted) return;
-    
-    final displayName = appState.nickname;
-    
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => ActiveCallPage(
-          receiverId: targetId,
-          callerId: currentUser,
-          nickname: displayName,
-          isCaller: true, // We are initiating the call
-          pricePerMin: 5.0,
-          isFirstFreeCall: false,
-        ),
-      ),
-    );
-  }
   
   Widget _buildEmptyState() {
     return const Center(
