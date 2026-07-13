@@ -310,6 +310,26 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
       _ringingTimer?.cancel();
       
       _saveCallLog();
+      
+      // Sync Caller's Wallet Deduction to Firestore exactly once at the end
+      if (widget.isCaller && _duration >= 60) {
+        int callMinutes = _duration ~/ 60;
+        if (widget.isFirstFreeCall) {
+          callMinutes = (callMinutes >= 2) ? (callMinutes - 2) : 0;
+        }
+        if (callMinutes > 0) {
+          final coinsToDeduct = callMinutes * (widget.pricePerMin * 10).toInt();
+          final appState = context.read<AppState>();
+          final mobile = appState.mobileNumber.isNotEmpty ? appState.mobileNumber : "test_mobile";
+          
+          FirebaseFirestore.instance.collection('users').doc(mobile).update({
+            'coinBalance': FieldValue.increment(-coinsToDeduct),
+          }).catchError((e) => debugPrint('Error syncing caller wallet deduction: $e'));
+          
+          debugPrint('Caller billed for $callMinutes mins: -$coinsToDeduct coins synced to Firestore');
+        }
+      }
+
       // Credit expert earnings and update talk time at end of call (only if >= 50 seconds)
       if (!widget.isCaller && _duration >= 50) {
         int callMinutes = _duration ~/ 60;

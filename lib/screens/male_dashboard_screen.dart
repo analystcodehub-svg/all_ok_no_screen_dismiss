@@ -152,8 +152,10 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
         }
 
         final hasUsedFreeCall = data['hasUsedFreeCall'] as bool? ?? false;
+        final freeMessagesUsed = (data['freeMessagesUsed'] as num?)?.toInt() ?? 0;
         appState.setCoinBalance(coinBalance);
         appState.setHasUsedFreeCall(hasUsedFreeCall);
+        appState.setFreeMessagesUsed(freeMessagesUsed);
         
         final nickname = data['nickname'] as String? ?? '';
         if (nickname.isNotEmpty) {
@@ -164,10 +166,12 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
           'mobileNumber': mobile,
           'coinBalance': 0,
           'hasUsedFreeCall': false,
+          'freeMessagesUsed': 0,
           'gender': 'male',
         }, SetOptions(merge: true));
         appState.setCoinBalance(0);
         appState.setHasUsedFreeCall(false);
+        appState.setFreeMessagesUsed(0);
       }
       
       // Save FCM Token for push notifications
@@ -752,6 +756,68 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
                       ),
                     ],
                   ),
+                ),
+              ),
+
+            // 5 FREE MESSAGES Banner
+            if (appState.freeMessagesUsed < 5)
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF0EA5E9), Color(0xFF3B82F6)], // Light Blue to Blue
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
+                  ),
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF0EA5E9).withValues(alpha: 0.35),
+                      blurRadius: 20,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    // Chat icon
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.2),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Text('💬', style: TextStyle(fontSize: 22)),
+                    ),
+                    const SizedBox(width: 14),
+                    // Main text
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            '5 FREE MESSAGES!',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.8,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            'You have ${5 - appState.freeMessagesUsed} free messages left ✨',
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
 

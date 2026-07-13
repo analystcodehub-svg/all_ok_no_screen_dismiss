@@ -46,6 +46,9 @@ class AppState extends ChangeNotifier {
   bool _hasUsedFreeCall = false;
   bool get hasUsedFreeCall => _hasUsedFreeCall;
 
+  int _freeMessagesUsed = 0;
+  int get freeMessagesUsed => _freeMessagesUsed;
+
   // Setters
   void setMobileNumber(String number) {
     _mobileNumber = number;
@@ -111,6 +114,16 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setFreeMessagesUsed(int count) {
+    _freeMessagesUsed = count;
+    notifyListeners();
+  }
+
+  void incrementFreeMessagesUsed() {
+    _freeMessagesUsed++;
+    notifyListeners();
+  }
+
   void addCoinBalance(int amount) {
     _coinBalance += amount;
     notifyListeners();
@@ -137,6 +150,7 @@ class AppState extends ChangeNotifier {
     _totalEarnings = 0.0;
     _coinBalance = 0;
     _hasUsedFreeCall = false;
+    _freeMessagesUsed = 0;
     notifyListeners();
   }
 }
