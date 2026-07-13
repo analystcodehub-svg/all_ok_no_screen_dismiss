@@ -95,7 +95,6 @@ class _HybridChatScreenState extends State<HybridChatScreen> {
 
     
     // If the sender is a Male User, deduct 20 coins
-    /*
     if (appState.selectedGender == 'Male') {
       if (appState.coinBalance < 20) {
         showDialog(
@@ -150,7 +149,6 @@ class _HybridChatScreenState extends State<HybridChatScreen> {
         debugPrint('Failed to deduct coins in Firestore: $e');
       });
     }
-    */
 
     _textController.clear();
     

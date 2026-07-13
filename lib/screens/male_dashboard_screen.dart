@@ -678,7 +678,6 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
             ),
 
             // FIRST 2 MIN FREE Banner
-            /*
             if (!appState.hasUsedFreeCall)
               GestureDetector(
                 onTap: _startRandomMatchmaking,
@@ -755,7 +754,6 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
                   ),
                 ),
               ),
-              */
 
             // Section Header
             const Padding(
