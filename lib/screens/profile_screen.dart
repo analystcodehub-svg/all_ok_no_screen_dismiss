@@ -4,7 +4,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../theme/app_colors.dart';
 import '../providers/app_state.dart';
 import 'kyc_pan_screen.dart';
-import 'referral_screen.dart';
 import 'withdrawal_history_screen.dart';
 import 'payment_history_screen.dart';
 import 'terms_condition_screen.dart';
@@ -38,7 +37,11 @@ class ProfileScreen extends StatelessWidget {
                       height: 120,
                       width: double.infinity,
                       decoration: const BoxDecoration(
-                        color: AppColors.primaryBlue,
+                        gradient: LinearGradient(
+                          colors: [AppColors.gradientBlueStart, AppColors.gradientBlueEnd],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
                       ),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -606,11 +609,11 @@ class ProfileScreen extends StatelessWidget {
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           gradient: const LinearGradient(
-            colors: [Color(0xFF3B82F6), Color(0xFF1E3A8A)],
+            colors: [AppColors.gradientBlueStart, AppColors.gradientBlueEnd],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
               color: const Color(0xFF3B82F6).withValues(alpha: 0.3),

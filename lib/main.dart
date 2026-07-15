@@ -15,6 +15,9 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Sync pending chat deductions if the app was force killed previously
+  AppState.syncPendingChatDeductions();
 
   // ── 1. Initialize Firebase ──────────────────────────────────────────────
   bool firebaseInitialized = false;

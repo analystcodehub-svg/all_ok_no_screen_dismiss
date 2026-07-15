@@ -222,7 +222,7 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> with SingleTicker
 
       if (expertAnswered) {
         // SUCCESS: Proceed with WebRTC stream
-        double pricePerMin = 5.0; // Fixed price
+        double pricePerMin = 3.0; // Fixed price for male users
 
         if (!_isDisposed && mounted) {
           Navigator.pushReplacement(
@@ -236,7 +236,7 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> with SingleTicker
                 pricePerMin: pricePerMin,
                 isCaller: true,
                 preStartedCallService: _callService,
-                isFirstFreeCall: !hasUsedFreeCall,
+                isFirstFreeCall: false, // Temporary disable 2 min free: !hasUsedFreeCall,
               ),
             ),
           );

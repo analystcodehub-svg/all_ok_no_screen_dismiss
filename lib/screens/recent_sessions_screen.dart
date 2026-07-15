@@ -3,11 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import '../theme/app_colors.dart';
 import '../providers/app_state.dart';
-import '../services/call_service.dart';
 import '../services/local_chat_database.dart';
 import '../widgets/local_avatar_widget.dart';
-import 'active_call_page.dart';
-
 class RecentSessionsScreen extends StatefulWidget {
   const RecentSessionsScreen({super.key});
 

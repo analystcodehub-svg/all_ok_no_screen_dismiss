@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class AppState extends ChangeNotifier {
   // Authentication state
@@ -136,6 +138,65 @@ class AppState extends ChangeNotifier {
       _coinBalance = 0;
     }
     notifyListeners();
+  }
+
+  // --- SharedPreferences Chat Billing Optimization ---
+  int _pendingChatCoins = 0;
+  int _pendingChatFreeMsgs = 0;
+
+  int get pendingChatCoins => _pendingChatCoins;
+  int get pendingChatFreeMsgs => _pendingChatFreeMsgs;
+
+  Future<void> addPendingChatDeduction({required int coins, required int freeMsgs}) async {
+    final prefs = await SharedPreferences.getInstance();
+    
+    if (coins > 0) {
+      _pendingChatCoins += coins;
+      await prefs.setInt('pendingChatCoins', _pendingChatCoins);
+      deductCoinBalance(coins); // instant UI update
+    }
+    if (freeMsgs > 0) {
+      _pendingChatFreeMsgs += freeMsgs;
+      await prefs.setInt('pendingChatFreeMsgs', _pendingChatFreeMsgs);
+      incrementFreeMessagesUsed(); // instant UI update
+    }
+    
+    final mobile = _mobileNumber.isNotEmpty ? _mobileNumber : "test_mobile";
+    await prefs.setString('pendingChatMobile', mobile);
+  }
+
+  void clearPendingChatDeductionsLocally() {
+    _pendingChatCoins = 0;
+    _pendingChatFreeMsgs = 0;
+  }
+
+  static Future<void> syncPendingChatDeductions() async {
+    final prefs = await SharedPreferences.getInstance();
+    final coinsToDeduct = prefs.getInt('pendingChatCoins') ?? 0;
+    final freeMsgsToSync = prefs.getInt('pendingChatFreeMsgs') ?? 0;
+    
+    if (coinsToDeduct == 0 && freeMsgsToSync == 0) return;
+    
+    final mobile = prefs.getString('pendingChatMobile') ?? '';
+    if (mobile.isEmpty) return;
+
+    final Map<String, dynamic> updates = {};
+    if (freeMsgsToSync > 0) {
+      updates['freeMessagesUsed'] = FieldValue.increment(freeMsgsToSync);
+    }
+    if (coinsToDeduct > 0) {
+      updates['coinBalance'] = FieldValue.increment(-coinsToDeduct);
+    }
+
+    await prefs.remove('pendingChatCoins');
+    await prefs.remove('pendingChatFreeMsgs');
+    await prefs.remove('pendingChatMobile');
+
+    if (updates.isNotEmpty) {
+      FirebaseFirestore.instance.collection('users').doc(mobile).update(updates).catchError((e) {
+        debugPrint('Failed to sync chat deductions: $e');
+      });
+    }
   }
 
   void reset() {

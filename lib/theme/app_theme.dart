@@ -1,56 +1,59 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+
 class AppTheme {
-  // Legacy colors (kept for existing screens to not break them, but pink is removed)
-  static const Color primaryBlue = Color(0xFF3B5998);
-  static const Color textBlack = Color(0xFF1A1A1A);
-  static const Color textGrey = Color(0xFF757575);
+  // New Premium Colors (Midnight Blue & Sunset Orange)
+  static const Color primaryBlue = Color(0xFF1E1B4B); // Midnight Blue
+  static const Color secondaryOrange = Color(0xFFF97316); // Sunset Orange
+  static const Color textBlack = Color(0xFF0F172A);
+  static const Color textGrey = Color(0xFF64748B);
   static const Color bgWhite = Colors.white;
-  static const Color bgLight = Color(0xFFF8F9FA);
+  static const Color bgLight = Color(0xFFF8FAFC);
   static const Color containerWhite = Color(0xFFFFFFFF);
-  static const Color inputBg = Color(0xFFF3F5F9);
-  static const Color borderGrey = Color(0xFFE0E0E0);
-  static const Color lightBlue = Color(0xFFE8EEF9);
+  static const Color inputBg = Color(0xFFF1F5F9);
+  static const Color borderGrey = Color(0xFFE2E8F0);
+  static const Color lightBlue = Color(0xFFE0E7FF);
 
   static ThemeData get lightTheme {
     return ThemeData(
       useMaterial3: true,
       scaffoldBackgroundColor: bgWhite,
-      colorScheme: ColorScheme.light(
+      colorScheme: const ColorScheme.light(
         primary: primaryBlue,
-        secondary: primaryBlue,
+        secondary: secondaryOrange,
         surface: bgWhite,
         onPrimary: Colors.white,
         onSecondary: Colors.white,
         onSurface: textBlack,
       ),
       appBarTheme: const AppBarTheme(
-        backgroundColor: bgWhite,
+        backgroundColor: primaryBlue,
         elevation: 0,
-        iconTheme: IconThemeData(color: textBlack),
+        iconTheme: IconThemeData(color: Colors.white),
         titleTextStyle: TextStyle(
-          color: textBlack,
+          color: Colors.white,
           fontSize: 20,
           fontWeight: FontWeight.bold,
         ),
       ),
-      textTheme: const TextTheme(
-        headlineMedium: TextStyle(
+      textTheme: GoogleFonts.poppinsTextTheme().copyWith(
+        headlineMedium: GoogleFonts.poppins(
           color: textBlack,
           fontSize: 28,
           fontWeight: FontWeight.bold,
           letterSpacing: -0.5,
         ),
-        titleLarge: TextStyle(
+        titleLarge: GoogleFonts.poppins(
           color: textBlack,
           fontSize: 20,
           fontWeight: FontWeight.w600,
         ),
-        bodyLarge: TextStyle(
+        bodyLarge: GoogleFonts.poppins(
           color: textBlack,
           fontSize: 16,
           fontWeight: FontWeight.normal,
         ),
-        bodyMedium: TextStyle(
+        bodyMedium: GoogleFonts.poppins(
           color: textGrey,
           fontSize: 14,
           fontWeight: FontWeight.normal,
@@ -65,9 +68,9 @@ class AppTheme {
           elevation: 0,
           padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(30),
+            borderRadius: BorderRadius.circular(12), // Sharper corners
           ),
-          textStyle: const TextStyle(
+          textStyle: GoogleFonts.poppins(
             fontSize: 16,
             fontWeight: FontWeight.bold,
             letterSpacing: 0.5,
@@ -79,18 +82,18 @@ class AppTheme {
         fillColor: inputBg,
         contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(15),
+          borderRadius: BorderRadius.circular(12), // Sharper corners
           borderSide: BorderSide.none,
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(15),
+          borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide.none,
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(15),
+          borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: primaryBlue, width: 1.5),
         ),
-        hintStyle: const TextStyle(
+        hintStyle: GoogleFonts.poppins(
           color: textGrey,
           fontSize: 16,
         ),

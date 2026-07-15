@@ -7,8 +7,8 @@ import 'package:provider/provider.dart';
 import '../providers/app_state.dart';
 import '../widgets/local_avatar_widget.dart';
 import 'package:firebase_database/firebase_database.dart';
-
-
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'wallet_recharge_screen.dart';
 class HybridChatScreen extends StatefulWidget {
   final String myUid;
   final String otherUid;
@@ -25,7 +25,7 @@ class HybridChatScreen extends StatefulWidget {
   State<HybridChatScreen> createState() => _HybridChatScreenState();
 }
 
-class _HybridChatScreenState extends State<HybridChatScreen> {
+class _HybridChatScreenState extends State<HybridChatScreen> with WidgetsBindingObserver {
   final TextEditingController _textController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final HybridChatService _chatService = HybridChatService();
@@ -37,6 +37,7 @@ class _HybridChatScreenState extends State<HybridChatScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _roomId = LocalChatDatabase.generateRoomId(widget.myUid, widget.otherUid);
     
     // Set active room to prevent false delivery ACKs when we are actually reading
@@ -82,10 +83,19 @@ class _HybridChatScreenState extends State<HybridChatScreen> {
   @override
   void dispose() {
     HybridChatService.activeChatRoomId = null;
+    WidgetsBinding.instance.removeObserver(this);
+    AppState.syncPendingChatDeductions();
     _dbUpdateSubscription?.cancel();
     _textController.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.detached) {
+      AppState.syncPendingChatDeductions();
+    }
   }
 
   void _sendMessage() async {
@@ -93,19 +103,13 @@ class _HybridChatScreenState extends State<HybridChatScreen> {
     if (text.isEmpty) return;
 
 
+    final appState = context.read<AppState>();
     
     // If the sender is a Male User, deduct coins or use free messages
     if (appState.selectedGender == 'Male') {
-      final mobile = appState.mobileNumber.isNotEmpty ? appState.mobileNumber : "test_mobile";
-      
       if (appState.freeMessagesUsed < 5) {
         // Use a free message
-        appState.incrementFreeMessagesUsed();
-        FirebaseFirestore.instance.collection('users').doc(mobile).update({
-          'freeMessagesUsed': FieldValue.increment(1),
-        }).catchError((e) {
-          debugPrint('Failed to increment freeMessagesUsed in Firestore: $e');
-        });
+        appState.addPendingChatDeduction(coins: 0, freeMsgs: 1);
       } else {
         // Deduct 5 coins (50 paise)
         if (appState.coinBalance < 5) {
@@ -150,15 +154,14 @@ class _HybridChatScreenState extends State<HybridChatScreen> {
           return;
         }
         
-        // Deduct locally for immediate UI update
-        appState.deductCoinBalance(5);
-        
-        // Persist deduction to Firestore
-        FirebaseFirestore.instance.collection('users').doc(mobile).update({
-          'coinBalance': FieldValue.increment(-5),
-        }).catchError((e) {
-          debugPrint('Failed to deduct coins in Firestore: $e');
-        });
+        // Deduct locally and save to SharedPreferences
+        appState.addPendingChatDeduction(coins: 5, freeMsgs: 0);
+      }
+      
+      // Batch sync rule: Sync after 5 messages
+      if (appState.pendingChatFreeMsgs >= 5 || appState.pendingChatCoins >= 25) {
+        AppState.syncPendingChatDeductions();
+        appState.clearPendingChatDeductionsLocally();
       }
     }
 
@@ -178,7 +181,7 @@ class _HybridChatScreenState extends State<HybridChatScreen> {
     } else if (status == 2) {
       return const Icon(Icons.done_all, size: 16, color: Colors.grey);
     } else if (status >= 3) {
-      return const Icon(Icons.done_all, size: 16, color: Colors.blue);
+      return const Icon(Icons.done_all, size: 16, color: AppColors.primaryBlue);
     }
     return const SizedBox(width: 16);
   }
@@ -191,7 +194,15 @@ class _HybridChatScreenState extends State<HybridChatScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF0F2F5), // WhatsApp-like background
       appBar: AppBar(
-        backgroundColor: AppColors.primaryBlue,
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [AppColors.gradientBlueStart, AppColors.gradientBlueEnd],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
         titleSpacing: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
@@ -267,7 +278,7 @@ class _HybridChatScreenState extends State<HybridChatScreen> {
                     margin: const EdgeInsets.only(bottom: 6),
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     decoration: BoxDecoration(
-                      color: isMe ? const Color(0xFFE1FFC7) : Colors.white,
+                      color: isMe ? AppColors.lightBlueBg : Colors.white,
                       borderRadius: BorderRadius.circular(12).copyWith(
                         bottomRight: isMe ? const Radius.circular(0) : const Radius.circular(12),
                         bottomLeft: !isMe ? const Radius.circular(0) : const Radius.circular(12),

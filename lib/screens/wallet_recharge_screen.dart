@@ -399,13 +399,21 @@ class _WalletRechargeScreenState extends State<WalletRechargeScreen> implements 
     return Scaffold(
       backgroundColor: bgColor,
       appBar: AppBar(
-        backgroundColor: bgColor,
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFF312E81), Color(0xFF1E1B4B)], // Midnight Blue gradient
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: Color(0xFF0F172A), size: 20),
+          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text('Wallet', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold)),
+        title: const Text('Wallet', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 16.0, top: 10.0, bottom: 10.0),
@@ -416,12 +424,12 @@ class _WalletRechargeScreenState extends State<WalletRechargeScreen> implements 
                   MaterialPageRoute(builder: (_) => const PaymentHistoryScreen()),
                 );
               },
-              icon: const Icon(Icons.swap_vert_rounded, size: 16, color: Color(0xFF3B82F6)),
-              label: const Text('Transactions', style: TextStyle(color: Color(0xFF3B82F6))),
+              icon: const Icon(Icons.swap_vert_rounded, size: 16, color: Colors.white),
+              label: const Text('Transactions', style: TextStyle(color: Colors.white)),
               style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: Color(0xFF3B82F6)),
+                side: const BorderSide(color: Colors.white),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(12), // Sharper corners
                 ),
                 padding: const EdgeInsets.symmetric(horizontal: 12),
               ),
@@ -605,9 +613,9 @@ class _WalletRechargeScreenState extends State<WalletRechargeScreen> implements 
                     child: ElevatedButton(
                       onPressed: _isLoading ? null : _showPaymentOptionsBottomSheet,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF3B82F6),
+                        backgroundColor: const Color(0xFFF97316), // Sunset Orange
                         padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)), // Pill shape
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), // Sharper corners
                       ),
                       child: _isLoading 
                         ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white))
