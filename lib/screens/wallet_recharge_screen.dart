@@ -208,7 +208,10 @@ class _WalletRechargeScreenState extends State<WalletRechargeScreen> implements 
       PayUCheckoutProConfigKeys.autoSelectOtp: true,
       PayUCheckoutProConfigKeys.waitingTime: 30000,
       PayUCheckoutProConfigKeys.enforcePaymentList: [
-        {"payment_type": "UPI"}
+        {
+          "payment_type": "UPI",
+          "enforce_ibiboCode": "PHONEPE"
+        }
       ],
     };
 
@@ -322,12 +325,20 @@ class _WalletRechargeScreenState extends State<WalletRechargeScreen> implements 
               const SizedBox(height: 12),
               ListTile(
                 leading: Container(
-                  padding: const EdgeInsets.all(8),
+                  padding: const EdgeInsets.all(4),
                   decoration: BoxDecoration(
-                    color: Colors.purple.withOpacity(0.1),
+                    color: Colors.purple.withOpacity(0.05),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.payment, color: Colors.purple, size: 28),
+                  child: ClipOval(
+                    child: Image.network(
+                      'https://uxwing.com/wp-content/themes/uxwing/download/brands-and-social-media/phonepe-icon.png',
+                      width: 36,
+                      height: 36,
+                      fit: BoxFit.contain,
+                      errorBuilder: (context, error, stackTrace) => const Icon(Icons.payment, color: Colors.purple, size: 28),
+                    ),
+                  ),
                 ),
                 title: const Text('PhonePe', style: TextStyle(fontWeight: FontWeight.w600)),
                 subtitle: const Text('Secure payment via PayU', style: TextStyle(fontSize: 12)),
@@ -474,80 +485,92 @@ class _WalletRechargeScreenState extends State<WalletRechargeScreen> implements 
                 const Text('Add Balance to Wallet', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
                 const SizedBox(height: 16),
 
-                GridView.builder(
+                ListView.separated(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    childAspectRatio: 1.55,
-                    crossAxisSpacing: 16,
-                    mainAxisSpacing: 20,
-                  ),
                   itemCount: _packages.length,
+                  separatorBuilder: (context, index) => const SizedBox(height: 12),
                   itemBuilder: (context, index) {
                     final package = _packages[index];
                     final isSelected = _selectedPackageIndex == index;
                     return GestureDetector(
                       onTap: () => setState(() => _selectedPackageIndex = index),
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                         decoration: BoxDecoration(
                           color: isSelected ? const Color(0xFFEFF6FF) : Colors.white,
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
-                            color: isSelected ? const Color(0xFF3B82F6) : Colors.white,
-                            width: isSelected ? 1.5 : 0.0, // Used to be 1.0, but original image has no border when unselected
+                            color: isSelected ? const Color(0xFF3B82F6) : Colors.grey.shade200,
+                            width: isSelected ? 2.0 : 1.0,
                           ),
                           boxShadow: isSelected ? [] : [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.03),
-                              blurRadius: 5,
+                              color: Colors.black.withOpacity(0.02),
+                              blurRadius: 4,
                               offset: const Offset(0, 2),
                             ),
                           ],
                         ),
                         child: Row(
-                          mainAxisAlignment: package.badge != null 
-                              ? MainAxisAlignment.spaceBetween 
-                              : MainAxisAlignment.center,
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              crossAxisAlignment: package.badge != null 
-                                  ? CrossAxisAlignment.start 
-                                  : CrossAxisAlignment.center,
+                            Row(
                               children: [
-                                Text(
-                                  '₹${package.amount.toStringAsFixed(0)}',
-                                  style: TextStyle(
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.bold,
-                                    color: isSelected ? const Color(0xFF1E3A8A) : const Color(0xFF3B82F6),
+                                Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: isSelected ? const Color(0xFF3B82F6).withOpacity(0.1) : Colors.grey.shade100,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    Icons.account_balance_wallet_rounded,
+                                    color: isSelected ? const Color(0xFF3B82F6) : Colors.grey.shade600,
+                                    size: 20,
                                   ),
                                 ),
-                                if (package.extraText != null) ...[
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    package.extraText!,
-                                    style: const TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.bold,
-                                      color: Color(0xFF10B981),
+                                const SizedBox(width: 16),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      '₹${package.amount.toStringAsFixed(0)}',
+                                      style: TextStyle(
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.w800,
+                                        color: isSelected ? const Color(0xFF1E3A8A) : const Color(0xFF0F172A),
+                                      ),
                                     ),
-                                  ),
-                                ]
+                                    if (package.extraText != null) ...[
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        package.extraText!,
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold,
+                                          color: Color(0xFF10B981),
+                                        ),
+                                      ),
+                                    ]
+                                  ],
+                                ),
                               ],
                             ),
                             if (package.badge != null)
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                 decoration: BoxDecoration(
                                   color: package.badgeColor ?? const Color(0xFFEF4444),
-                                  borderRadius: BorderRadius.circular(12),
+                                  borderRadius: BorderRadius.circular(20),
                                 ),
                                 child: Text(
                                   package.badge!,
-                                  style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: 0.5,
+                                  ),
                                 ),
                               ),
                           ],

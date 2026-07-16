@@ -412,6 +412,7 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
         'logId': logId,
         'callerId': widget.callerId,
         'receiverId': widget.receiverId,
+        'otherUserName': widget.nickname,
         'durationSeconds': _duration,
         'status': status,
         'timestamp': timestamp,

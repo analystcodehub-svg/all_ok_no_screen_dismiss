@@ -160,19 +160,21 @@ class ProfileScreen extends StatelessWidget {
                         },
                       ),
                       const SizedBox(height: 12),
-                      _buildSettingsTile(
-                        title: 'Refund & Cancellation',
-                        icon: Icons.attach_money,
-                        iconColor: AppColors.successGreen,
-                        iconBgColor: AppColors.successGreen.withValues(alpha: 0.1),
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (_) => const RefundCancellationScreen()),
-                          );
-                        },
-                      ),
-                      const SizedBox(height: 12),
+                      if (role != 'expert') ...[
+                        _buildSettingsTile(
+                          title: 'Refund & Cancellation',
+                          icon: Icons.attach_money,
+                          iconColor: AppColors.successGreen,
+                          iconBgColor: AppColors.successGreen.withValues(alpha: 0.1),
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => const RefundCancellationScreen()),
+                            );
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                      ],
                       _buildSettingsTile(
                         title: 'Privacy Policy',
                         icon: Icons.privacy_tip_outlined,

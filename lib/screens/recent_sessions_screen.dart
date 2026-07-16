@@ -97,6 +97,9 @@ class _RecentSessionsScreenState extends State<RecentSessionsScreen> {
                           final isMissed = data['status'] == 'missed';
                           
                           String timeText = 'Just now';
+                          String initialName = (data['otherUserName']?.toString() ?? '').trim();
+                          if (initialName.isEmpty) initialName = 'Loading...';
+                          
                           if (data['timestamp'] != null) {
                             final dt = DateTime.fromMillisecondsSinceEpoch(data['timestamp']);
                             final now = DateTime.now();
@@ -136,12 +139,18 @@ class _RecentSessionsScreenState extends State<RecentSessionsScreen> {
                           return FutureBuilder<DocumentSnapshot>(
                             future: FirebaseFirestore.instance.collection(collectionName).doc(otherUserId).get(),
                             builder: (context, profileSnapshot) {
-                              String displayName = otherUserId ?? 'Unknown';
-
-                              if (profileSnapshot.hasData && profileSnapshot.data!.exists) {
-                                final profileData = profileSnapshot.data!.data() as Map<String, dynamic>;
-                                if (profileData['nickname'] != null && profileData['nickname'].toString().isNotEmpty) {
-                                  displayName = profileData['nickname'];
+                              String displayName = initialName;
+                              
+                              if (profileSnapshot.connectionState == ConnectionState.done) {
+                                if (profileSnapshot.hasData && profileSnapshot.data!.exists) {
+                                  final profileData = profileSnapshot.data!.data() as Map<String, dynamic>;
+                                  if (profileData['nickname'] != null && profileData['nickname'].toString().trim().isNotEmpty) {
+                                    displayName = profileData['nickname'];
+                                  } else {
+                                    displayName = isCaller ? 'Expert' : 'User';
+                                  }
+                                } else {
+                                  displayName = isCaller ? 'Expert' : 'User';
                                 }
                               }
 

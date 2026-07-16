@@ -690,6 +690,7 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
               ),
             ),
 
+            /*
             // FIRST 2 MIN FREE Banner
             if (false /* !appState.hasUsedFreeCall */)
               GestureDetector(
@@ -767,6 +768,7 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
                   ),
                 ),
               ),
+            */
 
             // Promotional Banner (5 FREE MESSAGES + SALE)
             Container(

@@ -29,7 +29,7 @@ class LocalChatDatabase {
 
     return await openDatabase(
       path,
-      version: 2, // Upgraded for call logs
+      version: 3, // Upgraded for call logs with names
       onCreate: _createDB,
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -44,6 +44,13 @@ class LocalChatDatabase {
             )
           ''');
           await db.execute('CREATE INDEX idx_call_timestamp ON call_logs (timestamp DESC)');
+        }
+        if (oldVersion < 3) {
+          try {
+            await db.execute('ALTER TABLE call_logs ADD COLUMN otherUserName TEXT');
+          } catch (e) {
+            debugPrint('Error altering call_logs table: $e');
+          }
         }
       },
     );
@@ -70,7 +77,8 @@ class LocalChatDatabase {
         receiverId TEXT NOT NULL,
         durationSeconds INTEGER NOT NULL,
         status TEXT NOT NULL,
-        timestamp INTEGER NOT NULL
+        timestamp INTEGER NOT NULL,
+        otherUserName TEXT
       )
     ''');
     await db.execute('CREATE INDEX idx_call_timestamp ON call_logs (timestamp DESC)');
@@ -221,6 +229,7 @@ class LocalChatDatabase {
               'durationSeconds': data['durationSeconds'] ?? 0,
               'status': data['status'] ?? 'unknown',
               'timestamp': data['timestamp'] ?? DateTime.now().millisecondsSinceEpoch,
+              'otherUserName': data['otherUserName'] ?? '',
             },
             conflictAlgorithm: ConflictAlgorithm.replace,
           );

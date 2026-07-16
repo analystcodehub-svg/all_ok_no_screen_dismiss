@@ -7,6 +7,7 @@ import '../models/female_expert.dart';
 import 'matchmaking_screen.dart';
 import 'hybrid_chat_screen.dart';
 import '../widgets/expert_card.dart';
+import 'wallet_recharge_screen.dart';
 class ExpertFeedScreen extends StatefulWidget {
   const ExpertFeedScreen({super.key});
 
@@ -169,6 +170,45 @@ class _ExpertFeedScreenState extends State<ExpertFeedScreen> {
                 isOnline: isOnline,
                 onCallTap: () async {
                   debugPrint('Call button tapped for ${expert['nickname']} with ID ${expert['id']}');
+                  
+                  final appState = context.read<AppState>();
+                  final balance = appState.coinBalance;
+                  const overridePricePerMin = 3.0;
+                  
+                  if (balance < (overridePricePerMin * 10).toInt()) {
+                    if (!context.mounted) return;
+                    showDialog(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: const Text(
+                          'Insufficient Balance',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        content: Text(
+                          'Your balance is ₹${(balance / 10).toStringAsFixed(1)}. You need at least ₹$overridePricePerMin to place a call.',
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: const Text(
+                              'Cancel',
+                              style: TextStyle(color: Colors.grey),
+                            ),
+                          ),
+                          ElevatedButton(
+                            onPressed: () {
+                              Navigator.pop(context);
+                              Navigator.push(context, MaterialPageRoute(builder: (context) => const WalletRechargeScreen()));
+                            },
+                            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4F46E5)),
+                            child: const Text('Recharge'),
+                          ),
+                        ],
+                      ),
+                    );
+                    return;
+                  }
+
                   final expertId = expert['id'];
                   try {
                     final doc = await FirebaseFirestore.instance.collection('experts').doc(expertId).get();

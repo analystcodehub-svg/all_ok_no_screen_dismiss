@@ -25,7 +25,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
     // but we can initialize data fetching here if needed.
   }
 
-  Future<List<Map<String, dynamic>>> _fetchEnrichedChats(String myUid) async {
+  Future<List<Map<String, dynamic>>> _fetchEnrichedChats(String myUid, bool isCurrentMale) async {
     final chatDocs = await LocalChatDatabase.instance.getRecentChats(myUid);
     final enrichedDocs = <Map<String, dynamic>>[];
 
@@ -34,7 +34,10 @@ class _ChatListScreenState extends State<ChatListScreen> {
       final otherUser = data['otherUserId'] as String;
       
       String displayName = otherUser;
-      String role = 'user'; // default
+      
+      // If current user is male, the other user must be an expert (female avatar).
+      // If current user is female, the other user must be a user (male avatar).
+      String role = isCurrentMale ? 'expert' : 'user';
 
       try {
         // Try experts collection first
@@ -42,7 +45,6 @@ class _ChatListScreenState extends State<ChatListScreen> {
         if (expertDoc.exists && expertDoc.data() != null) {
           final expertData = expertDoc.data()!;
           displayName = expertData['nickname'] ?? displayName;
-          role = 'expert';
         } else {
           // Try users collection
           final userDoc = await FirebaseFirestore.instance.collection('users').doc(otherUser).get();
@@ -82,6 +84,9 @@ class _ChatListScreenState extends State<ChatListScreen> {
         
     if (myUid.isEmpty) myUid = _currentUserMobile;
 
+    // Determine if current user is male
+    bool isCurrentMale = appState.selectedGender != 'Female';
+
     return Scaffold(
       backgroundColor: AppColors.bgLight,
       body: SafeArea(
@@ -110,7 +115,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
                 stream: LocalChatDatabase.instance.updates,
                 builder: (context, snapshot) {
                   return FutureBuilder<List<Map<String, dynamic>>>(
-                    future: _fetchEnrichedChats(myUid),
+                    future: _fetchEnrichedChats(myUid, isCurrentMale),
                     builder: (context, futureSnapshot) {
                       if (futureSnapshot.connectionState == ConnectionState.waiting) {
                         return const Center(child: CircularProgressIndicator());
