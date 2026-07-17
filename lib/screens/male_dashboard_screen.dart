@@ -584,7 +584,7 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            (appState.coinBalance / 10).toStringAsFixed(1),
+                            '₹${(appState.coinBalance / 10).toStringAsFixed(1)}',
                             style: const TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.bold,
