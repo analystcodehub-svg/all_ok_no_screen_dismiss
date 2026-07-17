@@ -269,8 +269,8 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
         }
       }
 
-      // Deduct balances every 60 seconds (after free period)
-      if (_duration > 0 && _duration % 60 == 0) {
+      // Deduct balances at the start of every minute (1s, 61s, 121s) after free period
+      if (_duration > 0 && (_duration - 1) % 60 == 0) {
         if (widget.isCaller) {
           if (widget.isFirstFreeCall && _duration <= 120) {
             // First 2 minutes are free, do not deduct wallet
@@ -278,7 +278,7 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
             final requiredCoins = (widget.pricePerMin * 10).toInt();
             context.read<AppState>().deductCoinBalance(requiredCoins);
             final balance = context.read<AppState>().coinBalance;
-            if (balance < requiredCoins) {
+            if (balance < 0) { // Since we already deducted, check if it went negative
               _triggerHangup();
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Call ended: Insufficient balance')),
@@ -313,8 +313,8 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
       _saveCallLog();
       
       // Sync Caller's Wallet Deduction to Firestore exactly once at the end
-      if (widget.isCaller && _duration >= 60) {
-        int callMinutes = _duration ~/ 60;
+      if (widget.isCaller && _duration > 0) {
+        int callMinutes = (_duration / 60).ceil();
         if (widget.isFirstFreeCall) {
           callMinutes = (callMinutes >= 2) ? (callMinutes - 2) : 0;
         }
