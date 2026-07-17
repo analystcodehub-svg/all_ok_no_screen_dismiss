@@ -8,37 +8,100 @@ class RefundCancellationScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('Refund & Cancellation', style: TextStyle(color: Colors.black)),
+        title: const Text('Refund & Cancellation', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
         iconTheme: const IconThemeData(color: Colors.black),
         elevation: 0,
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: const Column(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Refund & Cancellation Policy', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-            SizedBox(height: 16),
-            Text('At SajniRe, we strive to provide the best experience. Please read our policy regarding wallet recharges and call deductions.', style: TextStyle(fontSize: 16)),
-            SizedBox(height: 16),
-            Text('1. Wallet Recharges', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            SizedBox(height: 8),
-            Text('All wallet recharges are final and non-refundable. Once money is added to your SajniRe wallet, it cannot be transferred back to your bank account or credit card.', style: TextStyle(fontSize: 16)),
-            SizedBox(height: 16),
-            Text('2. Call Deductions', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            SizedBox(height: 8),
-            Text('Charges are deducted on a per-minute basis during your consultation. If a call drops due to technical issues on our end within the first 60 seconds, you may contact support for a dispute review.', style: TextStyle(fontSize: 16)),
-            SizedBox(height: 16),
-            Text('3. Dispute Resolution', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            SizedBox(height: 8),
-            Text('Any disputes regarding deductions must be raised within 24 hours of the transaction. Our team will review the logs and, if deemed valid, credit the disputed amount back to your in-app wallet.', style: TextStyle(fontSize: 16)),
-            SizedBox(height: 16),
-            Text('4. Cancellation', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            SizedBox(height: 8),
-            Text('You may cancel or delete your account at any time through the app settings. However, any unused wallet balance will be forfeited upon account deletion.', style: TextStyle(fontSize: 16)),
+            const Text('Refund & Cancellation Policy', style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 6),
+            Text('Last updated: July 2025', style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
+            const SizedBox(height: 20),
+            const Text(
+              'At SajniRe, we are committed to providing a fair and transparent experience for all users. Please read this policy carefully before making any wallet recharges or using paid features.',
+              style: TextStyle(fontSize: 15, height: 1.6),
+            ),
+
+            _buildSection('1. Wallet Recharges — Non-Refundable',
+              'All wallet recharges made through SajniRe are final and non-refundable under normal circumstances.\n\n'
+              '• Once coins are added to your SajniRe wallet, they cannot be converted back to cash or transferred to a bank account.\n'
+              '• Coins have no monetary value outside the SajniRe platform.\n'
+              '• This policy applies to all payment methods including PayU, PhonePe, GPay, Paytm, and Google Play.',
+            ),
+
+            _buildSection('2. Exception — Payment Deducted but Coins Not Credited',
+              'If your payment was deducted from your bank account or payment app but coins were NOT credited to your SajniRe wallet, you are eligible for a resolution:\n\n'
+              '• Contact us at analystcodehub@gmail.com within 7 days of the transaction.\n'
+              '• Share your Transaction ID, payment screenshot, and registered mobile number.\n'
+              '• We will investigate within 3–5 business days.\n'
+              '• If the payment is confirmed on our end, the coins will be credited to your wallet. If not, we will assist you in raising a dispute with your payment provider.',
+            ),
+
+            _buildSection('3. Call Charges',
+              '• Calls are billed at ₹3 per minute for male users.\n'
+              '• Deductions happen from the in-app coin wallet.\n'
+              '• If a call drops within the first 60 seconds due to a verified technical fault on our server, you may contact support for a review.\n'
+              '• Call quality issues caused by the user\'s own network or device are not eligible for refunds.',
+            ),
+
+            _buildSection('4. Chat Charges',
+              '• The first 5 chat messages are free for new users.\n'
+              '• Subsequent messages are charged at ₹0.50 (5 coins) per message.\n'
+              '• Coins deducted for sent messages are non-refundable.',
+            ),
+
+            _buildSection('5. Expert Withdrawals & Cancellations',
+              '• Expert earnings are credited to their expert wallet based on completed calls.\n'
+              '• Withdrawal requests are subject to a minimum balance threshold and processing time of 3–7 business days.\n'
+              '• SajniRe reserves the right to withhold or cancel earnings in cases of policy violations, fraudulent activity, or disputed calls.',
+            ),
+
+            _buildSection('6. Account Deletion & Remaining Balance',
+              '• If you choose to delete your SajniRe account, any remaining coin balance in your wallet will be permanently forfeited.\n'
+              '• We strongly recommend spending your balance before requesting account deletion.\n'
+              '• Deleted accounts cannot be recovered.',
+            ),
+
+            _buildSection('7. Fraudulent Transactions',
+              'If you believe an unauthorized transaction was made from your account:\n'
+              '• Immediately contact us at analystcodehub@gmail.com.\n'
+              '• We will temporarily freeze your account during the investigation.\n'
+              '• Decisions made after investigation are final.',
+            ),
+
+            _buildSection('8. How to Request Support',
+              'To raise a refund request or dispute:\n\n'
+              '• Email: analystcodehub@gmail.com\n'
+              '• Please include: Registered mobile number, Transaction ID, Date of transaction, Screenshot of payment confirmation.\n\n'
+              'We aim to respond to all queries within 2 business days.',
+            ),
+
+            _buildSection('9. Changes to This Policy',
+              'SajniRe reserves the right to modify this Refund & Cancellation Policy at any time. Changes will be communicated via the app. Continued use of the app after changes constitutes your acceptance.',
+            ),
+
+            const SizedBox(height: 40),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildSection(String title, String content) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF1E3A8A))),
+          const SizedBox(height: 8),
+          Text(content, style: const TextStyle(fontSize: 15, height: 1.6, color: Color(0xFF374151))),
+        ],
       ),
     );
   }
