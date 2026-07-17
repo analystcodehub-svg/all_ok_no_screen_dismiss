@@ -92,7 +92,8 @@ class PrivacyPolicyScreen extends StatelessWidget {
             _buildSection('10. Contact Us',
               'For any privacy-related questions or concerns:\n\n'
               '• Email: analystcodehub@gmail.com\n'
-              '• Address: SajniRe, India',
+              '• Phone/WhatsApp: +91 8987108642\n'
+              '• Address: Fathehpur, Bhagalpur, Bihar',
             ),
 
             const SizedBox(height: 40),

@@ -9,6 +9,7 @@ import '../widgets/local_avatar_widget.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'wallet_recharge_screen.dart';
+import '../services/block_service.dart';
 class HybridChatScreen extends StatefulWidget {
   final String myUid;
   final String otherUid;
@@ -273,6 +274,7 @@ class _HybridChatScreenState extends State<HybridChatScreen> with WidgetsBinding
                   );
                 }
               } else if (value == 'block') {
+                await BlockService.instance.blockUser(widget.myUid, widget.otherUid);
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('User blocked. You will no longer receive messages from them.')),

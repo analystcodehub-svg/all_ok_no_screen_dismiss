@@ -8,6 +8,7 @@ import 'package:firebase_database/firebase_database.dart';
 import '../providers/app_state.dart';
 import '../services/call_service.dart';
 import '../services/local_chat_database.dart';
+import '../services/block_service.dart';
 import '../widgets/local_avatar_widget.dart';
 
 class ActiveCallPage extends StatefulWidget {
@@ -502,6 +503,9 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
                         );
                       }
                     } else if (value == 'block') {
+                      final myId = widget.isCaller ? widget.callerId : widget.receiverId;
+                      final otherId = widget.isCaller ? widget.receiverId : widget.callerId;
+                      await BlockService.instance.blockUser(myId, otherId);
                       if (mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(content: Text('User blocked.')),

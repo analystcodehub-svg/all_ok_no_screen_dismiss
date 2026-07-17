@@ -10,6 +10,7 @@ import 'main_navigation.dart';
 import 'gender_selection_screen.dart';
 import '../theme/app_theme.dart';
 import 'male_dashboard_screen.dart';
+import '../services/block_service.dart';
 
 class AuthWrapper extends StatefulWidget {
   const AuthWrapper({super.key});
@@ -84,6 +85,9 @@ class _AuthWrapperState extends State<AuthWrapper> {
             appState.setSelectedGender(gender == 'male' ? 'Male' : 'Female');
             appState.setNickname(data['nickname'] ?? '');
             
+            // Sync blocked users
+            BlockService.instance.syncBlockedUsers(user.uid);
+            
             setState(() {
               _homeWidget = gender == 'male' 
                   ? const MaleCallerDashboard() 
@@ -94,6 +98,9 @@ class _AuthWrapperState extends State<AuthWrapper> {
             // Logged in but no profile (maybe they closed the app during onboarding)
             final appState = context.read<AppState>();
             appState.setMobileNumber(mobileNumber);
+            
+            // Sync blocked users even during onboarding (just in case)
+            BlockService.instance.syncBlockedUsers(user.uid);
             
             setState(() {
               _homeWidget = const GenderSelectionScreen();

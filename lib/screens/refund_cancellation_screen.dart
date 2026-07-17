@@ -77,6 +77,8 @@ class RefundCancellationScreen extends StatelessWidget {
             _buildSection('8. How to Request Support',
               'To raise a refund request or dispute:\n\n'
               '• Email: analystcodehub@gmail.com\n'
+              '• Phone/WhatsApp: +91 8987108642\n'
+              '• Address: Fathehpur, Bhagalpur, Bihar\n'
               '• Please include: Registered mobile number, Transaction ID, Date of transaction, Screenshot of payment confirmation.\n\n'
               'We aim to respond to all queries within 2 business days.',
             ),

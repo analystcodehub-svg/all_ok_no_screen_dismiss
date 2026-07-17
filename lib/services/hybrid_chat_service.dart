@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/foundation.dart';
 import 'local_chat_database.dart';
+import 'block_service.dart';
 
 class HybridChatService {
   static String? activeChatRoomId;
@@ -82,6 +83,12 @@ class HybridChatService {
 
       // Ensure we immediately delete from RTDB to maintain zero storage cost
       await event.snapshot.ref.remove();
+
+      // Check if this sender is blocked
+      if (BlockService.instance.isBlocked(senderId)) {
+        debugPrint('Blocked message dropped from: $senderId');
+        return; // Drop the message entirely
+      }
 
       // Determine status based on active screen
       int localStatus = 2; // Default to delivered
