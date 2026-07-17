@@ -255,6 +255,56 @@ class _HybridChatScreenState extends State<HybridChatScreen> with WidgetsBinding
             ),
           ],
         ),
+        actions: [
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert, color: Colors.white),
+            onSelected: (value) async {
+              if (value == 'report') {
+                await FirebaseFirestore.instance.collection('reports').add({
+                  'reporterId': widget.myUid,
+                  'reportedId': widget.otherUid,
+                  'reportedName': widget.otherUserName,
+                  'reason': 'Inappropriate behavior in chat',
+                  'timestamp': FieldValue.serverTimestamp(),
+                });
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('User reported successfully. We will review this shortly.')),
+                  );
+                }
+              } else if (value == 'block') {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('User blocked. You will no longer receive messages from them.')),
+                  );
+                  Navigator.pop(context);
+                }
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'report',
+                child: Row(
+                  children: [
+                    Icon(Icons.flag_outlined, color: Colors.red, size: 20),
+                    SizedBox(width: 8),
+                    Text('Report User', style: TextStyle(color: Colors.red)),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'block',
+                child: Row(
+                  children: [
+                    Icon(Icons.block, color: Colors.black54, size: 20),
+                    SizedBox(width: 8),
+                    Text('Block User'),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
       body: Column(
         children: [

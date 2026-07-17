@@ -481,7 +481,59 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const SizedBox(height: 20),
+              Align(
+                alignment: Alignment.topRight,
+                child: PopupMenuButton<String>(
+                  icon: const Icon(Icons.more_vert, color: Colors.white70),
+                  onSelected: (value) async {
+                    if (value == 'report') {
+                      final reporterId = widget.isCaller ? widget.callerId : widget.receiverId;
+                      final reportedId = widget.isCaller ? widget.receiverId : widget.callerId;
+                      await FirebaseFirestore.instance.collection('reports').add({
+                        'reporterId': reporterId,
+                        'reportedId': reportedId,
+                        'reportedName': widget.nickname,
+                        'reason': 'Inappropriate behavior on call',
+                        'timestamp': FieldValue.serverTimestamp(),
+                      });
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('User reported successfully. We will review this shortly.')),
+                        );
+                      }
+                    } else if (value == 'block') {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('User blocked.')),
+                        );
+                        _triggerHangup();
+                      }
+                    }
+                  },
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(
+                      value: 'report',
+                      child: Row(
+                        children: [
+                          Icon(Icons.flag_outlined, color: Colors.red, size: 20),
+                          SizedBox(width: 8),
+                          Text('Report User', style: TextStyle(color: Colors.red)),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'block',
+                      child: Row(
+                        children: [
+                          Icon(Icons.block, color: Colors.black54, size: 20),
+                          SizedBox(width: 8),
+                          Text('Block & End Call'),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
               
               // Call header containing Profile details
               Column(
