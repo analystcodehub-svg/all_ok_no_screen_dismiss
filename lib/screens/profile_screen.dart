@@ -9,6 +9,7 @@ import 'payment_history_screen.dart';
 import 'terms_condition_screen.dart';
 import 'refund_cancellation_screen.dart';
 import 'privacy_policy_screen.dart';
+import 'referral_screen.dart';
 
 import 'wallet_recharge_screen.dart';
 
@@ -99,6 +100,19 @@ class ProfileScreen extends StatelessWidget {
                       
                       // History Section
                       if (role == 'expert') ...[
+                        _buildSettingsTile(
+                          title: 'Refer & Earn',
+                          icon: Icons.card_giftcard_rounded,
+                          iconColor: Colors.amber.shade700,
+                          iconBgColor: Colors.amber.shade50,
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => const ReferralScreen()),
+                            );
+                          },
+                        ),
+                        const SizedBox(height: 12),
                         _buildSettingsTile(
                           title: 'Withdrawal History',
                           icon: Icons.history_rounded,

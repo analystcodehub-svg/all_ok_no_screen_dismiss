@@ -59,14 +59,8 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
     
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final appState = context.read<AppState>();
-      final String currentUserId;
-      if (appState.selectedGender.toLowerCase() == 'female') {
-        currentUserId = appState.uid;
-      } else {
-        currentUserId = appState.mobileNumber.isNotEmpty 
-            ? appState.mobileNumber 
-            : appState.uid;
-      }
+      // For experts, their Firestore document ID is ALWAYS appState.uid.
+      final String currentUserId = appState.uid;
       
       if (currentUserId.isNotEmpty) {
         // Crucial for MatchmakingService: set 'status' to 'ringing' in active_calls lock
@@ -134,9 +128,8 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
     _isDismissing = true;
     
     final appState = context.read<AppState>();
-    final currentUserId = appState.mobileNumber.isNotEmpty 
-        ? appState.mobileNumber 
-        : appState.uid;
+    // For experts, their Firestore document ID is ALWAYS appState.uid.
+    final currentUserId = appState.uid;
     
     Navigator.pushReplacement(
       context,
