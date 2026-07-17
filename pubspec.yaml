@@ -55,6 +55,8 @@ dependencies:
     path: packages/auto_start_flutter
   flutter_background_service: ^5.1.0
   in_app_purchase: ^3.3.0
+  record: ^7.1.1
+  firebase_storage: ^13.4.5
 
 
 dev_dependencies:

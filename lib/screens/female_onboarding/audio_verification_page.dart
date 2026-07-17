@@ -1,7 +1,11 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:record/record.dart';
+import 'package:path_provider/path_provider.dart';
 import '../../providers/app_state.dart';
 import '../../theme/app_theme.dart';
 import '../main_navigation.dart';
@@ -16,9 +20,12 @@ class AudioVerificationPage extends StatefulWidget {
 class _AudioVerificationPageState extends State<AudioVerificationPage> with SingleTickerProviderStateMixin {
   bool _isRecording = false;
   bool _isFinished = false;
+  bool _isUploading = false;
   int _secondsRecorded = 0;
   Timer? _timer;
   late AnimationController _animationController;
+  final _audioRecorder = AudioRecorder();
+  String? _recordedFilePath;
 
   @override
   void initState() {
@@ -33,44 +40,82 @@ class _AudioVerificationPageState extends State<AudioVerificationPage> with Sing
   void dispose() {
     _timer?.cancel();
     _animationController.dispose();
+    _audioRecorder.dispose();
     super.dispose();
   }
 
-  void _startRecording() {
-    setState(() {
-      _isRecording = true;
-      _secondsRecorded = 0;
-    });
-    _animationController.repeat(reverse: true);
+  Future<void> _startRecording() async {
+    try {
+      if (await _audioRecorder.hasPermission()) {
+        final dir = await getApplicationDocumentsDirectory();
+        final path = '${dir.path}/audio_verification_${DateTime.now().millisecondsSinceEpoch}.m4a';
+        
+        await _audioRecorder.start(const RecordConfig(), path: path);
+        
+        setState(() {
+          _isRecording = true;
+          _secondsRecorded = 0;
+        });
+        _animationController.repeat(reverse: true);
 
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      setState(() {
-        _secondsRecorded++;
-      });
-      // Stop recording automatically after 6 seconds for demo
-      if (_secondsRecorded >= 15) {
-        _stopRecording();
+        _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+          setState(() {
+            _secondsRecorded++;
+          });
+          // Stop recording automatically after 15 seconds
+          if (_secondsRecorded >= 15) {
+            _stopRecording();
+          }
+        });
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Microphone permission denied.')),
+        );
       }
-    });
+    } catch (e) {
+      debugPrint('Error starting recording: $e');
+    }
   }
 
-  void _stopRecording() {
+  Future<void> _stopRecording() async {
     _timer?.cancel();
     _animationController.stop();
-    setState(() {
-      _isRecording = false;
-      _isFinished = true;
-    });
+    try {
+      final path = await _audioRecorder.stop();
+      setState(() {
+        _isRecording = false;
+        _isFinished = true;
+        _recordedFilePath = path;
+      });
+    } catch (e) {
+      debugPrint('Error stopping recording: $e');
+    }
   }
 
   void _submit() async {
-    // Update state
-    final appState = context.read<AppState>();
-    appState.setAudioVerified(true);
+    if (_recordedFilePath == null) return;
+    
+    setState(() {
+      _isUploading = true;
+    });
 
+    final appState = context.read<AppState>();
     final String expertId = appState.uid;
+    String? audioUrl;
+
     if (expertId.isNotEmpty) {
       try {
+        // 1. Upload to Firebase Storage
+        final storageRef = FirebaseStorage.instance
+            .ref()
+            .child('expert_audios')
+            .child('$expertId.m4a');
+        
+        final File audioFile = File(_recordedFilePath!);
+        await storageRef.putFile(audioFile);
+        audioUrl = await storageRef.getDownloadURL();
+
+        // 2. Save to Firestore (We keep isVerified implicitly true/bypassed for Play Store testing)
         await FirebaseFirestore.instance
             .collection('experts')
             .doc(expertId)
@@ -78,13 +123,27 @@ class _AudioVerificationPageState extends State<AudioVerificationPage> with Sing
           'nickname': appState.nickname,
           'mobileNumber': appState.mobileNumber,
           'age': 2026 - appState.birthYear,
-          'pricePerMin': 5,
+          'pricePerMin': 3, // Changed to 3 to match system default
           'languages': appState.primaryLanguage,
           'rating': 4.8,
+          'audioVerificationUrl': audioUrl, // Save the audio URL
         }, SetOptions(merge: true));
+        
+        appState.setAudioVerified(true);
       } catch (e) {
-        debugPrint('Error saving expert profile at onboarding: $e');
+        debugPrint('Error uploading audio or saving profile: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Failed to upload audio. Please try again.')),
+          );
+        }
       }
+    }
+    
+    if (mounted) {
+      setState(() {
+        _isUploading = false;
+      });
     }
     
     // Navigate to Female Expert Dashboard and clear history
@@ -269,7 +328,9 @@ class _AudioVerificationPageState extends State<AudioVerificationPage> with Sing
         Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (_isFinished) ...[
+            if (_isUploading)
+              const Center(child: CircularProgressIndicator())
+            else if (_isFinished) ...[
               ElevatedButton(
                 onPressed: _submit,
                 child: const Text('Submit & Proceed'),
