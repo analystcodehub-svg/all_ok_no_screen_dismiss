@@ -162,12 +162,18 @@ class _ExpertFeedScreenState extends State<ExpertFeedScreen> {
               final String nickname = expert['nickname'] ?? 'Unknown';
               final String language = expert['language'] ?? 'Hindi';
               final bool isOnline = expert['isOnline'] ?? true;
+              final int age = expert['age'] ?? 22;
+              final String? avatarUrl = expert['avatarUrl'];
+              final int avatarIndex = expert['avatarIndex'] ?? 1;
               
               return ExpertCard(
                 expertId: expert['id'] ?? '',
                 nickname: nickname,
                 language: language,
                 isOnline: isOnline,
+                age: age,
+                avatarUrl: avatarUrl,
+                avatarIndex: avatarIndex,
                 onCallTap: () async {
                   debugPrint('Call button tapped for ${expert['nickname']} with ID ${expert['id']}');
                   
@@ -221,6 +227,9 @@ class _ExpertFeedScreenState extends State<ExpertFeedScreen> {
                         languages: data['languages'] ?? 'Hindi',
                         rating: (data['rating'] ?? 4.5).toDouble(),
                         isOnline: true,
+                        age: (data['age'] as num?)?.toInt() ?? 22,
+                        avatarUrl: data['profileImageUrl'] ?? data['avatarUrl'],
+                        avatarIndex: (data['avatarIndex'] as num?)?.toInt() ?? 1,
                       );
                       
                       

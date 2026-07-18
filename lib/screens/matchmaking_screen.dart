@@ -35,6 +35,8 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> with SingleTicker
   final ValueNotifier<int> _ringingTimer = ValueNotifier<int>(0);
   final ValueNotifier<String?> _matchedExpertUidNotifier = ValueNotifier<String?>(null);
   String _matchedExpertNickname = 'Expert';
+  String? _matchedExpertAvatarUrl;
+  int _matchedExpertAvatarIndex = 1;
   Completer<bool>? _ringingCompleter;
   
   bool _isDisposed = false;
@@ -140,6 +142,8 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> with SingleTicker
 
     // Fetch the matched expert's nickname before ringing
     String resolvedNickname = widget.requestedExpert?.nickname ?? matchedExpertUid.toUpperCase();
+    _matchedExpertAvatarUrl = widget.requestedExpert?.avatarUrl;
+    _matchedExpertAvatarIndex = widget.requestedExpert?.avatarIndex ?? 1;
     
     if (widget.isRandomMode || (widget.requestedExpert != null && widget.requestedExpert!.id != matchedExpertUid)) {
       try {
@@ -151,6 +155,8 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> with SingleTicker
         if (qSnapshot.exists && qSnapshot.value != null) {
           final data = qSnapshot.value as Map<dynamic, dynamic>;
           resolvedNickname = data['nickname']?.toString() ?? matchedExpertUid.toUpperCase();
+          _matchedExpertAvatarUrl = data['avatarUrl']?.toString();
+          _matchedExpertAvatarIndex = (data['avatarIndex'] as num?)?.toInt() ?? 1;
         }
       } catch (e) {
         debugPrint('Error fetching expert nickname: $e');
@@ -233,6 +239,8 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> with SingleTicker
                 receiverId: matchedExpertUid ?? '', // We know it's not null here
                 callerId: callerUid,
                 nickname: _matchedExpertNickname,
+                avatarUrl: _matchedExpertAvatarUrl,
+                avatarIndex: _matchedExpertAvatarIndex,
                 pricePerMin: pricePerMin,
                 isCaller: true,
                 preStartedCallService: _callService,
@@ -584,6 +592,8 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> with SingleTicker
                       uid: expertUid,
                       role: 'expert',
                       radius: 64, // Prominent large avatar
+                      avatarUrl: _matchedExpertAvatarUrl,
+                      avatarIndex: _matchedExpertAvatarIndex,
                     ),
                   ),
                 ],

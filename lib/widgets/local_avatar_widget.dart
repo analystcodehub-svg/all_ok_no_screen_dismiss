@@ -4,28 +4,38 @@ class LocalAvatarWidget extends StatelessWidget {
   final String uid;
   final String role; // 'expert' or 'user'
   final double radius;
+  final String? avatarUrl;
+  final int avatarIndex;
 
   const LocalAvatarWidget({
     super.key,
     required this.uid,
     required this.role,
     this.radius = 24.0,
+    this.avatarUrl,
+    this.avatarIndex = 1,
   });
 
   @override
   Widget build(BuildContext context) {
     String assetPath;
     
-    if (uid.isEmpty) {
-      assetPath = role == 'expert' ? 'assets/avatars/female_avatar.png' : 'assets/avatars/male_avatar.png';
+    ImageProvider imageProvider;
+
+    if (avatarUrl != null && avatarUrl!.isNotEmpty) {
+      imageProvider = NetworkImage(avatarUrl!);
     } else {
-      int index = (uid.hashCode.abs() % 6) + 1;
-      assetPath = role == 'expert' ? 'assets/avatars/female_$index.png' : 'assets/avatars/male_$index.png';
+      if (uid.isEmpty) {
+        assetPath = role == 'expert' ? 'assets/avatars/female_avatar.png' : 'assets/avatars/male_avatar.png';
+      } else {
+        assetPath = role == 'expert' ? 'assets/avatars/female_$avatarIndex.png' : 'assets/avatars/male_$avatarIndex.png';
+      }
+      imageProvider = AssetImage(assetPath);
     }
 
     return CircleAvatar(
       radius: radius,
-      backgroundImage: AssetImage(assetPath),
+      backgroundImage: imageProvider,
       backgroundColor: Colors.grey[200],
     );
   }

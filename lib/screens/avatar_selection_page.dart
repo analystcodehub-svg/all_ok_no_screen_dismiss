@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
 
 class AvatarSelectionPage extends StatefulWidget {
@@ -105,7 +107,10 @@ class _AvatarSelectionPageState extends State<AvatarSelectionPage> {
 
         // Next button
         ElevatedButton(
-          onPressed: widget.onNext,
+          onPressed: () {
+            context.read<AppState>().setAvatarIndex(_selectedIndex);
+            widget.onNext();
+          },
           child: const Text('Next'),
         ),
       ],

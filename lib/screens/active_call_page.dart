@@ -20,6 +20,8 @@ class ActiveCallPage extends StatefulWidget {
   final double pricePerMin;
   final bool isFirstFreeCall;
   final CallService? preStartedCallService;
+  final String? avatarUrl;
+  final int avatarIndex;
 
   const ActiveCallPage({
     super.key,
@@ -31,6 +33,8 @@ class ActiveCallPage extends StatefulWidget {
     required this.pricePerMin,
     this.isFirstFreeCall = false,
     this.preStartedCallService,
+    this.avatarUrl,
+    this.avatarIndex = 1,
   });
 
   @override
@@ -546,6 +550,8 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
                     uid: widget.isCaller ? widget.receiverId : widget.callerId,
                     role: widget.isCaller ? 'expert' : 'user',
                     radius: 64,
+                    avatarUrl: widget.avatarUrl,
+                    avatarIndex: widget.avatarIndex,
                   ),
                   const SizedBox(height: 20),
                   Text(

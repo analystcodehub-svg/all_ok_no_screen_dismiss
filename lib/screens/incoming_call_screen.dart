@@ -28,34 +28,34 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
   final CallService _callService = CallService();
   StreamSubscription<DatabaseEvent>? _callSub;
   bool _isDismissing = false;
-  late Future<String> _callerNameFuture;
-  String _callerName = "User";
+  late Future<Map<String, dynamic>> _callerDataFuture;
 
-  Future<String> _fetchCallerName() async {
+  Future<Map<String, dynamic>> _fetchCallerData() async {
+    Map<String, dynamic> result = {
+      'nickname': 'User',
+      'avatarUrl': null,
+      'avatarIndex': 1,
+    };
     try {
       final doc = await FirebaseFirestore.instance.collection('users').doc(widget.callerId).get();
       if (doc.exists && doc.data() != null) {
         final data = doc.data()!;
         if (data['nickname'] != null && data['nickname'].toString().isNotEmpty) {
-          final name = data['nickname'].toString();
-          if (mounted) {
-            setState(() {
-              _callerName = name;
-            });
-          }
-          return name;
+          result['nickname'] = data['nickname'].toString();
         }
+        result['avatarUrl'] = data['profileImageUrl'] ?? data['avatarUrl'];
+        result['avatarIndex'] = (data['avatarIndex'] as num?)?.toInt() ?? 1;
       }
     } catch (e) {
-      debugPrint("Error fetching caller name: $e");
+      debugPrint("Error fetching caller data: $e");
     }
-    return "User";
+    return result;
   }
 
   @override
   void initState() {
     super.initState();
-    _callerNameFuture = _fetchCallerName();
+    _callerDataFuture = _fetchCallerData();
     
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final appState = context.read<AppState>();
@@ -138,7 +138,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
           callRoomId: widget.callRoomId,
           receiverId: currentUserId,
           callerId: widget.callerId,
-          nickname: _callerName,
+          nickname: 'User', // The ActiveCallPage will fetch the real name again or we can wait, but ActiveCallPage uses callerId.
           pricePerMin: 5.0,
           isCaller: false,
         ),
@@ -176,10 +176,11 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
               ),
             ),
             const SizedBox(height: 16),
-            FutureBuilder<String>(
-              future: _callerNameFuture,
+            FutureBuilder<Map<String, dynamic>>(
+              future: _callerDataFuture,
               builder: (context, snapshot) {
-                final displayName = snapshot.data ?? 'User';
+                final data = snapshot.data ?? {'nickname': 'User'};
+                final displayName = data['nickname'] as String;
                 return Text(
                   displayName.toUpperCase(),
                   style: const TextStyle(
@@ -245,10 +246,18 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
                         ),
                       ],
                     ),
-                    child: LocalAvatarWidget(
-                      uid: widget.callerId,
-                      role: 'user', // Assuming callers are always users
-                      radius: 70,
+                    child: FutureBuilder<Map<String, dynamic>>(
+                      future: _callerDataFuture,
+                      builder: (context, snapshot) {
+                        final data = snapshot.data ?? {};
+                        return LocalAvatarWidget(
+                          uid: widget.callerId,
+                          role: 'user', // Assuming callers are always users
+                          radius: 70,
+                          avatarUrl: data['avatarUrl'] as String?,
+                          avatarIndex: (data['avatarIndex'] as int?) ?? 1,
+                        );
+                      }
                     ),
                   ),
                 ],

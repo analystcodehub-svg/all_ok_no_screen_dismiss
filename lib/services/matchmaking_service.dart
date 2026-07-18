@@ -45,12 +45,19 @@ class MatchmakingService {
       if (isOnline) {
         int talkSeconds = 0;
         String nickname = '';
+        int age = 22;
+        String? avatarUrl;
+        int avatarIndex = 1;
+        
         try {
           final doc = await FirebaseFirestore.instance.collection('experts').doc(expertId).get();
           if (doc.exists) {
             final data = doc.data();
             talkSeconds = (data?['totalTalkSeconds'] as num?)?.toInt() ?? 0;
             nickname = data?['nickname'] as String? ?? 'Expert';
+            age = (data?['age'] as num?)?.toInt() ?? 22;
+            avatarUrl = data?['profileImageUrl'] as String? ?? data?['avatarUrl'] as String?;
+            avatarIndex = (data?['avatarIndex'] as num?)?.toInt() ?? 1;
           }
         } catch (e) {
           debugPrint('Error fetching expert data: $e');
@@ -73,6 +80,9 @@ class MatchmakingService {
           'timestamp': ServerValue.timestamp,
           'totalTalkSeconds': talkSeconds,
           'nickname': nickname,
+          'age': age,
+          'avatarIndex': avatarIndex,
+          if (avatarUrl != null && avatarUrl.isNotEmpty) 'avatarUrl': avatarUrl,
         });
         await docRef.onDisconnect().remove();
         debugPrint('Expert $expertId added to $bucketPath.');

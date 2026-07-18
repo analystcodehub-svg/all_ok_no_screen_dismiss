@@ -9,6 +9,9 @@ class ExpertCard extends StatelessWidget {
   final VoidCallback onCallTap;
   final VoidCallback onChatTap;
   final bool isOnline;
+  final int age;
+  final String? avatarUrl;
+  final int avatarIndex;
 
   const ExpertCard({
     super.key,
@@ -18,12 +21,11 @@ class ExpertCard extends StatelessWidget {
     required this.onCallTap,
     required this.onChatTap,
     this.isOnline = true,
+    this.age = 22,
+    this.avatarUrl,
+    this.avatarIndex = 1,
   });
 
-  int get displayAge {
-    if (expertId.isEmpty) return 22;
-    return (expertId.hashCode.abs() % 6) + 20; 
-  }
 
   String get displayRating {
     if (expertId.isEmpty) return "4.5";
@@ -53,6 +55,8 @@ class ExpertCard extends StatelessWidget {
                     uid: expertId,
                     role: 'expert',
                     radius: 24,
+                    avatarUrl: avatarUrl,
+                    avatarIndex: avatarIndex,
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -97,7 +101,7 @@ class ExpertCard extends StatelessWidget {
                                 ),
                                 const SizedBox(width: 4),
                                 Text(
-                                  '$displayAge Yrs',
+                                  '$age Yrs',
                                   style: const TextStyle(
                                     fontSize: 13,
                                     color: Colors.grey,

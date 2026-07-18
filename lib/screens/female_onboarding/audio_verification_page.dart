@@ -123,6 +123,7 @@ class _AudioVerificationPageState extends State<AudioVerificationPage> with Sing
           'nickname': appState.nickname,
           'mobileNumber': appState.mobileNumber,
           'age': 2026 - appState.birthYear,
+          'avatarIndex': appState.avatarIndex,
           'pricePerMin': 3, // Changed to 3 to match system default
           'languages': appState.primaryLanguage,
           'rating': 4.8,

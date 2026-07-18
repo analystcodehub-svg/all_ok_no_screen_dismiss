@@ -5,6 +5,9 @@ class FemaleExpert {
   final String languages;
   final double rating;
   final bool isOnline;
+  final int age;
+  final String? avatarUrl;
+  final int avatarIndex;
 
   const FemaleExpert({
     required this.id,
@@ -13,13 +16,12 @@ class FemaleExpert {
     required this.languages,
     required this.rating,
     required this.isOnline,
+    this.age = 22,
+    this.avatarUrl,
+    this.avatarIndex = 1,
   });
 
-  int get displayAge {
-    if (id.isEmpty) return 22; // Safe fallback
-    // .abs() ensures no negative numbers. % 6 gives 0-5. Adding 20 gives 20-25.
-    return (id.hashCode.abs() % 6) + 20; 
-  }
+  int get displayAge => age;
 
   static List<FemaleExpert> get mockExperts {
     return const [
