@@ -22,6 +22,9 @@ class ActiveCallPage extends StatefulWidget {
   final CallService? preStartedCallService;
   final String? avatarUrl;
   final int avatarIndex;
+  final VoidCallback? onCallEnded;
+  final int? callerCoinBalance;
+  final bool? callerHasUsedFreeCall;
 
   const ActiveCallPage({
     super.key,
@@ -35,6 +38,9 @@ class ActiveCallPage extends StatefulWidget {
     this.preStartedCallService,
     this.avatarUrl,
     this.avatarIndex = 1,
+    this.onCallEnded,
+    this.callerCoinBalance,
+    this.callerHasUsedFreeCall,
   });
 
   @override
@@ -350,6 +356,7 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
     }
     
     if (mounted) {
+      widget.onCallEnded?.call();
       Navigator.pop(context);
     }
   }
@@ -461,6 +468,20 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
   }
 
   String _formatDuration(int sec) {
+    if (!widget.isCaller && widget.callerCoinBalance != null) {
+      int reqCoins = (widget.pricePerMin * 10).toInt();
+      int maxMins = widget.callerCoinBalance! ~/ reqCoins;
+      if (widget.callerHasUsedFreeCall == false) {
+        maxMins += 2;
+      }
+      int maxSecs = maxMins * 60;
+      int remaining = maxSecs - sec;
+      if (remaining < 0) remaining = 0;
+      final m = (remaining ~/ 60).toString().padLeft(2, '0');
+      final s = (remaining % 60).toString().padLeft(2, '0');
+      return '$m:$s';
+    }
+
     final m = (sec ~/ 60).toString().padLeft(2, '0');
     final s = (sec % 60).toString().padLeft(2, '0');
     return '$m:$s';

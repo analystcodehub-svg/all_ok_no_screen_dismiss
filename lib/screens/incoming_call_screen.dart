@@ -11,11 +11,13 @@ import 'active_call_page.dart';
 class IncomingCallScreen extends StatefulWidget {
   final String callRoomId;
   final String callerId;
+  final VoidCallback? onCallEnded;
 
   const IncomingCallScreen({
     super.key,
     required this.callRoomId,
     required this.callerId,
+    this.onCallEnded,
   });
 
   @override
@@ -35,6 +37,8 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
       'nickname': 'User',
       'avatarUrl': null,
       'avatarIndex': 1,
+      'coinBalance': 0,
+      'hasUsedFreeCall': true,
     };
     try {
       final doc = await FirebaseFirestore.instance.collection('users').doc(widget.callerId).get();
@@ -45,6 +49,8 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
         }
         result['avatarUrl'] = data['profileImageUrl'] ?? data['avatarUrl'];
         result['avatarIndex'] = (data['avatarIndex'] as num?)?.toInt() ?? 1;
+        result['coinBalance'] = (data['coinBalance'] as num?)?.toInt() ?? 0;
+        result['hasUsedFreeCall'] = data['hasUsedFreeCall'] as bool? ?? false;
       }
     } catch (e) {
       debugPrint("Error fetching caller data: $e");
@@ -146,6 +152,9 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
             avatarIndex: (callerData['avatarIndex'] as num?)?.toInt() ?? 1,
             pricePerMin: 5.0,
             isCaller: false,
+            callerCoinBalance: (callerData['coinBalance'] as num?)?.toInt() ?? 0,
+            callerHasUsedFreeCall: callerData['hasUsedFreeCall'] as bool? ?? true,
+            onCallEnded: widget.onCallEnded,
           ),
         ),
       );

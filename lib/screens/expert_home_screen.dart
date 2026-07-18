@@ -193,13 +193,14 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
         builder: (context) => IncomingCallScreen(
           callRoomId: roomId,
           callerId: callerId,
+          onCallEnded: () {
+            if (mounted) {
+              _fetchExpertStats();
+            }
+          },
         ),
       ),
-    ).then((_) {
-      if (mounted) {
-        _fetchExpertStats();
-      }
-    });
+    );
   }
 
   /// Check KYC status in Firestore, then route accordingly

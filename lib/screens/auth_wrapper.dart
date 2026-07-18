@@ -71,7 +71,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
         
         final userDoc = await FirebaseFirestore.instance
             .collection('users')
-            .doc(mobileNumber)
+            .doc(user.uid)
             .get();
 
         if (mounted) {

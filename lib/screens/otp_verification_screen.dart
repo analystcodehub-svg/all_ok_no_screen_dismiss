@@ -59,7 +59,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
         // Successful login, check if user exists in Firestore
         final userDoc = await FirebaseFirestore.instance
             .collection('users')
-            .doc(widget.mobileNumber)
+            .doc(userCredential.user!.uid)
             .get();
 
         if (mounted) {

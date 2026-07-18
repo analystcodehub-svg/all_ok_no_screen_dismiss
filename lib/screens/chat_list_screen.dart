@@ -269,20 +269,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
         ),
         child: Row(
           children: [
-            Container(
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.blue.shade100, width: 1.5),
-              ),
-              child: LocalAvatarWidget(
-                uid: uid,
-                role: role,
-                radius: 28,
-                avatarUrl: avatarUrl,
-                avatarIndex: avatarIndex ?? 1,
-              ),
-            ),
-            const SizedBox(width: 16),
+
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,

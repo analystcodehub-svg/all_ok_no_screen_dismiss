@@ -16,9 +16,7 @@ class _RecentSessionsScreenState extends State<RecentSessionsScreen> {
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
-    final String currentUserMobile = appState.mobileNumber.isNotEmpty 
-        ? appState.mobileNumber 
-        : (appState.nickname.isNotEmpty ? appState.uid : 'caller_1');
+    final String currentUserId = appState.uid;
     
     return Scaffold(
       backgroundColor: AppColors.bgLight,
@@ -67,7 +65,7 @@ class _RecentSessionsScreenState extends State<RecentSessionsScreen> {
                 stream: LocalChatDatabase.instance.updates,
                 builder: (context, snapshot) {
                   return FutureBuilder<List<Map<String, dynamic>>>(
-                    future: LocalChatDatabase.instance.getRecentCallLogs(currentUserMobile),
+                    future: LocalChatDatabase.instance.getRecentCallLogs(currentUserId),
                     builder: (context, futureSnapshot) {
                       if (futureSnapshot.connectionState == ConnectionState.waiting) {
                         return const Center(child: CircularProgressIndicator());
@@ -92,7 +90,7 @@ class _RecentSessionsScreenState extends State<RecentSessionsScreen> {
                         itemBuilder: (context, index) {
                           final data = allCalls[index];
                           
-                          final isCaller = data['callerId'] == currentUserMobile;
+                          final isCaller = data['callerId'] == currentUserId;
                           final String? otherUserId = (isCaller ? data['receiverId'] : data['callerId'])?.toString();
                           final isMissed = data['status'] == 'missed';
                           

@@ -1059,7 +1059,7 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
               stream: LocalChatDatabase.instance.updates,
               builder: (context, snapshot) {
                 return FutureBuilder<List<Map<String, dynamic>>>(
-                  future: LocalChatDatabase.instance.getRecentCallLogs(appState.mobileNumber),
+                  future: LocalChatDatabase.instance.getRecentCallLogs(appState.uid),
                   builder: (context, futureSnapshot) {
                 if (futureSnapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
@@ -1075,7 +1075,7 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
                   itemCount: docs.length,
                   itemBuilder: (context, index) {
                     final data = docs[index];
-                    final expertId = data['receiverId'] == appState.mobileNumber ? data['callerId'] : data['receiverId'];
+                    final expertId = data['receiverId'] == appState.uid ? data['callerId'] : data['receiverId'];
                     final durationSeconds = data['durationSeconds'] ?? 0;
                     
                     final m = durationSeconds ~/ 60;
