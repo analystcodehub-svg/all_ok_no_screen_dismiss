@@ -70,7 +70,7 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
       // Initialize Chat Listeners
       final appState = context.read<AppState>();
       final myUid = appState.uid;
-      HybridChatService().initListeners(myUid);
+      HybridChatService.instance.initListeners(myUid);
       LocalChatDatabase.instance.syncCallLogsFromFirestore(myUid);
       
       // Check for auto-start permissions (Infinix, Xiaomi, etc.)
@@ -122,7 +122,8 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
 
   @override
   void dispose() {
-    HybridChatService().dispose();
+    // We don't dispose the singleton, just let it run or implement a cleanup method if needed.
+    // HybridChatService.instance.dispose();
     _incomingCallSubscription?.cancel();
     super.dispose();
   }

@@ -29,7 +29,7 @@ class HybridChatScreen extends StatefulWidget {
 class _HybridChatScreenState extends State<HybridChatScreen> with WidgetsBindingObserver {
   final TextEditingController _textController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  final HybridChatService _chatService = HybridChatService();
+  final HybridChatService _chatService = HybridChatService.instance;
   
   late String _roomId;
   List<Map<String, dynamic>> _messages = [];
@@ -43,6 +43,9 @@ class _HybridChatScreenState extends State<HybridChatScreen> with WidgetsBinding
     
     // Set active room to prevent false delivery ACKs when we are actually reading
     HybridChatService.activeChatRoomId = _roomId;
+
+    // Ensure listeners are active
+    HybridChatService.instance.initListeners(widget.myUid);
 
     // Listen to local DB updates (so ticks update instantly)
     _dbUpdateSubscription = LocalChatDatabase.instance.updates.listen((_) {

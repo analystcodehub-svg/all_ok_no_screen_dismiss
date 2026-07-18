@@ -79,14 +79,14 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
       
       // Initialize Chat Listeners for Female Expert
       if (expertId.isNotEmpty) {
-        HybridChatService().initListeners(expertId);
+        HybridChatService.instance.initListeners(expertId);
       }
     });
   }
 
   @override
   void dispose() {
-    HybridChatService().dispose();
+    // HybridChatService.instance.dispose();
     _incomingCallSubscription?.cancel();
     _pulseController.dispose();
     _cardSlideController.dispose();

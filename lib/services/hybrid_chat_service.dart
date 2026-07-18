@@ -5,6 +5,7 @@ import 'local_chat_database.dart';
 import 'block_service.dart';
 
 class HybridChatService {
+  static final HybridChatService instance = HybridChatService._init();
   static String? activeChatRoomId;
   
   final FirebaseDatabase _database = FirebaseDatabase.instanceFor(
@@ -15,15 +16,31 @@ class HybridChatService {
   StreamSubscription? _messagesSub;
   StreamSubscription? _acksSub;
 
+  String? _initializedUid;
+
+  HybridChatService._init();
+
   /// Start listening to temporary routing queues
   void initListeners(String myUid) {
+    if (myUid.isEmpty) return; // Do not listen to root nodes
+
+    // If already initialized for this UID, return
+    if (_messagesSub != null && _initializedUid == myUid) return;
+    
+    // If initialized for a different UID, cancel old listeners
+    dispose();
+    
+    _initializedUid = myUid;
     _listenToIncomingMessages(myUid);
     _listenToIncomingAcks(myUid);
   }
 
   void dispose() {
     _messagesSub?.cancel();
+    _messagesSub = null;
     _acksSub?.cancel();
+    _acksSub = null;
+    _initializedUid = null;
   }
 
   /// Sends a message: Saves locally (status 1) and pushes to RTDB transit
@@ -113,7 +130,7 @@ class HybridChatService {
 
       final data = Map<String, dynamic>.from(event.snapshot.value as Map);
       final msgId = event.snapshot.key!;
-      final newStatus = data['status'] as int;
+      final newStatus = (data['status'] as num).toInt();
 
       // Ensure immediate deletion
       await event.snapshot.ref.remove();
