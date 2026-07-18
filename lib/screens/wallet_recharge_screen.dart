@@ -3,11 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:crypto/crypto.dart';
+import 'package:payu_checkoutpro_flutter/payu_checkoutpro_flutter.dart';
+import 'package:payu_checkoutpro_flutter/PayUConstantKeys.dart';
 import '../providers/app_state.dart';
 import 'payment_history_screen.dart';
-import 'payu_webview_screen.dart';
-import 'male_dashboard_screen.dart';
-import 'main_navigation.dart';
 
 class RechargePackage {
   final double amount;
@@ -34,7 +33,9 @@ class WalletRechargeScreen extends StatefulWidget {
   State<WalletRechargeScreen> createState() => _WalletRechargeScreenState();
 }
 
-class _WalletRechargeScreenState extends State<WalletRechargeScreen> {
+class _WalletRechargeScreenState extends State<WalletRechargeScreen> implements PayUCheckoutProProtocol {
+  late PayUCheckoutProFlutter _checkoutPro;
+  
   final List<RechargePackage> _packages = const [
     RechargePackage(amount: 20.0, coins: 200, bonusCoins: 0),
     RechargePackage(amount: 50.0, coins: 500, bonusCoins: 30, extraText: "+6% Extra"),
@@ -61,12 +62,58 @@ class _WalletRechargeScreenState extends State<WalletRechargeScreen> {
   @override
   void initState() {
     super.initState();
+    _checkoutPro = PayUCheckoutProFlutter(this);
   }
 
   double get _payableAmount => _packages[_selectedPackageIndex].amount;
   int get _totalCoinsCredited => _packages[_selectedPackageIndex].coins + _packages[_selectedPackageIndex].bonusCoins;
 
+  @override
+  generateHash(Map response) {
+    var hashName = response[PayUHashConstantsKeys.hashName];
+    var hashStringWithoutSalt = response[PayUHashConstantsKeys.hashString];
+    var postSalt = response[PayUHashConstantsKeys.postSalt];
+    var hashType = response[PayUHashConstantsKeys.hashType];
+    
+    String generatedHash = '';
 
+    if (hashType == 'V2') {
+      var hmac = Hmac(sha256, utf8.encode(_merchantSalt));
+      var digest = hmac.convert(utf8.encode(hashStringWithoutSalt));
+      generatedHash = digest.toString();
+    } else {
+      String hashDataWithSalt = hashStringWithoutSalt + _merchantSalt;
+      if (postSalt != null && postSalt.toString().isNotEmpty) {
+        hashDataWithSalt = hashDataWithSalt + postSalt.toString();
+      }
+      var bytes = utf8.encode(hashDataWithSalt);
+      var digest = sha512.convert(bytes);
+      generatedHash = digest.toString();
+    }
+    
+    Map hashResponse = {hashName: generatedHash};
+    _checkoutPro.hashGenerated(hash: hashResponse);
+  }
+
+  @override
+  onPaymentSuccess(dynamic response) async {
+    await _syncWalletToFirestore(success: true, gateway: _lastSelectedGateway, txnId: _lastTxnId);
+  }
+
+  @override
+  onPaymentFailure(dynamic response) {
+    _showSnackBar("Payment Failed or Cancelled.", isError: true);
+  }
+
+  @override
+  onPaymentCancel(dynamic response) {
+    _showSnackBar("Payment Cancelled.", isError: true);
+  }
+
+  @override
+  onError(dynamic response) {
+    _showSnackBar("Payment Error: ${response?.toString() ?? 'Unknown'}", isError: true);
+  }
 
   Future<void> _syncWalletToFirestore({required bool success, required String gateway, required String txnId}) async {
     if (!success) return;
@@ -106,18 +153,9 @@ class _WalletRechargeScreenState extends State<WalletRechargeScreen> {
         appState.setCoinBalance(newBalance);
       });
 
-      _showSnackBar("Payment Successful! Coins Added.");
+      _showSnackBar("Recharge Successful! ₹${(_totalCoinsCredited / 10).toStringAsFixed(0)} added.");
       if (mounted) {
-        final gender = appState.selectedGender;
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(
-            builder: (context) => gender == 'Male'
-                ? const MaleCallerDashboard()
-                : const MainNavigation(),
-          ),
-          (route) => false,
-        );
+        Navigator.popUntil(context, (route) => route.isFirst);
       }
     } catch (e) {
       _showSnackBar("Recharge succeeded but failed to sync balance: $e", isError: true);
@@ -136,46 +174,104 @@ class _WalletRechargeScreenState extends State<WalletRechargeScreen> {
     );
   }
 
-  void _startWebViewPaymentFlow(String gateway) async {
+  void _startPhonePePaymentFlow() {
     final appState = context.read<AppState>();
+    final myUid = appState.uid.isNotEmpty ? appState.uid : "test_uid";
     final nickname = appState.nickname.isNotEmpty ? appState.nickname : "Guest";
     final txnid = "TXN${DateTime.now().millisecondsSinceEpoch}";
-    final amountStr = _payableAmount.toStringAsFixed(2);
-    final productInfo = "Wallet Recharge";
-    final email = "guest@sajnire.com";
-    final phone = "9999999999";
     
-    _lastSelectedGateway = gateway;
+    _lastSelectedGateway = 'PhonePe';
     _lastTxnId = txnid;
 
-    // Generate SHA512 hash: key|txnid|amount|productinfo|firstname|email|udf1|udf2|udf3|udf4|udf5||||||SALT
-    final String hashString = '$_merchantKey|$txnid|$amountStr|$productInfo|$nickname|$email|||||||||||$_merchantSalt';
-    final bytes = utf8.encode(hashString);
-    final digest = sha512.convert(bytes);
-    final generatedHash = digest.toString();
+    var payUPaymentParams = {
+      PayUPaymentParamKey.key: _merchantKey,
+      PayUPaymentParamKey.amount: _payableAmount.toStringAsFixed(2),
+      PayUPaymentParamKey.productInfo: "Wallet Recharge",
+      PayUPaymentParamKey.firstName: nickname,
+      PayUPaymentParamKey.email: "guest@sajnire.com",
+      PayUPaymentParamKey.phone: "9999999999",
+      PayUPaymentParamKey.transactionId: txnid,
+      PayUPaymentParamKey.environment: _environment,
+      PayUPaymentParamKey.userCredential: "$_merchantKey:$myUid",
+      PayUPaymentParamKey.android_surl: "https://payu.herokuapp.com/ios_success",
+      PayUPaymentParamKey.android_furl: "https://payu.herokuapp.com/ios_failure",
+      PayUPaymentParamKey.ios_surl: "https://payu.herokuapp.com/ios_success",
+      PayUPaymentParamKey.ios_furl: "https://payu.herokuapp.com/ios_failure",
+      PayUPaymentParamKey.additionalParam: {
+        "enforce_paymethod": "upi",
+      },
+    };
 
-    final result = await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => PayUWebViewScreen(
-          merchantKey: _merchantKey,
-          hash: generatedHash,
-          txnId: txnid,
-          amount: amountStr,
-          productInfo: productInfo,
-          firstName: nickname,
-          email: email,
-          phone: phone,
-          surl: "https://payu.herokuapp.com/ios_success",
-          furl: "https://payu.herokuapp.com/ios_failure",
-        ),
-      ),
-    );
+    var payUCheckoutProConfig = {
+      PayUCheckoutProConfigKeys.merchantName: "SajniRe",
+      PayUCheckoutProConfigKeys.primaryColor: "#5E35B1", // PhonePe Purple Theme
+      PayUCheckoutProConfigKeys.secondaryColor: "#1E293B",
+      PayUCheckoutProConfigKeys.autoSelectOtp: true,
+      PayUCheckoutProConfigKeys.waitingTime: 30000,
+      PayUCheckoutProConfigKeys.enforcePaymentList: [
+        {
+          "payment_type": "UPI",
+          "enforce_ibiboCode": "PHONEPE"
+        }
+      ],
+    };
 
-    if (result == true) {
-      await _syncWalletToFirestore(success: true, gateway: gateway, txnId: txnid);
-    } else if (result == false) {
-      _showSnackBar("Payment Failed or Cancelled.", isError: true);
+    try {
+      _checkoutPro.openCheckoutScreen(
+        payUPaymentParams: payUPaymentParams,
+        payUCheckoutProConfig: payUCheckoutProConfig,
+      );
+    } catch (e) {
+      _showSnackBar("Failed to open payment gateway: $e", isError: true);
+    }
+  }
+
+  void _startPayUPaymentFlow() {
+    final appState = context.read<AppState>();
+    final myUid = appState.uid.isNotEmpty ? appState.uid : "test_uid";
+    final nickname = appState.nickname.isNotEmpty ? appState.nickname : "Guest";
+    final txnid = "TXN${DateTime.now().millisecondsSinceEpoch}";
+
+    _lastSelectedGateway = 'PayU';
+    _lastTxnId = txnid;
+
+    var payUPaymentParams = {
+      PayUPaymentParamKey.key: _merchantKey,
+      PayUPaymentParamKey.amount: _payableAmount.toStringAsFixed(2),
+      PayUPaymentParamKey.productInfo: "Wallet Recharge",
+      PayUPaymentParamKey.firstName: nickname,
+      PayUPaymentParamKey.email: "guest@sajnire.com",
+      PayUPaymentParamKey.phone: "9999999999",
+      PayUPaymentParamKey.transactionId: txnid,
+      PayUPaymentParamKey.environment: _environment,
+      PayUPaymentParamKey.userCredential: "$_merchantKey:$myUid",
+      PayUPaymentParamKey.android_surl: "https://payu.herokuapp.com/ios_success",
+      PayUPaymentParamKey.android_furl: "https://payu.herokuapp.com/ios_failure",
+      PayUPaymentParamKey.ios_surl: "https://payu.herokuapp.com/ios_success",
+      PayUPaymentParamKey.ios_furl: "https://payu.herokuapp.com/ios_failure",
+      PayUPaymentParamKey.additionalParam: {
+        "enforce_paymethod": "upi",
+      },
+    };
+
+    var payUCheckoutProConfig = {
+      PayUCheckoutProConfigKeys.merchantName: "SajniRe",
+      PayUCheckoutProConfigKeys.primaryColor: "#3B82F6",
+      PayUCheckoutProConfigKeys.secondaryColor: "#1E293B",
+      PayUCheckoutProConfigKeys.autoSelectOtp: true,
+      PayUCheckoutProConfigKeys.waitingTime: 30000,
+      PayUCheckoutProConfigKeys.enforcePaymentList: [
+        {"payment_type": "UPI"}
+      ],
+    };
+
+    try {
+      _checkoutPro.openCheckoutScreen(
+        payUPaymentParams: payUPaymentParams,
+        payUCheckoutProConfig: payUCheckoutProConfig,
+      );
+    } catch (e) {
+      _showSnackBar("Failed to open payment gateway: $e", isError: true);
     }
   }
 
@@ -254,7 +350,7 @@ class _WalletRechargeScreenState extends State<WalletRechargeScreen> {
                 ),
                 onTap: () {
                   Navigator.pop(context);
-                  _startWebViewPaymentFlow('PhonePe');
+                  _startPhonePePaymentFlow();
                 },
               ),
               const SizedBox(height: 12),
@@ -276,7 +372,7 @@ class _WalletRechargeScreenState extends State<WalletRechargeScreen> {
                 ),
                 onTap: () {
                   Navigator.pop(context);
-                  _startWebViewPaymentFlow('PayU UPI');
+                  _startPayUPaymentFlow();
                 },
               ),
               const SizedBox(height: 20),
