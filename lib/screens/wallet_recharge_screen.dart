@@ -120,10 +120,10 @@ class _WalletRechargeScreenState extends State<WalletRechargeScreen> implements 
     
     setState(() => _isLoading = true);
     final appState = context.read<AppState>();
-    final mobile = appState.mobileNumber.isNotEmpty ? appState.mobileNumber : "test_mobile";
+    final myUid = appState.uid.isNotEmpty ? appState.uid : "test_uid";
     
     try {
-      final userDocRef = FirebaseFirestore.instance.collection('users').doc(mobile);
+      final userDocRef = FirebaseFirestore.instance.collection('users').doc(myUid);
       final rechargeDocRef = FirebaseFirestore.instance.collection('recharge_history').doc(txnId);
       
       await FirebaseFirestore.instance.runTransaction((transaction) async {
@@ -135,13 +135,13 @@ class _WalletRechargeScreenState extends State<WalletRechargeScreen> implements 
         
         int newBalance = currentBalance + _totalCoinsCredited;
         transaction.set(userDocRef, {
-          'mobileNumber': mobile,
+          'uid': myUid,
           'coinBalance': newBalance,
           'lastRechargedAt': FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));
         
         transaction.set(rechargeDocRef, {
-          'userId': mobile,
+          'buyer_name': myUid,
           'amount': _payableAmount,
           'coinsCredited': _totalCoinsCredited,
           'gateway': gateway,
@@ -154,10 +154,11 @@ class _WalletRechargeScreenState extends State<WalletRechargeScreen> implements 
       });
 
       _showSnackBar("Recharge Successful! ₹${(_totalCoinsCredited / 10).toStringAsFixed(0)} added.");
-      if (mounted) Navigator.pop(context);
+      if (mounted) {
+        Navigator.popUntil(context, (route) => route.isFirst);
+      }
     } catch (e) {
       _showSnackBar("Recharge succeeded but failed to sync balance: $e", isError: true);
-    } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
@@ -175,7 +176,7 @@ class _WalletRechargeScreenState extends State<WalletRechargeScreen> implements 
 
   void _startPhonePePaymentFlow() {
     final appState = context.read<AppState>();
-    final mobile = appState.mobileNumber.isNotEmpty ? appState.mobileNumber : "9876543210";
+    final myUid = appState.uid.isNotEmpty ? appState.uid : "test_uid";
     final nickname = appState.nickname.isNotEmpty ? appState.nickname : "Guest";
     final txnid = "TXN${DateTime.now().millisecondsSinceEpoch}";
     
@@ -188,10 +189,10 @@ class _WalletRechargeScreenState extends State<WalletRechargeScreen> implements 
       PayUPaymentParamKey.productInfo: "Wallet Recharge",
       PayUPaymentParamKey.firstName: nickname,
       PayUPaymentParamKey.email: "guest@sajnire.com",
-      PayUPaymentParamKey.phone: mobile,
+      PayUPaymentParamKey.phone: "9999999999",
       PayUPaymentParamKey.transactionId: txnid,
       PayUPaymentParamKey.environment: _environment,
-      PayUPaymentParamKey.userCredential: "$_merchantKey:$mobile",
+      PayUPaymentParamKey.userCredential: "$_merchantKey:$myUid",
       PayUPaymentParamKey.android_surl: "https://payu.herokuapp.com/ios_success",
       PayUPaymentParamKey.android_furl: "https://payu.herokuapp.com/ios_failure",
       PayUPaymentParamKey.ios_surl: "https://payu.herokuapp.com/ios_success",
@@ -227,7 +228,7 @@ class _WalletRechargeScreenState extends State<WalletRechargeScreen> implements 
 
   void _startPayUPaymentFlow() {
     final appState = context.read<AppState>();
-    final mobile = appState.mobileNumber.isNotEmpty ? appState.mobileNumber : "9876543210";
+    final myUid = appState.uid.isNotEmpty ? appState.uid : "test_uid";
     final nickname = appState.nickname.isNotEmpty ? appState.nickname : "Guest";
     final txnid = "TXN${DateTime.now().millisecondsSinceEpoch}";
 
@@ -240,10 +241,10 @@ class _WalletRechargeScreenState extends State<WalletRechargeScreen> implements 
       PayUPaymentParamKey.productInfo: "Wallet Recharge",
       PayUPaymentParamKey.firstName: nickname,
       PayUPaymentParamKey.email: "guest@sajnire.com",
-      PayUPaymentParamKey.phone: mobile,
+      PayUPaymentParamKey.phone: "9999999999",
       PayUPaymentParamKey.transactionId: txnid,
       PayUPaymentParamKey.environment: _environment,
-      PayUPaymentParamKey.userCredential: "$_merchantKey:$mobile",
+      PayUPaymentParamKey.userCredential: "$_merchantKey:$myUid",
       PayUPaymentParamKey.android_surl: "https://payu.herokuapp.com/ios_success",
       PayUPaymentParamKey.android_furl: "https://payu.herokuapp.com/ios_failure",
       PayUPaymentParamKey.ios_surl: "https://payu.herokuapp.com/ios_success",
@@ -305,7 +306,7 @@ class _WalletRechargeScreenState extends State<WalletRechargeScreen> implements 
                 leading: Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: Colors.green.withOpacity(0.1),
+                    color: Colors.green.withValues(alpha: 0.1),
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(Icons.play_arrow_rounded, color: Colors.green, size: 28),
@@ -327,7 +328,7 @@ class _WalletRechargeScreenState extends State<WalletRechargeScreen> implements 
                 leading: Container(
                   padding: const EdgeInsets.all(4),
                   decoration: BoxDecoration(
-                    color: Colors.purple.withOpacity(0.05),
+                    color: Colors.purple.withValues(alpha: 0.05),
                     shape: BoxShape.circle,
                   ),
                   child: ClipOval(
@@ -357,7 +358,7 @@ class _WalletRechargeScreenState extends State<WalletRechargeScreen> implements 
                 leading: Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: Colors.blue.withOpacity(0.1),
+                    color: Colors.blue.withValues(alpha: 0.1),
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(Icons.account_balance_wallet_rounded, color: Colors.blue, size: 28),
@@ -463,7 +464,7 @@ class _WalletRechargeScreenState extends State<WalletRechargeScreen> implements 
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.02),
+                        color: Colors.black.withValues(alpha: 0.02),
                         blurRadius: 10,
                         offset: const Offset(0, 4),
                       ),
@@ -506,7 +507,7 @@ class _WalletRechargeScreenState extends State<WalletRechargeScreen> implements 
                           ),
                           boxShadow: isSelected ? [] : [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.02),
+                              color: Colors.black.withValues(alpha: 0.02),
                               blurRadius: 4,
                               offset: const Offset(0, 2),
                             ),
@@ -520,7 +521,7 @@ class _WalletRechargeScreenState extends State<WalletRechargeScreen> implements 
                                 Container(
                                   padding: const EdgeInsets.all(8),
                                   decoration: BoxDecoration(
-                                    color: isSelected ? const Color(0xFF3B82F6).withOpacity(0.1) : Colors.grey.shade100,
+                                    color: isSelected ? const Color(0xFF3B82F6).withValues(alpha: 0.1) : Colors.grey.shade100,
                                     shape: BoxShape.circle,
                                   ),
                                   child: Icon(
@@ -610,7 +611,7 @@ class _WalletRechargeScreenState extends State<WalletRechargeScreen> implements 
                 color: Colors.white,
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
+                    color: Colors.black.withValues(alpha: 0.05),
                     blurRadius: 10,
                     offset: const Offset(0, -5),
                   ),

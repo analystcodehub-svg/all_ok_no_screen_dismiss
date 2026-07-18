@@ -25,11 +25,7 @@ class LocalAvatarWidget extends StatelessWidget {
     if (avatarUrl != null && avatarUrl!.isNotEmpty) {
       imageProvider = NetworkImage(avatarUrl!);
     } else {
-      if (uid.isEmpty) {
-        assetPath = role == 'expert' ? 'assets/avatars/female_avatar.png' : 'assets/avatars/male_avatar.png';
-      } else {
-        assetPath = role == 'expert' ? 'assets/avatars/female_$avatarIndex.png' : 'assets/avatars/male_$avatarIndex.png';
-      }
+      assetPath = role == 'expert' ? 'assets/avatars/female_$avatarIndex.png' : 'assets/avatars/male_$avatarIndex.png';
       imageProvider = AssetImage(assetPath);
     }
 

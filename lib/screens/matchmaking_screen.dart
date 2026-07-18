@@ -78,11 +78,9 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> with SingleTicker
     if (_isDisposed || !mounted) return;
 
     final appState = context.read<AppState>();
-    final String callerUid = appState.mobileNumber.isNotEmpty 
-        ? appState.mobileNumber 
-        : (appState.nickname.isNotEmpty ? appState.uid : 'caller_1');
+    final String callerUid = appState.uid;
     final String preferredLanguage = appState.primaryLanguage;
-    final hasUsedFreeCall = appState.hasUsedFreeCall;
+
 
     String? matchedExpertUid;
 

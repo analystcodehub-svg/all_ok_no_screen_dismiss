@@ -124,6 +124,10 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
           _redeemableBalance =
               (data['redeemableBalance'] as num?)?.toDouble() ?? 0.0;
         });
+        
+        if (data.containsKey('avatarIndex')) {
+          context.read<AppState>().setAvatarIndex((data['avatarIndex'] as num).toInt());
+        }
       }
     } catch (e) {
       debugPrint('Error fetching expert stats: $e');
@@ -200,9 +204,9 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
 
   /// Check KYC status in Firestore, then route accordingly
   Future<void> _showWithdrawDialog() async {
-    if (_redeemableBalance <= 0) {
+    if (_redeemableBalance < 99) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('No redeemable balance to withdraw.'),
+          content: Text('Minimum withdrawal amount is ₹99.'),
           backgroundColor: AppColors.textGrey));
       return;
     }
@@ -399,6 +403,7 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
                     uid: appState.uid,
                     role: 'expert',
                     radius: 28,
+                    avatarIndex: appState.avatarIndex,
                   ),
                 ),
               ),

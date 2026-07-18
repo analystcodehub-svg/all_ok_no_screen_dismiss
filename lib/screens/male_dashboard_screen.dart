@@ -69,7 +69,7 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
       _fetchInitialWalletBalance();
       // Initialize Chat Listeners
       final appState = context.read<AppState>();
-      final myUid = appState.mobileNumber.isNotEmpty ? appState.mobileNumber : "test_mobile";
+      final myUid = appState.uid;
       HybridChatService().initListeners(myUid);
       LocalChatDatabase.instance.syncCallLogsFromFirestore(myUid);
       
@@ -83,13 +83,13 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
 
   void _setupMalePresenceAndCallListener() {
     final appState = context.read<AppState>();
-    final mobile = appState.mobileNumber.isNotEmpty ? appState.mobileNumber : "test_mobile";
+    final myUid = appState.uid;
     
     // Setup RTDB Presence
     final presenceRef = FirebaseDatabase.instanceFor(
       app: FirebaseDatabase.instance.app,
       databaseURL: 'https://zegochat-c44b0.asia-southeast1.firebasedatabase.app',
-    ).ref('status/$mobile');
+    ).ref('status/$myUid');
     
     presenceRef.set({
       'isOnline': true,
@@ -104,7 +104,7 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
 
     // Listen for incoming calls
     _incomingCallSubscription = CallService().listenForIncomingCalls(
-      expertId: mobile, // Male user receives the call
+      expertId: myUid, // Male user receives the call
       onCallReceived: (roomId, callerId) {
         if (!mounted) return;
         Navigator.push(
@@ -131,9 +131,9 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
 
   Future<void> _fetchInitialWalletBalance() async {
     final appState = context.read<AppState>();
-    final mobile = appState.mobileNumber.isNotEmpty ? appState.mobileNumber : "test_mobile";
+    final myUid = appState.uid;
     try {
-      final docSnap = await FirebaseFirestore.instance.collection('users').doc(mobile).get();
+      final docSnap = await FirebaseFirestore.instance.collection('users').doc(myUid).get();
       if (docSnap.exists) {
         final data = docSnap.data()!;
         int coinBalance = 0;
@@ -143,7 +143,7 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
           double oldBalance = (data['walletBalance'] as num?)?.toDouble() ?? 0.0;
           coinBalance = (oldBalance * 10).toInt();
           
-          await FirebaseFirestore.instance.collection('users').doc(mobile).update({
+          await FirebaseFirestore.instance.collection('users').doc(myUid).update({
             'coinBalance': coinBalance,
             'walletBalance': FieldValue.delete(),
           });
@@ -162,8 +162,8 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
           appState.setNickname(nickname);
         }
       } else {
-        await FirebaseFirestore.instance.collection('users').doc(mobile).set({
-          'mobileNumber': mobile,
+        await FirebaseFirestore.instance.collection('users').doc(myUid).set({
+          'uid': myUid,
           'coinBalance': 0,
           'hasUsedFreeCall': false,
           'freeMessagesUsed': 0,
@@ -176,7 +176,7 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
       
       // Save FCM Token for push notifications
       await NotificationService.instance.saveTokenForUser(
-        userId: mobile,
+        userId: myUid,
         collection: 'users',
       );
     } catch (e) {
@@ -219,7 +219,7 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
     if (!mounted) return;
     final appState = context.read<AppState>();
     final balance = appState.coinBalance;
-    final hasUsedFreeCall = appState.hasUsedFreeCall;
+
     const overridePricePerMin = 3.0; // Enforce ₹3/min for male callers
     
     // Temporary disable 2 min free
@@ -270,7 +270,7 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
   void _startRandomMatchmaking() {
     final appState = context.read<AppState>();
     final balance = appState.coinBalance;
-    final hasUsedFreeCall = appState.hasUsedFreeCall;
+
     const requiredCoins = 30; // equivalent to ₹3/min
     
     // Temporary disable 2 min free
@@ -1097,11 +1097,15 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
                       future: FirebaseFirestore.instance.collection('experts').doc(expertId).get(),
                       builder: (context, expertSnap) {
                         String displayName = expertId;
+                        String? avatarUrl;
+                        int avatarIndex = 1;
                         
                         if (expertSnap.hasData && expertSnap.data!.exists) {
                           final expertData = expertSnap.data!.data() as Map<String, dynamic>?;
                           if (expertData != null) {
                             displayName = expertData['nickname'] ?? displayName;
+                            avatarUrl = expertData['profileImageUrl'] ?? expertData['avatarUrl'];
+                            avatarIndex = (expertData['avatarIndex'] as num?)?.toInt() ?? 1;
                           }
                         }
 
@@ -1134,6 +1138,8 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
                                   uid: expertId,
                                   role: 'expert',
                                   radius: 28,
+                                  avatarUrl: avatarUrl,
+                                  avatarIndex: avatarIndex,
                                 ),
                               ),
                               const SizedBox(width: 16),

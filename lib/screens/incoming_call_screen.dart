@@ -123,7 +123,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
     super.dispose();
   }
 
-  void _acceptCall() {
+  void _acceptCall() async {
     if (_isDismissing) return;
     _isDismissing = true;
     
@@ -131,19 +131,25 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
     // For experts, their Firestore document ID is ALWAYS appState.uid.
     final currentUserId = appState.uid;
     
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (_) => ActiveCallPage(
-          callRoomId: widget.callRoomId,
-          receiverId: currentUserId,
-          callerId: widget.callerId,
-          nickname: 'User', // The ActiveCallPage will fetch the real name again or we can wait, but ActiveCallPage uses callerId.
-          pricePerMin: 5.0,
-          isCaller: false,
+    final callerData = await _callerDataFuture;
+    
+    if (mounted) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ActiveCallPage(
+            callRoomId: widget.callRoomId,
+            receiverId: currentUserId,
+            callerId: widget.callerId,
+            nickname: callerData['nickname'] ?? 'User',
+            avatarUrl: callerData['avatarUrl'] as String?,
+            avatarIndex: (callerData['avatarIndex'] as num?)?.toInt() ?? 1,
+            pricePerMin: 5.0,
+            isCaller: false,
+          ),
         ),
-      ),
-    );
+      );
+    }
   }
 
   void _declineCall() {

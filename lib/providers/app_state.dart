@@ -169,8 +169,8 @@ class AppState extends ChangeNotifier {
       incrementFreeMessagesUsed(); // instant UI update
     }
     
-    final mobile = _mobileNumber.isNotEmpty ? _mobileNumber : "test_mobile";
-    await prefs.setString('pendingChatMobile', mobile);
+    final myUid = uid.isNotEmpty ? uid : "test_uid";
+    await prefs.setString('pendingChatUid', myUid);
   }
 
   void clearPendingChatDeductionsLocally() {
@@ -185,8 +185,8 @@ class AppState extends ChangeNotifier {
     
     if (coinsToDeduct == 0 && freeMsgsToSync == 0) return;
     
-    final mobile = prefs.getString('pendingChatMobile') ?? '';
-    if (mobile.isEmpty) return;
+    final myUid = prefs.getString('pendingChatUid') ?? '';
+    if (myUid.isEmpty) return;
 
     final Map<String, dynamic> updates = {};
     if (freeMsgsToSync > 0) {
@@ -198,10 +198,10 @@ class AppState extends ChangeNotifier {
 
     await prefs.remove('pendingChatCoins');
     await prefs.remove('pendingChatFreeMsgs');
-    await prefs.remove('pendingChatMobile');
+    await prefs.remove('pendingChatUid');
 
     if (updates.isNotEmpty) {
-      FirebaseFirestore.instance.collection('users').doc(mobile).update(updates).catchError((e) {
+      FirebaseFirestore.instance.collection('users').doc(myUid).update(updates).catchError((e) {
         debugPrint('Failed to sync chat deductions: $e');
       });
     }

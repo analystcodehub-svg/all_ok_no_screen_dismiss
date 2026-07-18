@@ -167,7 +167,7 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
         await prefs.setString('saved_email', email);
         await prefs.setString('saved_password', password);
         
-        final userDoc = await FirebaseFirestore.instance.collection('users').doc(phone).get();
+        final userDoc = await FirebaseFirestore.instance.collection('users').doc(user!.uid).get();
         if (userDoc.exists) {
           final data = userDoc.data() ?? {};
           final gender = (data['gender'] ?? 'male').toString();

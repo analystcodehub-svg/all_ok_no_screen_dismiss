@@ -214,9 +214,9 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
 
   void _markFreeCallUsed() async {
     final appState = context.read<AppState>();
-    final mobile = appState.mobileNumber;
+    final myUid = appState.uid;
     appState.setHasUsedFreeCall(true);
-    await FirebaseFirestore.instance.collection('users').doc(mobile).set({
+    await FirebaseFirestore.instance.collection('users').doc(myUid).set({
       'hasUsedFreeCall': true,
     }, SetOptions(merge: true));
   }
@@ -295,9 +295,9 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
     });
   }
 
-  void _triggerHangup() async {
+  void _triggerHangup() {
     if (_roomId != null) {
-      await _callService.endCall(_roomId!);
+      _callService.endCall(_roomId!);
     }
     _hangupLocal();
   }
@@ -310,44 +310,46 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
     _callService.unlockUserFromCall(widget.callerId);
     _callService.unlockUserFromCall(widget.receiverId);
     
-    if (mounted) {
-      _timer?.cancel();
-      _ringingTimer?.cancel();
-      
-      _saveCallLog();
-      
-      // Sync Caller's Wallet Deduction to Firestore exactly once at the end
-      if (widget.isCaller && _duration > 0) {
-        int callMinutes = (_duration / 60).ceil();
-        if (widget.isFirstFreeCall) {
-          callMinutes = (callMinutes >= 2) ? (callMinutes - 2) : 0;
-        }
-        if (callMinutes > 0) {
-          final coinsToDeduct = callMinutes * (widget.pricePerMin * 10).toInt();
-          final appState = context.read<AppState>();
-          final mobile = appState.mobileNumber.isNotEmpty ? appState.mobileNumber : "test_mobile";
-          
-          FirebaseFirestore.instance.collection('users').doc(mobile).update({
-            'coinBalance': FieldValue.increment(-coinsToDeduct),
-          }).catchError((e) => debugPrint('Error syncing caller wallet deduction: $e'));
-          
-          debugPrint('Caller billed for $callMinutes mins: -$coinsToDeduct coins synced to Firestore');
-        }
+    _timer?.cancel();
+    _ringingTimer?.cancel();
+    
+    _saveCallLog();
+    
+    // Sync Caller's Wallet Deduction to Firestore exactly once at the end
+    if (widget.isCaller && _duration > 0) {
+      int callMinutes = (_duration / 60).ceil();
+      if (widget.isFirstFreeCall) {
+        callMinutes = (callMinutes >= 2) ? (callMinutes - 2) : 0;
       }
+      if (callMinutes > 0) {
+        final coinsToDeduct = callMinutes * (widget.pricePerMin * 10).toInt();
+        
+        // We can just query by callerId (which is the uid for users)
+        final callerUid = widget.callerId; 
+        
+        FirebaseFirestore.instance.collection('users').doc(callerUid).update({
+          'coinBalance': FieldValue.increment(-coinsToDeduct),
+        }).catchError((e) => debugPrint('Error syncing caller wallet deduction: $e'));
+        
+        debugPrint('Caller billed for $callMinutes mins: -$coinsToDeduct coins synced to Firestore');
+      }
+    }
 
-      // Credit expert earnings and update talk time at end of call (only if >= 50 seconds)
-      if (!widget.isCaller && _duration >= 50) {
-        int callMinutes = _duration ~/ 60;
-        if (_duration % 60 >= 50) {
-          callMinutes += 1;
-        }
-        final earned = _expertEarningRate * callMinutes;
-        final appState = context.read<AppState>();
-        appState.addEarnings(earned);
-        debugPrint('Expert earned: ₹${earned.toStringAsFixed(2)} (${_duration}s at ₹$_expertEarningRate/min, billed as $callMinutes min)');
-        // Update all stats in Firestore
-        _updateExpertStats(earned, _duration, appState.primaryLanguage);
+    // Credit expert earnings and update talk time at end of call (only if >= 50 seconds)
+    if (!widget.isCaller && _duration >= 50) {
+      int callMinutes = _duration ~/ 60;
+      if (_duration % 60 >= 50) {
+        callMinutes += 1;
       }
+      final earned = _expertEarningRate * callMinutes;
+      
+      // Update all stats in Firestore
+      // We don't rely on AppState for language here, fallback to 'hindi' if not provided
+      _updateExpertStats(earned, _duration, 'hindi');
+      debugPrint('Expert earned: ₹${earned.toStringAsFixed(2)} (${_duration}s at ₹$_expertEarningRate/min, billed as $callMinutes min)');
+    }
+    
+    if (mounted) {
       Navigator.pop(context);
     }
   }
@@ -501,7 +503,7 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
                         'reason': 'Inappropriate behavior on call',
                         'timestamp': FieldValue.serverTimestamp(),
                       });
-                      if (mounted) {
+                      if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(content: Text('User reported successfully. We will review this shortly.')),
                         );
@@ -510,7 +512,7 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
                       final myId = widget.isCaller ? widget.callerId : widget.receiverId;
                       final otherId = widget.isCaller ? widget.receiverId : widget.callerId;
                       await BlockService.instance.blockUser(myId, otherId);
-                      if (mounted) {
+                      if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(content: Text('User blocked.')),
                         );

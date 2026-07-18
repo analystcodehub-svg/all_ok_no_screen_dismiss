@@ -68,9 +68,11 @@ class _AudioVerificationPageState extends State<AudioVerificationPage> with Sing
           }
         });
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Microphone permission denied.')),
-        );
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Microphone permission denied.')),
+          );
+        }
       }
     } catch (e) {
       debugPrint('Error starting recording: $e');

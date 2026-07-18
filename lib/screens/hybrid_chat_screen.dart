@@ -268,14 +268,14 @@ class _HybridChatScreenState extends State<HybridChatScreen> with WidgetsBinding
                   'reason': 'Inappropriate behavior in chat',
                   'timestamp': FieldValue.serverTimestamp(),
                 });
-                if (mounted) {
+                if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('User reported successfully. We will review this shortly.')),
                   );
                 }
               } else if (value == 'block') {
                 await BlockService.instance.blockUser(widget.myUid, widget.otherUid);
-                if (mounted) {
+                if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('User blocked. You will no longer receive messages from them.')),
                   );

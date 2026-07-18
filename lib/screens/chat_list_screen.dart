@@ -45,6 +45,8 @@ class _ChatListScreenState extends State<ChatListScreen> {
         if (expertDoc.exists && expertDoc.data() != null) {
           final expertData = expertDoc.data()!;
           displayName = expertData['nickname'] ?? displayName;
+          data['avatarUrl'] = expertData['profileImageUrl'] ?? expertData['avatarUrl'];
+          data['avatarIndex'] = (expertData['avatarIndex'] as num?)?.toInt() ?? 1;
         } else {
           // Try users collection
           final userDoc = await FirebaseFirestore.instance.collection('users').doc(otherUser).get();
@@ -55,6 +57,8 @@ class _ChatListScreenState extends State<ChatListScreen> {
             } else {
               displayName = 'User ${otherUser.length >= 4 ? otherUser.substring(otherUser.length - 4) : otherUser}';
             }
+            data['avatarUrl'] = userData['avatarUrl'];
+            data['avatarIndex'] = (userData['avatarIndex'] as num?)?.toInt() ?? 1;
           } else {
             displayName = 'User ${otherUser.length >= 4 ? otherUser.substring(otherUser.length - 4) : otherUser}';
           }
@@ -158,6 +162,8 @@ class _ChatListScreenState extends State<ChatListScreen> {
                             lastMessage: lastMessage,
                             dayText: dayText,
                             unreadCount: unreadCount,
+                            avatarUrl: data['avatarUrl'] as String?,
+                            avatarIndex: (data['avatarIndex'] as num?)?.toInt() ?? 1,
                             onTap: () {
                               Navigator.push(
                                 context,
@@ -240,6 +246,8 @@ class _ChatListScreenState extends State<ChatListScreen> {
     required String dayText,
     required int unreadCount,
     required VoidCallback onTap,
+    String? avatarUrl,
+    int? avatarIndex,
   }) {
 
     return GestureDetector(
@@ -270,6 +278,8 @@ class _ChatListScreenState extends State<ChatListScreen> {
                 uid: uid,
                 role: role,
                 radius: 28,
+                avatarUrl: avatarUrl,
+                avatarIndex: avatarIndex ?? 1,
               ),
             ),
             const SizedBox(width: 16),
