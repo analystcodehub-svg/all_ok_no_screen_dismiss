@@ -221,30 +221,6 @@ class _RecentSessionsScreenState extends State<RecentSessionsScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Avatar with gradient border
-          Container(
-            padding: const EdgeInsets.all(3),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: LinearGradient(
-                colors: isMissed 
-                  ? [Colors.red.shade300, Colors.red.shade700] 
-                  : [AppColors.gradientBlueStart, AppColors.gradientBlueEnd],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-            ),
-            child: CircleAvatar(
-              radius: 30,
-              backgroundColor: Colors.white,
-              child: LocalAvatarWidget(
-                uid: otherUserId,
-                role: isCaller ? 'expert' : 'user',
-                radius: 28,
-              ),
-            ),
-          ),
-          const SizedBox(width: 16),
 
           // Details
           Expanded(

@@ -437,16 +437,19 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
                           ),
                         ),
                         const SizedBox(width: 6),
-                        Text(
-                          _isAudioOn
-                              ? 'Online · Ready for calls'
-                              : 'Offline · Not receiving calls',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: _isAudioOn
-                                ? Colors.greenAccent.shade100
-                                : Colors.white60,
-                            fontWeight: FontWeight.w500,
+                        Expanded(
+                          child: Text(
+                            _isAudioOn
+                                ? 'Online · Ready for calls'
+                                : 'Offline · Not receiving calls',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: _isAudioOn
+                                  ? Colors.greenAccent.shade100
+                                  : Colors.white60,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ],

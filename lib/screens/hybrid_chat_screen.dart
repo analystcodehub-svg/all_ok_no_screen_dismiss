@@ -216,10 +216,27 @@ class _HybridChatScreenState extends State<HybridChatScreen> with WidgetsBinding
           children: [
             Stack(
               children: [
-                LocalAvatarWidget(
-                  uid: widget.otherUid,
-                  role: otherRole,
-                  radius: 20,
+                FutureBuilder<DocumentSnapshot>(
+                  future: FirebaseFirestore.instance.collection(otherRole == 'expert' ? 'experts' : 'users').doc(widget.otherUid).get(),
+                  builder: (context, snapshot) {
+                    int avatarIndex = 1;
+                    String? avatarUrl;
+                    if (snapshot.hasData && snapshot.data!.exists) {
+                      final data = snapshot.data!.data() as Map<String, dynamic>;
+                      avatarIndex = (data['avatarIndex'] as num?)?.toInt() ?? 1;
+                      avatarUrl = data['avatarUrl'] as String?;
+                      if (otherRole == 'expert') {
+                        avatarUrl ??= data['profileImageUrl'] as String?;
+                      }
+                    }
+                    return LocalAvatarWidget(
+                      uid: widget.otherUid,
+                      role: otherRole,
+                      radius: 20,
+                      avatarIndex: avatarIndex,
+                      avatarUrl: avatarUrl,
+                    );
+                  },
                 ),
                 Positioned(
                   bottom: 0,

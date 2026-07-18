@@ -81,12 +81,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
     _currentUserMobile = appState.mobileNumber;
     if (_currentUserMobile.isEmpty) _currentUserMobile = "test_mobile";
 
-    // Dynamic ID logic: Females use nickname.toLowerCase(), Males use mobileNumber
-    String myUid = appState.selectedGender == 'Female' 
-        ? appState.uid 
-        : _currentUserMobile;
-        
-    if (myUid.isEmpty) myUid = _currentUserMobile;
+    final String myUid = appState.uid;
 
     // Determine if current user is male
     bool isCurrentMale = appState.selectedGender != 'Female';
@@ -269,6 +264,32 @@ class _ChatListScreenState extends State<ChatListScreen> {
         ),
         child: Row(
           children: [
+            // Avatar
+            Container(
+              padding: const EdgeInsets.all(3),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(
+                  colors: unreadCount > 0 
+                    ? [AppColors.gradientBlueStart, AppColors.gradientBlueEnd]
+                    : [Colors.grey.shade300, Colors.grey.shade400],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
+              child: CircleAvatar(
+                radius: 26,
+                backgroundColor: Colors.white,
+                child: LocalAvatarWidget(
+                  uid: uid,
+                  role: role,
+                  radius: 24,
+                  avatarUrl: avatarUrl,
+                  avatarIndex: avatarIndex ?? 1,
+                ),
+              ),
+            ),
+            const SizedBox(width: 16),
 
             Expanded(
               child: Column(
