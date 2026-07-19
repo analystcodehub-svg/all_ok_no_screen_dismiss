@@ -7,6 +7,7 @@ import 'package:payu_checkoutpro_flutter/payu_checkoutpro_flutter.dart';
 import 'package:payu_checkoutpro_flutter/PayUConstantKeys.dart';
 import '../providers/app_state.dart';
 import 'payment_history_screen.dart';
+import 'payment_success_screen.dart';
 
 class RechargePackage {
   final double amount;
@@ -37,6 +38,7 @@ class _WalletRechargeScreenState extends State<WalletRechargeScreen> implements 
   late PayUCheckoutProFlutter _checkoutPro;
   
   final List<RechargePackage> _packages = const [
+    RechargePackage(amount: 3.0, coins: 30, bonusCoins: 0, badge: "Starter", badgeColor: Color(0xFF6366F1)),
     RechargePackage(amount: 20.0, coins: 200, bonusCoins: 0),
     RechargePackage(amount: 50.0, coins: 500, bonusCoins: 30, extraText: "+6% Extra"),
     RechargePackage(amount: 100.0, coins: 1000, bonusCoins: 150, extraText: "+15% Extra"),
@@ -142,6 +144,7 @@ class _WalletRechargeScreenState extends State<WalletRechargeScreen> implements 
         
         transaction.set(rechargeDocRef, {
           'buyer_name': myUid,
+          'userId': myUid,
           'amount': _payableAmount,
           'coinsCredited': _totalCoinsCredited,
           'gateway': gateway,
@@ -153,9 +156,16 @@ class _WalletRechargeScreenState extends State<WalletRechargeScreen> implements 
         appState.setCoinBalance(newBalance);
       });
 
-      _showSnackBar("Recharge Successful! ₹${(_totalCoinsCredited / 10).toStringAsFixed(0)} added.");
       if (mounted) {
+        // Direct redirect to Home screen (skipping any success screens)
         Navigator.popUntil(context, (route) => route.isFirst);
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Recharge Successful! ₹${(_totalCoinsCredited / 10).toStringAsFixed(0)} added to wallet."),
+            backgroundColor: Colors.green.shade700,
+          ),
+        );
       }
     } catch (e) {
       _showSnackBar("Recharge succeeded but failed to sync balance: $e", isError: true);
@@ -193,10 +203,11 @@ class _WalletRechargeScreenState extends State<WalletRechargeScreen> implements 
       PayUPaymentParamKey.transactionId: txnid,
       PayUPaymentParamKey.environment: _environment,
       PayUPaymentParamKey.userCredential: "$_merchantKey:$myUid",
-      PayUPaymentParamKey.android_surl: "https://payu.herokuapp.com/ios_success",
-      PayUPaymentParamKey.android_furl: "https://payu.herokuapp.com/ios_failure",
-      PayUPaymentParamKey.ios_surl: "https://payu.herokuapp.com/ios_success",
-      PayUPaymentParamKey.ios_furl: "https://payu.herokuapp.com/ios_failure",
+      // Use official PayU SDK URLs which automatically inject the PayU.onSuccess() Javascript to close instantly
+      PayUPaymentParamKey.android_surl: "https://cbjs.payu.in/sdk/success",
+      PayUPaymentParamKey.android_furl: "https://cbjs.payu.in/sdk/failure",
+      PayUPaymentParamKey.ios_surl: "https://cbjs.payu.in/sdk/success",
+      PayUPaymentParamKey.ios_furl: "https://cbjs.payu.in/sdk/failure",
       PayUPaymentParamKey.additionalParam: {
         "enforce_paymethod": "upi",
       },
@@ -208,6 +219,7 @@ class _WalletRechargeScreenState extends State<WalletRechargeScreen> implements 
       PayUCheckoutProConfigKeys.secondaryColor: "#1E293B",
       PayUCheckoutProConfigKeys.autoSelectOtp: true,
       PayUCheckoutProConfigKeys.waitingTime: 30000,
+      PayUCheckoutProConfigKeys.merchantResponseTimeout: 0, // 0 tells the SDK to not wait at all
       PayUCheckoutProConfigKeys.enforcePaymentList: [
         {
           "payment_type": "UPI",
@@ -245,10 +257,10 @@ class _WalletRechargeScreenState extends State<WalletRechargeScreen> implements 
       PayUPaymentParamKey.transactionId: txnid,
       PayUPaymentParamKey.environment: _environment,
       PayUPaymentParamKey.userCredential: "$_merchantKey:$myUid",
-      PayUPaymentParamKey.android_surl: "https://payu.herokuapp.com/ios_success",
-      PayUPaymentParamKey.android_furl: "https://payu.herokuapp.com/ios_failure",
-      PayUPaymentParamKey.ios_surl: "https://payu.herokuapp.com/ios_success",
-      PayUPaymentParamKey.ios_furl: "https://payu.herokuapp.com/ios_failure",
+      PayUPaymentParamKey.android_surl: "https://cbjs.payu.in/sdk/success",
+      PayUPaymentParamKey.android_furl: "https://cbjs.payu.in/sdk/failure",
+      PayUPaymentParamKey.ios_surl: "https://cbjs.payu.in/sdk/success",
+      PayUPaymentParamKey.ios_furl: "https://cbjs.payu.in/sdk/failure",
       PayUPaymentParamKey.additionalParam: {
         "enforce_paymethod": "upi",
       },
@@ -260,6 +272,7 @@ class _WalletRechargeScreenState extends State<WalletRechargeScreen> implements 
       PayUCheckoutProConfigKeys.secondaryColor: "#1E293B",
       PayUCheckoutProConfigKeys.autoSelectOtp: true,
       PayUCheckoutProConfigKeys.waitingTime: 30000,
+      PayUCheckoutProConfigKeys.merchantResponseTimeout: 0, // 0 tells SDK to close instantly
       PayUCheckoutProConfigKeys.enforcePaymentList: [
         {"payment_type": "UPI"}
       ],

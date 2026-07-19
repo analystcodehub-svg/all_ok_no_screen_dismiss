@@ -15,7 +15,6 @@ class ChatListScreen extends StatefulWidget {
 }
 
 class _ChatListScreenState extends State<ChatListScreen> {
-  int _selectedTab = 0; // 0 for FRIENDS, 1 for GENERAL
   late String _currentUserMobile;
 
   @override
@@ -107,22 +106,20 @@ class _ChatListScreenState extends State<ChatListScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // Custom Tab Bar
+            // Left-aligned Large Header matching Recents
             Container(
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                border: Border(
-                  bottom: BorderSide(color: Color(0xFFE0E0E0), width: 1),
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
+              color: AppColors.bgLight,
+              child: const Text(
+                'Chats',
+                style: TextStyle(
+                  fontSize: 26,
+                  fontWeight: FontWeight.w900,
+                  color: AppColors.textDark,
                 ),
               ),
-              child: Row(
-                children: [
-                  Expanded(child: _buildTab('FRIENDS', 0)),
-                  Expanded(child: _buildTab('GENERAL', 1)),
-                ],
-              ),
             ),
-
             // List View connected to Local SQLite
             Expanded(
               child: StreamBuilder<void>(
@@ -213,38 +210,6 @@ class _ChatListScreenState extends State<ChatListScreen> {
             style: TextStyle(fontSize: 18, color: AppColors.textGrey),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildTab(String title, int index) {
-    final isActive = _selectedTab == index;
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _selectedTab = index;
-        });
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        decoration: BoxDecoration(
-          border: Border(
-            bottom: BorderSide(
-              color: isActive ? AppColors.primaryBlue : Colors.transparent,
-              width: 3,
-            ),
-          ),
-        ),
-        alignment: Alignment.center,
-        child: Text(
-          title,
-          style: TextStyle(
-            color: isActive ? AppColors.primaryBlue : AppColors.textGrey,
-            fontWeight: isActive ? FontWeight.bold : FontWeight.w600,
-            fontSize: 16,
-            letterSpacing: 1,
-          ),
-        ),
       ),
     );
   }

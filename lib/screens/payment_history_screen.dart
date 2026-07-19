@@ -10,15 +10,31 @@ class PaymentHistoryScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final userId = context.read<AppState>().mobileNumber;
+    final userId = context.read<AppState>().uid;
 
     return Scaffold(
       backgroundColor: AppColors.bgLight,
       appBar: AppBar(
-        title: const Text('Payment History'),
-        backgroundColor: Colors.white,
-        foregroundColor: AppColors.textDark,
-        elevation: 1,
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFF312E81), Color(0xFF1E1B4B)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: const Text(
+          'Payment History',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
+        backgroundColor: Colors.transparent,
+        foregroundColor: Colors.white,
       ),
       body: SafeArea(
         child: StreamBuilder<QuerySnapshot>(
@@ -165,16 +181,8 @@ class PaymentHistoryScreen extends StatelessWidget {
                           ),
                           const SizedBox(height: 6),
                           Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            mainAxisAlignment: MainAxisAlignment.end,
                             children: [
-                              Text(
-                                '+$coinsCredited Coins',
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.textDark,
-                                ),
-                              ),
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                                 decoration: BoxDecoration(
