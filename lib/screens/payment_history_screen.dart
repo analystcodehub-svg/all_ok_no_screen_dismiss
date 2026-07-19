@@ -227,27 +227,7 @@ class PaymentHistoryScreen extends StatelessWidget {
                         ],
                       ),
                     ),
-                    // Divider
-                    Container(height: 1, color: Colors.grey.shade100),
-                    // Bottom Action Row
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.support_agent_rounded, size: 16, color: AppColors.primaryBlue.withValues(alpha: 0.8)),
-                          const SizedBox(width: 6),
-                          Text(
-                            'Help',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.primaryBlue.withValues(alpha: 0.8),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+
                   ],
                 ),
               ),

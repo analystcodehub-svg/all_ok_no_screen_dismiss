@@ -141,10 +141,7 @@ class MatchmakingService {
     // Dynamic Bucket Path. Ensure these language buckets are created and indexed (.indexOn: .value) in RTDB.
     final String bucketPath = 'queues/${preferredGender.toLowerCase()}_${preferredLanguage.toLowerCase()}';
     
-    int maxRetries = 2; // Do not loop infinitely
-    int consecutiveFailures = 0;
-
-    for (int retry = 0; retry < maxRetries; retry++) {
+    for (int retry = 0; retry < 2; retry++) {
       if (retry > 0) {
         // Retry Delay
         await Future.delayed(const Duration(seconds: 1));
@@ -170,47 +167,7 @@ class MatchmakingService {
             bool isLocked = await lockExpertForCall(expertUid, callerUid);
             
             if (isLocked) {
-              bool isRinging = false;
-              StreamSubscription? statusSub;
-              
-              try {
-                final completer = Completer<bool>();
-                
-                // TARGETED LISTENERS (Critical): Listen strictly to the specific path
-                statusSub = _db.ref('active_calls/$expertUid/status').onValue.listen((event) {
-                  if (event.snapshot.value == 'ringing') {
-                    if (!completer.isCompleted) completer.complete(true);
-                  }
-                });
-
-                // The 5-Second Timeout
-                isRinging = await completer.future.timeout(
-                  const Duration(seconds: 5),
-                  onTimeout: () => false,
-                );
-              } catch (e) {
-                debugPrint('Error waiting for ringing status: $e');
-              } finally {
-                // Clean up StreamSubscriptions
-                await statusSub?.cancel();
-              }
-
-              if (isRinging) {
-                // HANDOVER TO UI: expert is alive. IMMEDIATELY return expertUid and completely break
-                return expertUid;
-              } else {
-                // Fallback & Jump: timeout hits without 'ringing', unlock instantly
-                await unlockExpert(expertUid);
-                consecutiveFailures++;
-
-                // Max Fails: If 2 consecutive locked experts fail, abort matchmaking completely
-                if (consecutiveFailures >= 2) {
-                  return null;
-                }
-                
-                // Continue to the next expert in the list
-                continue;
-              }
+              return expertUid;
             }
           }
         }
