@@ -70,17 +70,17 @@ class _ChatListScreenState extends State<ChatListScreen> {
             if (uName != null && uName.isNotEmpty) {
               displayName = uName;
             } else {
-              displayName = 'User ${otherUser.length >= 4 ? otherUser.substring(otherUser.length - 4) : otherUser}';
+              displayName = otherUser; // Show UID as-is if no name found
             }
             
             data['avatarUrl'] = userData['avatarUrl'];
             data['avatarIndex'] = (userData['avatarIndex'] as num?)?.toInt() ?? 1;
           } else {
-            displayName = 'User ${otherUser.length >= 4 ? otherUser.substring(otherUser.length - 4) : otherUser}';
+            displayName = otherUser; // Show UID as-is if user doc not found
           }
         }
       } catch (e) {
-        displayName = 'User ${otherUser.length >= 4 ? otherUser.substring(otherUser.length - 4) : otherUser}';
+        displayName = otherUser; // Show UID as-is on error
       }
       
       data['displayName'] = displayName;

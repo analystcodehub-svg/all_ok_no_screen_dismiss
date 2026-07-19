@@ -26,7 +26,7 @@ class _ExpertFeedScreenState extends State<ExpertFeedScreen> {
 
   Future<List<Map<dynamic, dynamic>>> _fetchExperts() async {
     final appState = context.read<AppState>();
-    String mobile = appState.mobileNumber.isNotEmpty ? appState.mobileNumber : "test_mobile";
+    String mobile = appState.uid.isNotEmpty ? appState.uid : appState.mobileNumber;
     String languageCode = Localizations.localeOf(context).languageCode;
 
     String bucket = 'hindi'; // Default bucket
@@ -253,9 +253,7 @@ class _ExpertFeedScreenState extends State<ExpertFeedScreen> {
                 },
                 onChatTap: () {
                   final appState = context.read<AppState>();
-                  String myUid = appState.selectedGender == 'Female' ? appState.uid : appState.mobileNumber;
-                  if (myUid.isEmpty) myUid = appState.mobileNumber;
-                  if (myUid.isEmpty) myUid = "test_mobile";
+                  final String myUid = appState.uid;
                   
                   Navigator.push(
                     context,

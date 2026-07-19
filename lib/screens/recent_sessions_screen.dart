@@ -142,13 +142,11 @@ class _RecentSessionsScreenState extends State<RecentSessionsScreen> {
                               if (profileSnapshot.connectionState == ConnectionState.done) {
                                 if (profileSnapshot.hasData && profileSnapshot.data!.exists) {
                                   final profileData = profileSnapshot.data!.data() as Map<String, dynamic>;
-                                  if (profileData['nickname'] != null && profileData['nickname'].toString().trim().isNotEmpty) {
-                                    displayName = profileData['nickname'];
-                                  } else {
-                                    displayName = isCaller ? 'Expert' : 'User';
-                                  }
+                                  final nick = profileData['nickname']?.toString().trim() ?? '';
+                                  final name = profileData['name']?.toString().trim() ?? '';
+                                  displayName = nick.isNotEmpty ? nick : (name.isNotEmpty ? name : (otherUserId ?? ''));
                                 } else {
-                                  displayName = isCaller ? 'Expert' : 'User';
+                                  displayName = otherUserId ?? '';
                                 }
                               }
 
