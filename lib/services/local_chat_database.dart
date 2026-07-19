@@ -84,18 +84,31 @@ class LocalChatDatabase {
     await db.execute('CREATE INDEX idx_call_timestamp ON call_logs (timestamp DESC)');
   }
 
-  // Generate a deterministic room ID
+  // Generate a deterministic room ID using double-underscore separator
+  // so UIDs that contain underscores are not split incorrectly.
   static String generateRoomId(String uid1, String uid2) {
     final users = [uid1, uid2];
     users.sort();
-    return users.join('_');
+    return users.join('__');
   }
 
   // Extract other user ID from room ID
   static String getOtherUserIdFromRoomId(String roomId, String myUid) {
-    final parts = roomId.split('_');
-    for (var p in parts) {
-      if (p != myUid && p.isNotEmpty) return p;
+    // Split on double-underscore only
+    final parts = roomId.split('__');
+    if (parts.length == 2) {
+      return parts[0] == myUid ? parts[1] : parts[0];
+    }
+    // Legacy fallback: single underscore (old room IDs)
+    final idx = roomId.indexOf(myUid);
+    if (idx == 0) {
+      // myUid is at the start, other is after myUid + '_'
+      final rest = roomId.substring(myUid.length);
+      if (rest.startsWith('_')) return rest.substring(1);
+    } else if (idx > 0) {
+      // myUid is at the end
+      final rest = roomId.substring(0, idx);
+      if (rest.endsWith('_')) return rest.substring(0, rest.length - 1);
     }
     return '';
   }
