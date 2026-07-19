@@ -68,9 +68,7 @@ jobs:
           tag_name: v${{ steps.get_version.outputs.version }}
           name: Release v${{ steps.get_version.outputs.version }}
           files: |
-#            build/app/outputs/flutter-apk/app-release.apk
             build/app/outputs/flutter-apk/app-debug.apk
-#            build/app/outputs/bundle/release/app-release.aab
           draft: false
           prerelease: false
           generate_release_notes: true
