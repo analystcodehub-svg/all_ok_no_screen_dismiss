@@ -400,8 +400,9 @@ class _HybridChatScreenState extends State<HybridChatScreen> with WidgetsBinding
   }
 
   Widget _buildMessageInput() {
+    final bottomInset = MediaQuery.of(context).viewPadding.bottom;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      padding: EdgeInsets.only(left: 8, right: 8, top: 8, bottom: 8 + bottomInset),
       color: Colors.white,
       child: Row(
         children: [
