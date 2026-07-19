@@ -44,7 +44,16 @@ class _ChatListScreenState extends State<ChatListScreen> {
         final expertDoc = await FirebaseFirestore.instance.collection('experts').doc(otherUser).get();
         if (expertDoc.exists && expertDoc.data() != null) {
           final expertData = expertDoc.data()!;
-          displayName = expertData['nickname'] ?? displayName;
+          
+          String? eName = expertData['nickname']?.toString().trim();
+          if (eName == null || eName.isEmpty) eName = expertData['name']?.toString().trim();
+          if (eName == null || eName.isEmpty) eName = expertData['displayName']?.toString().trim();
+          if (eName == null || eName.isEmpty) eName = expertData['fullName']?.toString().trim();
+          
+          if (eName != null && eName.isNotEmpty) {
+            displayName = eName;
+          }
+
           data['avatarUrl'] = expertData['profileImageUrl'] ?? expertData['avatarUrl'];
           data['avatarIndex'] = (expertData['avatarIndex'] as num?)?.toInt() ?? 1;
         } else {
@@ -52,11 +61,18 @@ class _ChatListScreenState extends State<ChatListScreen> {
           final userDoc = await FirebaseFirestore.instance.collection('users').doc(otherUser).get();
           if (userDoc.exists && userDoc.data() != null) {
             final userData = userDoc.data()!;
-            if (userData['nickname'] != null && userData['nickname'].toString().isNotEmpty) {
-              displayName = userData['nickname'].toString();
+            
+            String? uName = userData['nickname']?.toString().trim();
+            if (uName == null || uName.isEmpty) uName = userData['name']?.toString().trim();
+            if (uName == null || uName.isEmpty) uName = userData['displayName']?.toString().trim();
+            if (uName == null || uName.isEmpty) uName = userData['fullName']?.toString().trim();
+            
+            if (uName != null && uName.isNotEmpty) {
+              displayName = uName;
             } else {
               displayName = 'User ${otherUser.length >= 4 ? otherUser.substring(otherUser.length - 4) : otherUser}';
             }
+            
             data['avatarUrl'] = userData['avatarUrl'];
             data['avatarIndex'] = (userData['avatarIndex'] as num?)?.toInt() ?? 1;
           } else {
@@ -264,32 +280,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
         ),
         child: Row(
           children: [
-            // Avatar
-            Container(
-              padding: const EdgeInsets.all(3),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  colors: unreadCount > 0 
-                    ? [AppColors.gradientBlueStart, AppColors.gradientBlueEnd]
-                    : [Colors.grey.shade300, Colors.grey.shade400],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-              ),
-              child: CircleAvatar(
-                radius: 26,
-                backgroundColor: Colors.white,
-                child: LocalAvatarWidget(
-                  uid: uid,
-                  role: role,
-                  radius: 24,
-                  avatarUrl: avatarUrl,
-                  avatarIndex: avatarIndex ?? 1,
-                ),
-              ),
-            ),
-            const SizedBox(width: 16),
+
 
             Expanded(
               child: Column(
