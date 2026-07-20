@@ -9,6 +9,8 @@ import 'screens/active_call_page.dart';
 import 'screens/auth_wrapper.dart';
 import 'services/notification_service.dart';
 import 'services/foreground_task_service.dart';
+import 'package:firebase_database/firebase_database.dart';
+import 'screens/maintenance_screen.dart';
 
 /// Global navigator key — used by NotificationService to navigate
 /// after a call is accepted from the background / lock screen.
@@ -75,6 +77,29 @@ class SajniReApp extends StatelessWidget {
       // Provide the global navigatorKey so NotificationService can
       // push routes after accepting a call from a terminated state.
       navigatorKey: navigatorKey,
+
+      builder: (context, child) {
+        return StreamBuilder<DatabaseEvent>(
+          stream: FirebaseDatabase.instance.ref('app_settings/maintenance_mode').onValue,
+          builder: (context, snapshot) {
+            bool isMaintenance = false;
+            if (snapshot.hasData && snapshot.data!.snapshot.value != null) {
+              final value = snapshot.data!.snapshot.value;
+              if (value is bool) {
+                isMaintenance = value;
+              } else if (value is String) {
+                isMaintenance = value.toLowerCase() == 'true';
+              }
+            }
+            
+            if (isMaintenance) {
+              return const MaintenanceScreen();
+            }
+            
+            return child ?? const SizedBox.shrink();
+          },
+        );
+      },
 
       home: const AuthWrapper(),
 

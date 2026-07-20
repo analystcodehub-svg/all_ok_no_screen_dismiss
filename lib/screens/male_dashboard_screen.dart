@@ -43,7 +43,8 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
   static const Color brandCardBg = Colors.white;
 
   // (Pagination and old expert list removed for RTDB bucket system)
-  
+  int _feedKey = 0;
+
   StreamSubscription? _incomingCallSubscription;
 
   @override
@@ -966,24 +967,35 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
             ),
 
             // Section Header
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
-              child: Text(
-                'Featured Experts',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  color: brandTextDark,
-                ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+              child: Row(
+                children: [
+                  const Text(
+                    'Featured Experts',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      color: brandTextDark,
+                    ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.refresh_rounded, color: brandPrimary, size: 22),
+                    tooltip: 'Refresh Experts',
+                    onPressed: () {
+                      setState(() {
+                        _feedKey++;
+                      });
+                    },
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 8),
-
-
-
+            const SizedBox(height: 0), // Reduced height since IconButton adds padding
 
             // Integrated Expert Feed Screen (Fetch Once)
-            const ExpertFeedScreen(),
+            ExpertFeedScreen(key: ValueKey(_feedKey)),
           ],
         ),
       );
