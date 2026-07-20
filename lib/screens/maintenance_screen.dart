@@ -103,7 +103,7 @@ class MaintenanceScreen extends StatelessWidget {
                             const Icon(Icons.email_outlined, size: 18, color: AppColors.primaryBlue),
                             const SizedBox(width: 8),
                             const Text(
-                              'analystcodehub@gmail.com',
+                              'sajnireofficial@gmail.com',
                               style: TextStyle(fontSize: 14, color: AppColors.textDark),
                             ),
                           ],

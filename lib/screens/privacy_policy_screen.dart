@@ -78,7 +78,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
               '• Request correction of inaccurate data.\n'
               '• Request deletion of your account and data.\n'
               '• Withdraw consent at any time by deleting the app or contacting us.\n\n'
-              'To exercise these rights, contact us at: analystcodehub@gmail.com',
+              'To exercise these rights, contact us at: sajnireofficial@gmail.com',
             ),
 
             _buildSection('8. Security',
@@ -91,7 +91,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
 
             _buildSection('10. Contact Us',
               'For any privacy-related questions or concerns:\n\n'
-              '• Email: analystcodehub@gmail.com\n'
+              '• Email: sajnireofficial@gmail.com\n'
               '• Phone/WhatsApp: +91 8987108642\n'
               '• Address: Fathehpur, Bhagalpur, Bihar',
             ),

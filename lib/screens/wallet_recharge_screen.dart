@@ -1,14 +1,11 @@
-import 'dart:convert';
+import 'dart:async';
+import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:crypto/crypto.dart';
-import 'package:payu_checkoutpro_flutter/payu_checkoutpro_flutter.dart';
-import 'package:payu_checkoutpro_flutter/PayUConstantKeys.dart';
 import '../providers/app_state.dart';
 import 'payment_history_screen.dart';
 import 'payment_success_screen.dart';
-
 class RechargePackage {
   final double amount;
   final int coins;
@@ -34,8 +31,8 @@ class WalletRechargeScreen extends StatefulWidget {
   State<WalletRechargeScreen> createState() => _WalletRechargeScreenState();
 }
 
-class _WalletRechargeScreenState extends State<WalletRechargeScreen> implements PayUCheckoutProProtocol {
-  late PayUCheckoutProFlutter _checkoutPro;
+class _WalletRechargeScreenState extends State<WalletRechargeScreen> {
+  late StreamSubscription<List<PurchaseDetails>> _subscription;
   
   final List<RechargePackage> _packages = const [
     RechargePackage(amount: 3.0, coins: 30, bonusCoins: 0, badge: "Starter", badgeColor: Color(0xFF6366F1)),
@@ -54,67 +51,62 @@ class _WalletRechargeScreenState extends State<WalletRechargeScreen> implements 
 
   int _selectedPackageIndex = 0;
   bool _isLoading = false;
-  String _lastSelectedGateway = 'Unknown';
-  String _lastTxnId = '';
-
-  final String _merchantKey = "8e0HBa";
-  final String _merchantSalt = "vohCOn4XuJr0AHh2lojBj1WLv6euGVka";
-  final String _environment = "0"; // "0" for Production, "1" for Test
 
   @override
   void initState() {
     super.initState();
-    _checkoutPro = PayUCheckoutProFlutter(this);
+    final Stream<List<PurchaseDetails>> purchaseUpdated = InAppPurchase.instance.purchaseStream;
+    _subscription = purchaseUpdated.listen((purchaseDetailsList) {
+      _listenToPurchaseUpdated(purchaseDetailsList);
+    }, onDone: () {
+      _subscription.cancel();
+    }, onError: (error) {
+      _showSnackBar("Purchase Stream Error: $error", isError: true);
+    });
+  }
+
+  @override
+  void dispose() {
+    _subscription.cancel();
+    super.dispose();
   }
 
   double get _payableAmount => _packages[_selectedPackageIndex].amount;
   int get _totalCoinsCredited => _packages[_selectedPackageIndex].coins + _packages[_selectedPackageIndex].bonusCoins;
 
-  @override
-  generateHash(Map response) {
-    var hashName = response[PayUHashConstantsKeys.hashName];
-    var hashStringWithoutSalt = response[PayUHashConstantsKeys.hashString];
-    var postSalt = response[PayUHashConstantsKeys.postSalt];
-    var hashType = response[PayUHashConstantsKeys.hashType];
-    
-    String generatedHash = '';
-
-    if (hashType == 'V2') {
-      var hmac = Hmac(sha256, utf8.encode(_merchantSalt));
-      var digest = hmac.convert(utf8.encode(hashStringWithoutSalt));
-      generatedHash = digest.toString();
-    } else {
-      String hashDataWithSalt = hashStringWithoutSalt + _merchantSalt;
-      if (postSalt != null && postSalt.toString().isNotEmpty) {
-        hashDataWithSalt = hashDataWithSalt + postSalt.toString();
+  void _listenToPurchaseUpdated(List<PurchaseDetails> purchaseDetailsList) async {
+    for (var purchaseDetails in purchaseDetailsList) {
+      if (purchaseDetails.status == PurchaseStatus.pending) {
+        setState(() => _isLoading = true);
+      } else {
+        if (purchaseDetails.status == PurchaseStatus.error) {
+          setState(() => _isLoading = false);
+          _showSnackBar("Purchase Error: ${purchaseDetails.error?.message}", isError: true);
+        } else if (purchaseDetails.status == PurchaseStatus.purchased ||
+                   purchaseDetails.status == PurchaseStatus.restored) {
+          bool valid = await _verifyPurchase(purchaseDetails);
+          if (valid) {
+            await _syncWalletToFirestore(
+              success: true, 
+              gateway: 'Google Play', 
+              txnId: purchaseDetails.purchaseID ?? 'txn_${DateTime.now().millisecondsSinceEpoch}',
+            );
+          } else {
+            _showSnackBar("Invalid Purchase.", isError: true);
+            setState(() => _isLoading = false);
+          }
+        }
+        if (purchaseDetails.pendingCompletePurchase) {
+          await InAppPurchase.instance.completePurchase(purchaseDetails);
+        }
       }
-      var bytes = utf8.encode(hashDataWithSalt);
-      var digest = sha512.convert(bytes);
-      generatedHash = digest.toString();
     }
-    
-    Map hashResponse = {hashName: generatedHash};
-    _checkoutPro.hashGenerated(hash: hashResponse);
   }
 
-  @override
-  onPaymentSuccess(dynamic response) async {
-    await _syncWalletToFirestore(success: true, gateway: _lastSelectedGateway, txnId: _lastTxnId);
-  }
-
-  @override
-  onPaymentFailure(dynamic response) {
-    _showSnackBar("Payment Failed or Cancelled.", isError: true);
-  }
-
-  @override
-  onPaymentCancel(dynamic response) {
-    _showSnackBar("Payment Cancelled.", isError: true);
-  }
-
-  @override
-  onError(dynamic response) {
-    _showSnackBar("Payment Error: ${response?.toString() ?? 'Unknown'}", isError: true);
+  Future<bool> _verifyPurchase(PurchaseDetails purchaseDetails) async {
+    // In a real app, verify the receipt on your server.
+    // For this simple implementation, we assume it's valid if Google says it's purchased.
+    return true; 
   }
 
   Future<void> _syncWalletToFirestore({required bool success, required String gateway, required String txnId}) async {
@@ -184,216 +176,32 @@ class _WalletRechargeScreenState extends State<WalletRechargeScreen> implements 
     );
   }
 
-  void _startPhonePePaymentFlow() {
-    final appState = context.read<AppState>();
-    final myUid = appState.uid.isNotEmpty ? appState.uid : "test_uid";
-    final nickname = appState.nickname.isNotEmpty ? appState.nickname : "Guest";
-    final txnid = "TXN${DateTime.now().millisecondsSinceEpoch}";
+  Future<void> _buyProduct() async {
+    setState(() => _isLoading = true);
     
-    _lastSelectedGateway = 'PhonePe';
-    _lastTxnId = txnid;
+    // Identify which Product ID maps to the selected amount
+    final amount = _packages[_selectedPackageIndex].amount.toInt();
+    final productId = 'sajnire_coins_$amount';
 
-    var payUPaymentParams = {
-      PayUPaymentParamKey.key: _merchantKey,
-      PayUPaymentParamKey.amount: _payableAmount.toStringAsFixed(2),
-      PayUPaymentParamKey.productInfo: "Wallet Recharge",
-      PayUPaymentParamKey.firstName: nickname,
-      PayUPaymentParamKey.email: "guest@sajnire.com",
-      PayUPaymentParamKey.phone: "9999999999",
-      PayUPaymentParamKey.transactionId: txnid,
-      PayUPaymentParamKey.environment: _environment,
-      PayUPaymentParamKey.userCredential: "$_merchantKey:$myUid",
-      // Use official PayU SDK URLs which automatically inject the PayU.onSuccess() Javascript to close instantly
-      PayUPaymentParamKey.android_surl: "https://cbjs.payu.in/sdk/success",
-      PayUPaymentParamKey.android_furl: "https://cbjs.payu.in/sdk/failure",
-      PayUPaymentParamKey.ios_surl: "https://cbjs.payu.in/sdk/success",
-      PayUPaymentParamKey.ios_furl: "https://cbjs.payu.in/sdk/failure",
-      PayUPaymentParamKey.additionalParam: {
-        "enforce_paymethod": "upi",
-      },
-    };
-
-    var payUCheckoutProConfig = {
-      PayUCheckoutProConfigKeys.merchantName: "SajniRe",
-      PayUCheckoutProConfigKeys.primaryColor: "#5E35B1", // PhonePe Purple Theme
-      PayUCheckoutProConfigKeys.secondaryColor: "#1E293B",
-      PayUCheckoutProConfigKeys.autoSelectOtp: true,
-      PayUCheckoutProConfigKeys.waitingTime: 30000,
-      PayUCheckoutProConfigKeys.merchantResponseTimeout: 0, // 0 tells the SDK to not wait at all
-      PayUCheckoutProConfigKeys.enforcePaymentList: [
-        {
-          "payment_type": "UPI",
-          "enforce_ibiboCode": "PHONEPE"
-        }
-      ],
-    };
-
-    try {
-      _checkoutPro.openCheckoutScreen(
-        payUPaymentParams: payUPaymentParams,
-        payUCheckoutProConfig: payUCheckoutProConfig,
-      );
-    } catch (e) {
-      _showSnackBar("Failed to open payment gateway: $e", isError: true);
+    final bool available = await InAppPurchase.instance.isAvailable();
+    if (!available) {
+      setState(() => _isLoading = false);
+      _showSnackBar("Store not available.", isError: true);
+      return;
     }
-  }
 
-  void _startPayUPaymentFlow() {
-    final appState = context.read<AppState>();
-    final myUid = appState.uid.isNotEmpty ? appState.uid : "test_uid";
-    final nickname = appState.nickname.isNotEmpty ? appState.nickname : "Guest";
-    final txnid = "TXN${DateTime.now().millisecondsSinceEpoch}";
-
-    _lastSelectedGateway = 'PayU';
-    _lastTxnId = txnid;
-
-    var payUPaymentParams = {
-      PayUPaymentParamKey.key: _merchantKey,
-      PayUPaymentParamKey.amount: _payableAmount.toStringAsFixed(2),
-      PayUPaymentParamKey.productInfo: "Wallet Recharge",
-      PayUPaymentParamKey.firstName: nickname,
-      PayUPaymentParamKey.email: "guest@sajnire.com",
-      PayUPaymentParamKey.phone: "9999999999",
-      PayUPaymentParamKey.transactionId: txnid,
-      PayUPaymentParamKey.environment: _environment,
-      PayUPaymentParamKey.userCredential: "$_merchantKey:$myUid",
-      PayUPaymentParamKey.android_surl: "https://cbjs.payu.in/sdk/success",
-      PayUPaymentParamKey.android_furl: "https://cbjs.payu.in/sdk/failure",
-      PayUPaymentParamKey.ios_surl: "https://cbjs.payu.in/sdk/success",
-      PayUPaymentParamKey.ios_furl: "https://cbjs.payu.in/sdk/failure",
-      PayUPaymentParamKey.additionalParam: {
-        "enforce_paymethod": "upi",
-      },
-    };
-
-    var payUCheckoutProConfig = {
-      PayUCheckoutProConfigKeys.merchantName: "SajniRe",
-      PayUCheckoutProConfigKeys.primaryColor: "#3B82F6",
-      PayUCheckoutProConfigKeys.secondaryColor: "#1E293B",
-      PayUCheckoutProConfigKeys.autoSelectOtp: true,
-      PayUCheckoutProConfigKeys.waitingTime: 30000,
-      PayUCheckoutProConfigKeys.merchantResponseTimeout: 0, // 0 tells SDK to close instantly
-      PayUCheckoutProConfigKeys.enforcePaymentList: [
-        {"payment_type": "UPI"}
-      ],
-    };
-
-    try {
-      _checkoutPro.openCheckoutScreen(
-        payUPaymentParams: payUPaymentParams,
-        payUCheckoutProConfig: payUCheckoutProConfig,
-      );
-    } catch (e) {
-      _showSnackBar("Failed to open payment gateway: $e", isError: true);
+    final ProductDetailsResponse response = await InAppPurchase.instance.queryProductDetails({productId});
+    
+    if (response.notFoundIDs.isNotEmpty || response.productDetails.isEmpty) {
+      setState(() => _isLoading = false);
+      _showSnackBar("Product $productId not configured in Play Console yet.", isError: true);
+      return;
     }
-  }
 
-  void _startGooglePlayPaymentFlow() {
-    _lastSelectedGateway = 'Google Play';
-    _showSnackBar("Google Play payment integration is coming soon.", isError: true);
-  }
-
-  void _showPaymentOptionsBottomSheet() {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) {
-        return Padding(
-          padding: const EdgeInsets.all(20.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Select Payment Method',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF0F172A),
-                ),
-              ),
-              const SizedBox(height: 20),
-              ListTile(
-                leading: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.green.withValues(alpha: 0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.play_arrow_rounded, color: Colors.green, size: 28),
-                ),
-                title: const Text('Google Play', style: TextStyle(fontWeight: FontWeight.w600)),
-                subtitle: const Text('Pay securely via Google', style: TextStyle(fontSize: 12)),
-                tileColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  side: BorderSide(color: Colors.grey.shade200),
-                ),
-                onTap: () {
-                  Navigator.pop(context);
-                  _startGooglePlayPaymentFlow();
-                },
-              ),
-              const SizedBox(height: 12),
-              ListTile(
-                leading: Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: Colors.purple.withValues(alpha: 0.05),
-                    shape: BoxShape.circle,
-                  ),
-                  child: ClipOval(
-                    child: Image.network(
-                      'https://uxwing.com/wp-content/themes/uxwing/download/brands-and-social-media/phonepe-icon.png',
-                      width: 36,
-                      height: 36,
-                      fit: BoxFit.contain,
-                      errorBuilder: (context, error, stackTrace) => const Icon(Icons.payment, color: Colors.purple, size: 28),
-                    ),
-                  ),
-                ),
-                title: const Text('PhonePe', style: TextStyle(fontWeight: FontWeight.w600)),
-                subtitle: const Text('Secure payment via PayU', style: TextStyle(fontSize: 12)),
-                tileColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  side: BorderSide(color: Colors.grey.shade200),
-                ),
-                onTap: () {
-                  Navigator.pop(context);
-                  _startPhonePePaymentFlow();
-                },
-              ),
-              const SizedBox(height: 12),
-              ListTile(
-                leading: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.blue.withValues(alpha: 0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.account_balance_wallet_rounded, color: Colors.blue, size: 28),
-                ),
-                title: const Text('Other UPI Options', style: TextStyle(fontWeight: FontWeight.w600)),
-                subtitle: const Text('GPay, Paytm, etc. (via PayU)', style: TextStyle(fontSize: 12)),
-                tileColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  side: BorderSide(color: Colors.grey.shade200),
-                ),
-                onTap: () {
-                  Navigator.pop(context);
-                  _startPayUPaymentFlow();
-                },
-              ),
-              const SizedBox(height: 20),
-            ],
-          ),
-        );
-      },
-    );
+    final ProductDetails productDetails = response.productDetails.first;
+    final PurchaseParam purchaseParam = PurchaseParam(productDetails: productDetails);
+    
+    InAppPurchase.instance.buyConsumable(purchaseParam: purchaseParam, autoConsume: true);
   }
 
   Widget _buildVerticalDivider() {
@@ -648,7 +456,7 @@ class _WalletRechargeScreenState extends State<WalletRechargeScreen> implements 
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      onPressed: _isLoading ? null : _showPaymentOptionsBottomSheet,
+                      onPressed: _isLoading ? null : _buyProduct,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFFF97316), // Sunset Orange
                         padding: const EdgeInsets.symmetric(vertical: 16),

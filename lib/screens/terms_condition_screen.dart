@@ -100,7 +100,7 @@ class TermsConditionScreen extends StatelessWidget {
 
             _buildSection('11. Contact Us',
               'For any questions about these Terms:\n\n'
-              'Email: analystcodehub@gmail.com\n'
+              'Email: sajnireofficial@gmail.com\n'
               'Phone/WhatsApp: +91 8987108642\n'
               'Address: Fathehpur, Bhagalpur, Bihar',
             ),

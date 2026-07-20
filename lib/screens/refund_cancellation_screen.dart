@@ -36,7 +36,7 @@ class RefundCancellationScreen extends StatelessWidget {
 
             _buildSection('2. Exception — Payment Deducted but Coins Not Credited',
               'If your payment was deducted from your bank account or payment app but coins were NOT credited to your SajniRe wallet, you are eligible for a resolution:\n\n'
-              '• Contact us at analystcodehub@gmail.com within 7 days of the transaction.\n'
+              '• Contact us at sajnireofficial@gmail.com within 7 days of the transaction.\n'
               '• Share your Transaction ID, payment screenshot, and registered mobile number.\n'
               '• We will investigate within 3–5 business days.\n'
               '• If the payment is confirmed on our end, the coins will be credited to your wallet. If not, we will assist you in raising a dispute with your payment provider.',
@@ -69,14 +69,14 @@ class RefundCancellationScreen extends StatelessWidget {
 
             _buildSection('7. Fraudulent Transactions',
               'If you believe an unauthorized transaction was made from your account:\n'
-              '• Immediately contact us at analystcodehub@gmail.com.\n'
+              '• Immediately contact us at sajnireofficial@gmail.com.\n'
               '• We will temporarily freeze your account during the investigation.\n'
               '• Decisions made after investigation are final.',
             ),
 
             _buildSection('8. How to Request Support',
               'To raise a refund request or dispute:\n\n'
-              '• Email: analystcodehub@gmail.com\n'
+              '• Email: sajnireofficial@gmail.com\n'
               '• Phone/WhatsApp: +91 8987108642\n'
               '• Address: Fathehpur, Bhagalpur, Bihar\n'
               '• Please include: Registered mobile number, Transaction ID, Date of transaction, Screenshot of payment confirmation.\n\n'

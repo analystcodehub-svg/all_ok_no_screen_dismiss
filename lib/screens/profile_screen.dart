@@ -246,7 +246,7 @@ class ProfileScreen extends StatelessWidget {
                                 children: [
                                   Icon(Icons.email_outlined, size: 18, color: AppColors.primaryBlue),
                                   SizedBox(width: 8),
-                                  Text('analystcodehub@gmail.com', style: TextStyle(fontSize: 14, color: AppColors.textDark)),
+                                  Text('sajnireofficial@gmail.com', style: TextStyle(fontSize: 14, color: AppColors.textDark)),
                                 ],
                               ),
                             ],
