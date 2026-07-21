@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
-  
+
   debugPrint('=== ALL EXPERTS IN FIRESTORE ===');
   final experts = await FirebaseFirestore.instance.collection('experts').get();
   for (var doc in experts.docs) {
