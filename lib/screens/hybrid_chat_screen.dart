@@ -338,9 +338,9 @@ class _HybridChatScreenState extends State<HybridChatScreen> with WidgetsBinding
               itemBuilder: (context, index) {
                 final msg = _messages[index];
                 final isMe = msg['senderId'] == widget.myUid;
-                final text = msg['text'] as String;
-                final timestamp = msg['timestamp'] as int;
-                final status = msg['status'] as int;
+                final text = (msg['text'] ?? '').toString();
+                final timestamp = (msg['timestamp'] is num) ? (msg['timestamp'] as num).toInt() : DateTime.now().millisecondsSinceEpoch;
+                final status = (msg['status'] is num) ? (msg['status'] as num).toInt() : 0;
                 
                 final timeStr = TimeOfDay.fromDateTime(DateTime.fromMillisecondsSinceEpoch(timestamp)).format(context);
 
