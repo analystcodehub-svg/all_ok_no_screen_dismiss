@@ -106,6 +106,13 @@ class _HybridChatScreenState extends State<HybridChatScreen> with WidgetsBinding
     final text = _textController.text.trim();
     if (text.isEmpty) return;
 
+    if (BlockService.instance.isBlocked(widget.otherUid)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('You have blocked this user. Unblock to message.')),
+      );
+      return;
+    }
+
 
     final appState = context.read<AppState>();
     

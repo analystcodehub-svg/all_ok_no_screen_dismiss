@@ -100,6 +100,18 @@ exports.onCallInitiated = functions.region("asia-south1").firestore
     const isOnline = receiverData.isOnline || false;
     const fcmToken = receiverData.fcmToken || null;
 
+    // ── Step 1.5: Check if caller is blocked by receiver ───────────────────
+    const blockedDoc = await db.collection("blocked_users").doc(receiverId).get();
+    if (blockedDoc.exists) {
+      const blockedUids = blockedDoc.data().blocked_uids || [];
+      if (blockedUids.includes(callerId)) {
+        functions.logger.info(`Caller '${callerId}' is blocked by Receiver '${receiverId}'. Suppressing call notification.`);
+        // Also update call status to 'rejected_blocked' so the caller gets feedback
+        await snap.ref.update({ status: "rejected_blocked" });
+        return null;
+      }
+    }
+
     // ── Step 2: Business Logic Gate ────────────────────────────────────────
     //
     // CONDITION 1 (Female/Expert): If isOnline == false → DO NOT send notification.
@@ -203,6 +215,16 @@ exports.onMessageSent = functions.region("asia-south1").database
     const fcmToken = receiverData.fcmToken || null;
     const isOnline = receiverData.isOnline || false;
     const gender   = receiverData.gender   || (isExpert ? "female" : "male");
+
+    // ── Step 1.5: Check if sender is blocked by receiver ───────────────────
+    const blockedDoc = await db.collection("blocked_users").doc(receiverId).get();
+    if (blockedDoc.exists) {
+      const blockedUids = blockedDoc.data().blocked_uids || [];
+      if (blockedUids.includes(senderId)) {
+        functions.logger.info(`Sender '${senderId}' is blocked by Receiver '${receiverId}'. Suppressing message notification.`);
+        return null;
+      }
+    }
 
     // ── Step 2: Business Logic Gate ────────────────────────────────────────
     // Female/Expert: do NOT notify if offline

@@ -3,6 +3,7 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
+import 'block_service.dart';
 
 class CallService {
   final FirebaseDatabase _database = FirebaseDatabase.instanceFor(
@@ -81,6 +82,13 @@ class CallService {
         if (data['status'] == 'calling') {
           final callRoomId = event.snapshot.key!;
           final callerId = data['callerId'] ?? 'unknown';
+          
+          if (BlockService.instance.isBlocked(callerId)) {
+            debugPrint('Auto-rejecting incoming call from blocked user: $callerId');
+            _database.ref('calls/$callRoomId/status').set('rejected_blocked');
+            return;
+          }
+          
           onCallReceived(callRoomId, callerId);
         }
       }

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
+import 'block_service.dart';
 
 class MatchmakingService {
   final FirebaseDatabase _db;
@@ -164,6 +165,11 @@ class MatchmakingService {
 
           // Locking: Loop through the shuffled list
           for (String expertUid in expertIds) {
+            if (BlockService.instance.isBlocked(expertUid)) {
+              debugPrint('Matchmaking: Skipping blocked expert $expertUid');
+              continue;
+            }
+
             bool isLocked = await lockExpertForCall(expertUid, callerUid);
             
             if (isLocked) {
