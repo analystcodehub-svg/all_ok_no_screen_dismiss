@@ -62,10 +62,33 @@ class BlockService {
 
       // 2. Sync to Firestore
       await FirebaseFirestore.instance.collection('blocked_users').doc(myUid).set({
-        'uids': FieldValue.arrayUnion([otherUid])
+        'uids': FieldValue.arrayUnion([otherUid]),
+        'blocked_uids': FieldValue.arrayUnion([otherUid]) // For cloud function backwards compatibility
       }, SetOptions(merge: true));
     } catch (e) {
       debugPrint('Error blocking user: $e');
+    }
+  }
+
+  /// Unblock a user and update both Firestore and Local Cache.
+  Future<void> unblockUser(String myUid, String otherUid) async {
+    if (!_blockedUids.contains(otherUid)) return;
+
+    _blockedUids.remove(otherUid);
+    _currentMyUid ??= myUid;
+
+    try {
+      // 1. Save to SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList('blocked_uids_$myUid', _blockedUids.toList());
+
+      // 2. Sync to Firestore
+      await FirebaseFirestore.instance.collection('blocked_users').doc(myUid).set({
+        'uids': FieldValue.arrayRemove([otherUid]),
+        'blocked_uids': FieldValue.arrayRemove([otherUid])
+      }, SetOptions(merge: true));
+    } catch (e) {
+      debugPrint('Error unblocking user: $e');
     }
   }
 }

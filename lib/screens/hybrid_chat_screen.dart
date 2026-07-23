@@ -107,8 +107,31 @@ class _HybridChatScreenState extends State<HybridChatScreen> with WidgetsBinding
     if (text.isEmpty) return;
 
     if (BlockService.instance.isBlocked(widget.otherUid)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('You have blocked this user. Unblock to message.')),
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('User Blocked'),
+          content: const Text('You have blocked this user. Unblock to send a message.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.pop(context);
+                await BlockService.instance.unblockUser(widget.myUid, widget.otherUid);
+                if (context.mounted) {
+                  setState(() {});
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('User unblocked successfully.')),
+                  );
+                }
+              },
+              child: const Text('Unblock'),
+            ),
+          ],
+        ),
       );
       return;
     }
@@ -303,35 +326,46 @@ class _HybridChatScreenState extends State<HybridChatScreen> with WidgetsBinding
               } else if (value == 'block') {
                 await BlockService.instance.blockUser(widget.myUid, widget.otherUid);
                 if (context.mounted) {
+                  setState(() {});
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('User blocked. You will no longer receive messages from them.')),
                   );
-                  Navigator.pop(context);
+                }
+              } else if (value == 'unblock') {
+                await BlockService.instance.unblockUser(widget.myUid, widget.otherUid);
+                if (context.mounted) {
+                  setState(() {});
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('User unblocked successfully.')),
+                  );
                 }
               }
             },
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: 'report',
-                child: Row(
-                  children: [
-                    Icon(Icons.flag_outlined, color: Colors.red, size: 20),
-                    SizedBox(width: 8),
-                    Text('Report User', style: TextStyle(color: Colors.red)),
-                  ],
+            itemBuilder: (context) {
+              bool isBlocked = BlockService.instance.isBlocked(widget.otherUid);
+              return [
+                const PopupMenuItem(
+                  value: 'report',
+                  child: Row(
+                    children: [
+                      Icon(Icons.flag_outlined, color: Colors.red, size: 20),
+                      SizedBox(width: 8),
+                      Text('Report User', style: TextStyle(color: Colors.red)),
+                    ],
+                  ),
                 ),
-              ),
-              const PopupMenuItem(
-                value: 'block',
-                child: Row(
-                  children: [
-                    Icon(Icons.block, color: Colors.black54, size: 20),
-                    SizedBox(width: 8),
-                    Text('Block User'),
-                  ],
+                PopupMenuItem(
+                  value: isBlocked ? 'unblock' : 'block',
+                  child: Row(
+                    children: [
+                      Icon(isBlocked ? Icons.lock_open : Icons.block, color: Colors.black54, size: 20),
+                      const SizedBox(width: 8),
+                      Text(isBlocked ? 'Unblock User' : 'Block User'),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ];
+            },
           ),
         ],
       ),

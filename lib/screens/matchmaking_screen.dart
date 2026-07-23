@@ -8,6 +8,7 @@ import '../models/female_expert.dart';
 import '../providers/app_state.dart';
 import '../services/call_service.dart';
 import '../services/matchmaking_service.dart';
+import '../services/block_service.dart';
 import '../widgets/local_avatar_widget.dart';
 import 'active_call_page.dart';
 
@@ -88,6 +89,44 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> with SingleTicker
     if (!widget.isRandomMode && widget.requestedExpert != null) {
       _statusMessage.value = 'Checking availability for ${widget.requestedExpert!.nickname}...';
       matchedExpertUid = widget.requestedExpert!.id;
+      
+      if (BlockService.instance.isBlocked(matchedExpertUid)) {
+        _statusMessage.value = 'You have blocked this expert.';
+        if (!_isDisposed && mounted) {
+          bool unblocked = await showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) => AlertDialog(
+              title: const Text('Expert Blocked'),
+              content: const Text('You have blocked this expert. Do you want to unblock them to proceed with the call?'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFF43F5E)),
+                  onPressed: () async {
+                    await BlockService.instance.unblockUser(callerUid, matchedExpertUid!);
+                    if (context.mounted) {
+                      Navigator.pop(context, true);
+                    }
+                  },
+                  child: const Text('Unblock & Call'),
+                ),
+              ],
+            ),
+          ) ?? false;
+          
+          if (!unblocked) {
+            Navigator.pop(context);
+            return;
+          }
+          _statusMessage.value = 'Checking availability for ${widget.requestedExpert!.nickname}...';
+        } else {
+          return;
+        }
+      }
       
       bool isLocked = await _matchingService.lockExpertForCall(matchedExpertUid, callerUid);
       if (!isLocked) {
