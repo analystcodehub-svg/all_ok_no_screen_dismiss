@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../theme/app_colors.dart';
 import '../providers/app_state.dart';
 import 'kyc_pan_screen.dart';
@@ -201,6 +202,16 @@ class ProfileScreen extends StatelessWidget {
                           );
                         },
                       ),
+                      const SizedBox(height: 12),
+                      _buildSettingsTile(
+                        title: 'Delete Account',
+                        icon: Icons.delete_forever_rounded,
+                        iconColor: Colors.red,
+                        iconBgColor: Colors.red.withValues(alpha: 0.1),
+                        onTap: () {
+                          _showDeleteAccountDialog(context);
+                        },
+                      ),
                       const SizedBox(height: 24),
 
                       // Customer Care Section
@@ -262,6 +273,79 @@ class ProfileScreen extends StatelessWidget {
           );
         },
       ),
+    );
+  }
+
+  void _showDeleteAccountDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        bool isLoading = false;
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: const Text('Delete Account', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+              content: const Text(
+                'Are you sure you want to delete your account? This action cannot be undone and all your data and wallet balance will be permanently lost.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isLoading ? null : () => Navigator.pop(context),
+                  child: const Text('Cancel', style: TextStyle(color: AppColors.textGrey)),
+                ),
+                ElevatedButton(
+                  onPressed: isLoading
+                      ? null
+                      : () async {
+                          setState(() { isLoading = true; });
+                          try {
+                            final user = FirebaseAuth.instance.currentUser;
+                            if (user != null) {
+                              await user.delete();
+                            }
+                            if (context.mounted) {
+                              Navigator.pop(context); // close dialog
+                              // AuthWrapper will automatically redirect to Login
+                            }
+                          } on FirebaseAuthException catch (e) {
+                            if (e.code == 'requires-recent-login') {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('For security reasons, please log out and log back in to verify your identity before deleting your account.')),
+                                );
+                                Navigator.pop(context);
+                              }
+                            } else {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('Error: ${e.message}')),
+                                );
+                                setState(() { isLoading = false; });
+                              }
+                            }
+                          } catch (e) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Error: $e')),
+                              );
+                              setState(() { isLoading = false; });
+                            }
+                          }
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  child: isLoading
+                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      : const Text('Delete', style: TextStyle(color: Colors.white)),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 
