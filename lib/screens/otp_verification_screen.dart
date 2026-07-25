@@ -6,6 +6,7 @@ import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
 import 'gender_selection_screen.dart';
 import 'main_navigation.dart';
+import 'male_dashboard_screen.dart';
 
 class OtpVerificationScreen extends StatefulWidget {
   final String verificationId;
@@ -75,11 +76,19 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
             appState.setNickname((data['nickname'] ?? '').toString());
             
             // Navigate to Dashboard
-            Navigator.pushAndRemoveUntil(
-              context,
-              MaterialPageRoute(builder: (context) => const MainNavigation()),
-              (route) => false,
-            );
+            if (gender == 'male') {
+              Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(builder: (context) => const MaleCallerDashboard()),
+                (route) => false,
+              );
+            } else {
+              Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(builder: (context) => const MainNavigation()),
+                (route) => false,
+              );
+            }
           } else {
             // New user, navigate to Gender Selection to build profile
             Navigator.pushReplacement(

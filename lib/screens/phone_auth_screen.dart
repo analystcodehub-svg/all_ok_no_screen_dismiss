@@ -10,6 +10,7 @@ import '../theme/app_theme.dart';
 import 'main_navigation.dart';
 import 'gender_selection_screen.dart';
 import 'male_dashboard_screen.dart';
+import 'otp_verification_screen.dart';
 
 class PhoneAuthScreen extends StatefulWidget {
   const PhoneAuthScreen({super.key});
@@ -19,8 +20,7 @@ class PhoneAuthScreen extends StatefulWidget {
 }
 
 class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
-  final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _referralController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   final PageController _bannerController = PageController();
@@ -74,8 +74,7 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
 
   @override
   void dispose() {
-    _emailController.dispose();
-    _passwordController.dispose();
+    _phoneController.dispose();
     _referralController.dispose();
     _bannerController.dispose();
     _bannerTimer?.cancel();
@@ -123,85 +122,72 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
     }
   }
 
-  void _onGetOtpPressed() async {
+    void _onGetOtpPressed() async {
     if (_isLoading) return;
     if (_formKey.currentState!.validate()) {
-      final email = _emailController.text.trim();
-      final password = _passwordController.text.trim();
-      final phone = email.split('@')[0]; // Using email prefix as the 'phone number' ID
+      final phone = _phoneController.text.trim();
+      final phoneNumber = '+91$phone';
       
       setState(() {
         _isLoading = true;
       });
 
-      final appState = context.read<AppState>();
-      appState.setMobileNumber(phone);
-
       try {
-        try {
-          await FirebaseAuth.instance.signInWithEmailAndPassword(
-            email: email,
-            password: password,
-          );
-        } on FirebaseAuthException catch (e) {
-          if (e.code == 'user-not-found' || e.code == 'invalid-credential' || e.code == 'wrong-password') {
-             try {
-                await FirebaseAuth.instance.createUserWithEmailAndPassword(
-                  email: email,
-                  password: password,
+        await FirebaseAuth.instance.verifyPhoneNumber(
+          phoneNumber: phoneNumber,
+          verificationCompleted: (PhoneAuthCredential credential) async {
+            // Auto-retrieval or Instant verification (usually on Android)
+            try {
+              await FirebaseAuth.instance.signInWithCredential(credential);
+              // Handle routing in AuthWrapper or via another listener, 
+              // but we'll let auth state changes handle it generally, 
+              // or navigate manually if needed. For now, we'll let AuthWrapper catch the state change.
+              if (mounted) {
+                setState(() => _isLoading = false);
+              }
+            } catch (e) {
+              if (mounted) {
+                setState(() => _isLoading = false);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Auto-verification failed: $e')),
                 );
-             } catch (e2) {
-                 rethrow;
-             }
-          } else {
-             rethrow;
-          }
-        }
-
-        final user = FirebaseAuth.instance.currentUser;
-        if (user != null) {
-          await user.updateDisplayName(phone);
-        }
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('saved_mobile', phone);
-        await prefs.setString('saved_email', email);
-        await prefs.setString('saved_password', password);
-        
-        final userDoc = await FirebaseFirestore.instance.collection('users').doc(user!.uid).get();
-        if (userDoc.exists) {
-          final data = userDoc.data() ?? {};
-          final gender = (data['gender'] ?? 'male').toString();
-          appState.setSelectedGender(gender == 'male' ? 'Male' : 'Female');
-          appState.setNickname((data['nickname'] ?? '').toString());
-          
-          if (mounted) {
-            setState(() => _isLoading = false);
-            Navigator.pushAndRemoveUntil(
-              context,
-              MaterialPageRoute(
-                builder: (context) => gender == 'male' 
-                    ? const MaleCallerDashboard() 
-                    : const MainNavigation(),
-              ),
-              (route) => false,
-            );
-          }
-        } else {
-          if (mounted) {
-            setState(() => _isLoading = false);
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => const GenderSelectionScreen()),
-            );
-          }
-        }
+              }
+            }
+          },
+          verificationFailed: (FirebaseAuthException e) {
+            if (mounted) {
+              setState(() => _isLoading = false);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Verification failed: ${e.message}')),
+              );
+            }
+          },
+          codeSent: (String verificationId, int? resendToken) {
+            if (mounted) {
+              setState(() => _isLoading = false);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => OtpVerificationScreen(
+                    verificationId: verificationId,
+                    mobileNumber: phone,
+                  ),
+                ),
+              );
+            }
+          },
+          codeAutoRetrievalTimeout: (String verificationId) {
+            // Timeout handling if necessary
+          },
+          timeout: const Duration(seconds: 60),
+        );
       } catch (e) {
         if (mounted) {
           setState(() {
             _isLoading = false;
           });
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to login: $e')),
+            SnackBar(content: Text('Error: $e')),
           );
         }
       }
@@ -340,7 +326,6 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
                           children: [
                             const SizedBox(height: 40),
                             // Phone Number Field
-                            /* Phone field commented out for now
                             Container(
                               decoration: BoxDecoration(
                                 color: AppTheme.inputBg,
@@ -425,90 +410,6 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
                                     ),
                                   ),
                                 ],
-                              ),
-                            ),
-                            */
-                            // Email Field
-                            Container(
-                              decoration: BoxDecoration(
-                                color: AppTheme.inputBg,
-                                borderRadius: BorderRadius.circular(15),
-                                border: Border.all(
-                                  color: AppTheme.borderGrey,
-                                  width: 1.0,
-                                ),
-                              ),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                              ),
-                              child: TextFormField(
-                                controller: _emailController,
-                                keyboardType: TextInputType.emailAddress,
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppTheme.textBlack,
-                                ),
-                                decoration: const InputDecoration(
-                                  hintText: 'Your Email',
-                                  hintStyle: TextStyle(
-                                    color: AppTheme.textGrey,
-                                    fontWeight: FontWeight.normal,
-                                  ),
-                                  filled: false,
-                                  border: InputBorder.none,
-                                  enabledBorder: InputBorder.none,
-                                  focusedBorder: InputBorder.none,
-                                  contentPadding: EdgeInsets.symmetric(vertical: 16),
-                                ),
-                                validator: (value) {
-                                  if (value == null || value.isEmpty || !value.contains('@')) {
-                                    return 'Please enter a valid email';
-                                  }
-                                  return null;
-                                },
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            // Password Field
-                            Container(
-                              decoration: BoxDecoration(
-                                color: AppTheme.inputBg,
-                                borderRadius: BorderRadius.circular(15),
-                                border: Border.all(
-                                  color: AppTheme.borderGrey,
-                                  width: 1.0,
-                                ),
-                              ),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                              ),
-                              child: TextFormField(
-                                controller: _passwordController,
-                                obscureText: true,
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppTheme.textBlack,
-                                ),
-                                decoration: const InputDecoration(
-                                  hintText: 'Password',
-                                  hintStyle: TextStyle(
-                                    color: AppTheme.textGrey,
-                                    fontWeight: FontWeight.normal,
-                                  ),
-                                  filled: false,
-                                  border: InputBorder.none,
-                                  enabledBorder: InputBorder.none,
-                                  focusedBorder: InputBorder.none,
-                                  contentPadding: EdgeInsets.symmetric(vertical: 16),
-                                ),
-                                validator: (value) {
-                                  if (value == null || value.length < 6) {
-                                    return 'Password must be at least 6 characters';
-                                  }
-                                  return null;
-                                },
                               ),
                             ),
                             const SizedBox(height: 16),
@@ -625,7 +526,7 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
                                          strokeWidth: 2,
                                        ),
                                      )
-                                   : const Text('Login'),
+                                   : const Text('Get OTP'),
                              ),
                             const SizedBox(height: 20),
                             // Footer Agreement Text
