@@ -23,6 +23,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
   bool _isLoading = true;
   Widget _homeWidget = const PhoneAuthScreen();
   StreamSubscription<User?>? _authSubscription;
+  String? _errorMessage;
 
   @override
   void initState() {
@@ -59,10 +60,22 @@ class _AuthWrapperState extends State<AuthWrapper> {
         user = FirebaseAuth.instance.currentUser;
       } catch (e) {
         debugPrint("Auto-login failed: $e");
+        if (mounted) {
+          setState(() {
+            _errorMessage = "Connection error. Please try again.";
+            _isLoading = false;
+          });
+        }
+        return;
       }
     }
     
-    final String? rawPhone = user?.phoneNumber ?? user?.displayName ?? savedPhone;
+    // Clear error message if we proceed
+    if (mounted && _errorMessage != null) {
+      setState(() => _errorMessage = null);
+    }
+    
+    final String? rawPhone = user?.phoneNumber ?? user?.displayName ?? user?.email?.split('@')[0] ?? savedPhone;
     
     if (user != null && rawPhone != null && rawPhone.isNotEmpty) {
       // User is logged in, check if they have a profile in Firestore
@@ -112,7 +125,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
         debugPrint("Error checking user profile: $e");
         if (mounted) {
           setState(() {
-            _homeWidget = const PhoneAuthScreen();
+            _errorMessage = "Network error. Failed to load profile.";
             _isLoading = false;
           });
         }
@@ -135,6 +148,53 @@ class _AuthWrapperState extends State<AuthWrapper> {
         body: Center(
           child: CircularProgressIndicator(
             color: AppTheme.primaryBlue,
+          ),
+        ),
+      );
+    }
+
+    if (_errorMessage != null) {
+      return Scaffold(
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.wifi_off_rounded, size: 64, color: Colors.grey),
+                const SizedBox(height: 16),
+                Text(
+                  _errorMessage!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 16, color: Colors.black87),
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton(
+                  onPressed: () {
+                    setState(() {
+                      _isLoading = true;
+                      _errorMessage = null;
+                    });
+                    _checkAuthState(FirebaseAuth.instance.currentUser);
+                  },
+                  child: const Text('Retry'),
+                ),
+                TextButton(
+                  onPressed: () async {
+                    final prefs = await SharedPreferences.getInstance();
+                    await prefs.clear();
+                    await FirebaseAuth.instance.signOut();
+                    if (mounted) {
+                      setState(() {
+                        _errorMessage = null;
+                        _homeWidget = const PhoneAuthScreen();
+                      });
+                    }
+                  },
+                  child: const Text('Logout', style: TextStyle(color: Colors.grey)),
+                )
+              ],
+            ),
           ),
         ),
       );

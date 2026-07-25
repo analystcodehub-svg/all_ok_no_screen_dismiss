@@ -35,8 +35,6 @@ void main() async {
     statusBarIconBrightness: Brightness.dark,
   ));
 
-  AppState.syncPendingChatDeductions();
-
   // ── 1. Initialize Firebase ──────────────────────────────────────────────
   bool firebaseInitialized = false;
   try {
@@ -51,6 +49,7 @@ void main() async {
 
   // ── 2. Initialize Notification Service (FCM + CallKit) ─────────────────
   if (firebaseInitialized) {
+    AppState.syncPendingChatDeductions();
     await NotificationService.instance.initialize(navKey: navigatorKey);
     // Initialize Foreground Task Service
     await ForegroundTaskService().initializeService();
