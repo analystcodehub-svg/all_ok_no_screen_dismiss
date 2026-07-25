@@ -94,6 +94,6 @@ Execution failed for task ':app:mergeReleaseArtProfile'.
 > Run with --scan to generate a Build Scan (Powered by Develocity).
 > Get more help at https://help.gradle.org.
 
-BUILD FAILED in 8s
-Running Gradle task 'bundleRelease'...                              8.5s
+BUILD FAILED in 6s
+Running Gradle task 'bundleRelease'...                              6.9s
 Gradle task bundleRelease failed with exit code 1
