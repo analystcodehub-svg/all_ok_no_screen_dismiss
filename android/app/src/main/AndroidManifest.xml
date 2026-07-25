@@ -24,6 +24,9 @@
     <!-- Keeps CPU alive to process incoming FCM in background -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
+    <!-- Remove Camera Foreground Service since app only has audio calling -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" tools:node="remove" />
+
     <!-- Allow showing on lock screen -->
     <application
         tools:replace="android:label"
