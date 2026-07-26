@@ -11,7 +11,7 @@ import 'main_navigation.dart';
 import 'gender_selection_screen.dart';
 import 'male_dashboard_screen.dart';
 import 'otp_verification_screen.dart';
-
+import 'package:smart_auth/smart_auth.dart';
 class PhoneAuthScreen extends StatefulWidget {
   const PhoneAuthScreen({super.key});
 
@@ -53,7 +53,30 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
   void initState() {
     super.initState();
     _startBannerAutoPlay();
-    // Native phone hint removed for anonymous bypass
+    _requestPhoneHint();
+  }
+
+  Future<void> _requestPhoneHint() async {
+    try {
+      final res = await SmartAuth.instance.requestPhoneNumberHint();
+      if (res.hasData && res.data != null) {
+        String phone = res.data!.replaceAll(RegExp(r'[^\d+]'), '');
+        if (phone.startsWith('+91')) {
+          phone = phone.substring(3);
+        } else if (phone.startsWith('91') && phone.length == 12) {
+          phone = phone.substring(2);
+        } else if (phone.startsWith('0') && phone.length == 11) {
+          phone = phone.substring(1);
+        }
+        if (phone.length == 10 && mounted) {
+          setState(() {
+            _phoneController.text = phone;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Phone hint error: \$e');
+    }
   }
 
   void _startBannerAutoPlay() {
