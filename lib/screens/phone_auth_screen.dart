@@ -161,6 +161,9 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
           verificationCompleted: (PhoneAuthCredential credential) async {
             // Auto-retrieval or Instant verification (usually on Android)
             try {
+              if (credential.smsCode != null && mounted) {
+                context.read<AppState>().setAutoRetrievedSmsCode(credential.smsCode);
+              }
               await FirebaseAuth.instance.signInWithCredential(credential);
               // Handle routing in AuthWrapper or via another listener, 
               // but we'll let auth state changes handle it generally, 

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -7,6 +8,7 @@ import '../theme/app_theme.dart';
 import 'gender_selection_screen.dart';
 import 'main_navigation.dart';
 import 'male_dashboard_screen.dart';
+import 'dart:async';
 
 class OtpVerificationScreen extends StatefulWidget {
   final String verificationId;
@@ -25,9 +27,44 @@ class OtpVerificationScreen extends StatefulWidget {
 class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
   final TextEditingController _otpController = TextEditingController();
   bool _isLoading = false;
+  late StreamSubscription<User?> _authSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    // Listen for automatic background login (Android Auto-retrieval)
+    _authSubscription = FirebaseAuth.instance.authStateChanges().listen((User? user) async {
+      if (user != null && mounted) {
+        // User was automatically logged in by Firebase in the background
+        
+        // 1. Visibly fill the OTP code if it was caught by PhoneAuthScreen
+        final autoCode = context.read<AppState>().autoRetrievedSmsCode;
+        if (autoCode != null && autoCode.isNotEmpty) {
+          _otpController.text = autoCode;
+          context.read<AppState>().setAutoRetrievedSmsCode(null);
+        }
+
+        // 2. Wait for AuthWrapper (root) to finish loading user from Firestore
+        // We replicate the wait here so we don't pop while it's still loading
+        try {
+          await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+        } catch (_) {}
+
+        // 3. Add a small delay so the user can actually see the filled OTP magically!
+        await Future.delayed(const Duration(milliseconds: 1500));
+
+        if (mounted) {
+          // 4. Pop to root. Because AuthWrapper has already swapped PhoneAuthScreen 
+          // with GenderSelectionScreen, this reveals the new screen seamlessly!
+          Navigator.of(context).popUntil((route) => route.isFirst);
+        }
+      }
+    });
+  }
 
   @override
   void dispose() {
+    _authSubscription.cancel();
     _otpController.dispose();
     super.dispose();
   }
@@ -100,6 +137,12 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
       }
     } on FirebaseAuthException catch (e) {
       if (mounted) {
+        // If the session expired BUT the user is actually logged in (due to auto-retrieval)
+        if (e.code == 'session-expired' && FirebaseAuth.instance.currentUser != null) {
+          // Do nothing, let the auth state listener pop the screen automatically
+          return;
+        }
+
         String message = 'Invalid OTP. Please try again.';
         if (e.code == 'invalid-verification-code') {
           message = 'The OTP you entered is incorrect.';

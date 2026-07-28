@@ -12,6 +12,10 @@ class AppState extends ChangeNotifier {
   String _selectedGender = ''; // 'Male' or 'Female' or ''
   String get selectedGender => _selectedGender;
 
+  // Auto-retrieved SMS code (for visible filling)
+  String? _autoRetrievedSmsCode;
+  String? get autoRetrievedSmsCode => _autoRetrievedSmsCode;
+
   // Female Onboarding flow state
   String _nickname = '';
   String get nickname => _nickname;
@@ -62,6 +66,11 @@ class AppState extends ChangeNotifier {
 
   void setSelectedGender(String gender) {
     _selectedGender = gender;
+    notifyListeners();
+  }
+
+  void setAutoRetrievedSmsCode(String? code) {
+    _autoRetrievedSmsCode = code;
     notifyListeners();
   }
 
@@ -221,6 +230,7 @@ class AppState extends ChangeNotifier {
     _coinBalance = 0;
     _hasUsedFreeCall = false;
     _freeMessagesUsed = 0;
+    _autoRetrievedSmsCode = null;
     notifyListeners();
   }
 }
