@@ -14,7 +14,7 @@ for i in $(seq 1 $MAX_TRIES); do
   fi
   if grep -q "Built build/app/outputs/bundle" build_log.txt; then
     echo "SUCCESS"
-    cp build/app/outputs/bundle/release/app-release.aab /home/oem/Desktop/SajniRe-release-v13.aab
+    cp build/app/outputs/bundle/release/app-release.aab /home/oem/Desktop/SajniRe-release-v15.aab
     exit 0
   fi
   echo "Failed for another reason."

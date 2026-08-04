@@ -1,0 +1,17 @@
+Running Gradle task 'bundleRelease'...                          
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+java.lang.NoClassDefFoundError: com/android/build/gradle/BasePlugin
+> com/android/build/gradle/BasePlugin
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to generate a Build Scan (Powered by Develocity).
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 1s
+Running Gradle task 'bundleRelease'...                           1,875ms
+Gradle task bundleRelease failed with exit code 1

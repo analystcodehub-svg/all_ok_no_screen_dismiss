@@ -51,10 +51,7 @@ class _FemaleOnboardingParentState extends State<FemaleOnboardingParent> {
 
     return Scaffold(
       appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, size: 20),
-          onPressed: _prevPage,
-        ),
+        automaticallyImplyLeading: false,
         title: Text(
           'Step ${_currentPage + 1} of $_totalPages',
           style: const TextStyle(
