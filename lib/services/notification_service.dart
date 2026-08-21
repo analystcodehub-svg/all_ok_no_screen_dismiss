@@ -5,6 +5,7 @@
 // ─────────────────────────────────────────────────────────────────────
 
 import 'dart:convert';
+import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
@@ -117,7 +118,7 @@ class NotificationService {
 
     // 2.5 Request System Alert Window (Display over other apps) and Notification permission via permission_handler
     try {
-      if (Theme.of(navigatorKey.currentContext!).platform == TargetPlatform.android) {
+      if (Platform.isAndroid) {
          // This is critical for showing full screen incoming call and ringing like WhatsApp
          final status = await Permission.systemAlertWindow.status;
          if (!status.isGranted) {
