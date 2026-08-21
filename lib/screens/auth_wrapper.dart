@@ -63,7 +63,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
 
         if (mounted) {
           if (userDoc.exists) {
-            // Profile exists, load data into AppState
+            // Profile exists in users collection (Male Caller)
             final data = userDoc.data()!;
             final gender = data['gender'] ?? 'male';
 
@@ -84,19 +84,44 @@ class _AuthWrapperState extends State<AuthWrapper> {
               _isLoading = false;
             });
           } else {
-            // Logged in but no profile (maybe they closed the app during onboarding)
-            final appState = context.read<AppState>();
-            if (mobileNumber.isNotEmpty) {
-              appState.setMobileNumber(mobileNumber);
+            // Check if user exists in experts collection (Female Expert)
+            final expertDoc = await FirebaseFirestore.instance
+                .collection('experts')
+                .doc(user.uid)
+                .get();
+
+            if (expertDoc.exists) {
+              final data = expertDoc.data()!;
+              
+              final appState = context.read<AppState>();
+              if (mobileNumber.isNotEmpty) {
+                appState.setMobileNumber(mobileNumber);
+              }
+              appState.setSelectedGender('Female');
+              appState.setNickname((data['nickname'] ?? '').toString());
+              appState.setAudioVerified(true);
+              
+              BlockService.instance.syncBlockedUsers(user.uid);
+              
+              setState(() {
+                _homeWidget = const MainNavigation();
+                _isLoading = false;
+              });
+            } else {
+              // Logged in but no profile (maybe they closed the app during onboarding)
+              final appState = context.read<AppState>();
+              if (mobileNumber.isNotEmpty) {
+                appState.setMobileNumber(mobileNumber);
+              }
+              
+              // Sync blocked users even during onboarding (just in case)
+              BlockService.instance.syncBlockedUsers(user.uid);
+              
+              setState(() {
+                _homeWidget = const GenderSelectionScreen();
+                _isLoading = false;
+              });
             }
-            
-            // Sync blocked users even during onboarding (just in case)
-            BlockService.instance.syncBlockedUsers(user.uid);
-            
-            setState(() {
-              _homeWidget = const GenderSelectionScreen();
-              _isLoading = false;
-            });
           }
         }
       } catch (e) {

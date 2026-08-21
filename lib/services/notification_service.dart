@@ -14,7 +14,7 @@ import 'package:flutter_callkit_incoming/entities/android_params.dart';
 import 'package:flutter_callkit_incoming/entities/ios_params.dart';
 import 'package:flutter_callkit_incoming/entities/call_event.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-
+import 'package:permission_handler/permission_handler.dart';
 // ─── TOP-LEVEL BACKGROUND HANDLER ─────────────────────────────────────────
 //
 // MUST be a top-level function (outside any class).
@@ -57,7 +57,7 @@ Future<void> _showCallkitIncoming(Map<String, dynamic> data) async {
       isCustomNotification: true,
       isShowLogo: false,
       isShowCallID: false,
-      ringtonePath: 'system_ringtone_default', // uses system ringtone
+      ringtonePath: '', // empty string forces default system ringtone
       backgroundColor: '#1976D2',
       actionColor: '#4CAF50',
       textColor: '#ffffff',
@@ -114,6 +114,20 @@ class NotificationService {
       sound: true,
       criticalAlert: true,
     );
+
+    // 2.5 Request System Alert Window (Display over other apps) and Notification permission via permission_handler
+    try {
+      if (Theme.of(navigatorKey.currentContext!).platform == TargetPlatform.android) {
+         // This is critical for showing full screen incoming call and ringing like WhatsApp
+         final status = await Permission.systemAlertWindow.status;
+         if (!status.isGranted) {
+           await Permission.systemAlertWindow.request();
+         }
+         await Permission.notification.request();
+      }
+    } catch (e) {
+      debugPrint('[Permission] Error requesting system alert window: $e');
+    }
 
     // 3. iOS: don't show system banner for FCM — we use CallKit instead
     await _messaging.setForegroundNotificationPresentationOptions(
