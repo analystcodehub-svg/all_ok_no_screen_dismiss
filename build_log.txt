@@ -1,11 +1,92 @@
 Running Gradle task 'bundleRelease'...                          
+WARNING: Your app uses the following plugins that apply Kotlin Gradle Plugin (KGP): auto_start_flutter, firebase_database, firebase_storage, flutter_callkit_incoming, flutter_webrtc, payu_checkoutpro_flutter, smart_auth
+Future versions of Flutter will fail to build if your app uses plugins that apply KGP.
+
+Please check the changelogs of these plugins and upgrade to a version that supports Built-in Kotlin.
+If no such version exists, report the issue to the plugin. If necessary, here is a guide on filing 
+an issue against a plugin: https://docs.flutter.dev/release/breaking-changes/migrate-to-built-in-kotlin/for-app-developers#report-incompatible-kotlin-gradle-plugin-usage-to-plugin-authors
+
+If you are a plugin author, please migrate your plugin to Built-in Kotlin using this guide: https://docs.flutter.dev/release/breaking-changes/migrate-to-built-in-kotlin/for-plugin-authors
 
 FAILURE: Build failed with an exception.
 
 * What went wrong:
-Could not resolve all artifacts for configuration 'classpath'.
-> Failed to transform gradle-1.0.0.jar (project :gradle) to match attributes {artifactType=jar, org.gradle.category=library, org.gradle.dependency.bundling=external, org.gradle.internal.instrumented=instrumented-only, org.gradle.jvm.environment=standard-jvm, org.gradle.jvm.version=11, org.gradle.libraryelements=jar, org.gradle.usage=java-runtime, org.jetbrains.kotlin.platform.type=jvm}.
-   > The immutable workspace '/home/oem/.gradle/caches/9.1.0/transforms/493234490dfd7d02cd90b43082e13f41' exists, but it does not contain the metadata file. This is unexpected might have been caused by an external process or disk corruption. You can try to delete the immutable workspace directory and re-run the build.
+Execution failed for task ':app:mergeReleaseArtProfile'.
+> A build operation failed.
+      The contents of the immutable workspace '/home/oem/.gradle/caches/9.1.0/transforms/7f1d9fd7a7acf9bd354073351fae0c34' have been modified. These workspace directories are not supposed to be modified once they are created. The modification might have been caused by an external process, or could be the result of disk corruption.
+  outputDirectory:
+   - transformed (Directory, c3e42345bc16b5193959552b066c4c4e)
+     - payu-checkout-pro-base-1.19.5 (Directory, 716c9b7a546bc3aef0cd512347209266)
+       - AndroidManifest.xml (RegularFile, 2bc3edb4ff404ee66e90cba3e4524284)
+       - jars (Directory, cf8eb34790320bd091361b97de6b2f43)
+         - classes.jar (RegularFile, 1b0bef8636a954e52b151c630d507fef)
+       - META-INF (Directory, 2e65faf642122323c130368013ae30ae)
+         - com (Directory, 85935fbb5a26a797f5f5d2a785236f0b)
+           - android (Directory, 9e72ccabdea32a13db283371485512de)
+             - build (Directory, c86ccc95440d38a0f17f805dfd80761c)
+               - gradle (Directory, 492c458c5f81eb73ed0ce3e3f848ff55)
+                 - aar-metadata.properties (RegularFile, 77c8657f94f71f3ce1c8b5d9ca9592ae)
+       - out.map (RegularFile, 0b9588ad5b481d3c990320288c869bf1)
+       - proguard.txt (RegularFile, 3f5da536cf679cf0cf562d6157c9cf6a)
+       - R.txt (RegularFile, efbe1f89f693bda245fc87e8548c2c56)
+       - res (Directory, f56c9def088ef189b9df453245551016)
+         - drawable-anydpi-v24 (Directory, 0e66c5617bf60b0381652ac7b074a86e)
+           - payu_merchant_logo.xml (RegularFile, 8b7286783a1e995019d31ed8fc82c180)
+         - drawable-hdpi-v4 (Directory, bc0297d08642aadb3199a4796575e6bd)
+           - payu_merchant_logo.png (RegularFile, f6b66ab25daec9966fa7a36028068ece)
+         - drawable-ldpi-v4 (Directory, cd96980885a57d9e6c5d1a9b4d0355d9)
+           - payu_merchant_logo.png (RegularFile, 822613efe429ee77da86d59970d95754)
+         - drawable-mdpi-v4 (Directory, eaad77cb564f953a8f6e0116106c4824)
+           - payu_merchant_logo.png (RegularFile, 59cca09c6f40fee7f083a13282933fea)
+         - drawable-xhdpi-v4 (Directory, 2ffef1ef26de474876d8e44534ab8bde)
+           - payu_merchant_logo.png (RegularFile, 1a0794bab75d4a3579f16f6fc629145f)
+         - drawable-xxhdpi-v4 (Directory, f6034b2ccec23ffb7b1050c54147f005)
+           - payu_merchant_logo.png (RegularFile, a845ed6a27a57b658251b22cf39c6ec0)
+         - drawable-xxxhdpi-v4 (Directory, 2707139b10d16da0f2d4d2fea3df91d4)
+           - payu_merchant_logo.png (RegularFile, daffad076a753a1d871bc5e9c23ea792)
+         - values (Directory, cc71384043824e43bf07015926b59833)
+           - values.xml (RegularFile, bf34fc9765dfb70c08a931b214e61654)
+
+  resultsFile:
+   - results.bin (RegularFile, 035de7ace807450bf7a91ea070be05c6)
+
+   > The contents of the immutable workspace '/home/oem/.gradle/caches/9.1.0/transforms/7f1d9fd7a7acf9bd354073351fae0c34' have been modified. These workspace directories are not supposed to be modified once they are created. The modification might have been caused by an external process, or could be the result of disk corruption.
+     outputDirectory:
+      - transformed (Directory, c3e42345bc16b5193959552b066c4c4e)
+        - payu-checkout-pro-base-1.19.5 (Directory, 716c9b7a546bc3aef0cd512347209266)
+          - AndroidManifest.xml (RegularFile, 2bc3edb4ff404ee66e90cba3e4524284)
+          - jars (Directory, cf8eb34790320bd091361b97de6b2f43)
+            - classes.jar (RegularFile, 1b0bef8636a954e52b151c630d507fef)
+          - META-INF (Directory, 2e65faf642122323c130368013ae30ae)
+            - com (Directory, 85935fbb5a26a797f5f5d2a785236f0b)
+              - android (Directory, 9e72ccabdea32a13db283371485512de)
+                - build (Directory, c86ccc95440d38a0f17f805dfd80761c)
+                  - gradle (Directory, 492c458c5f81eb73ed0ce3e3f848ff55)
+                    - aar-metadata.properties (RegularFile, 77c8657f94f71f3ce1c8b5d9ca9592ae)
+          - out.map (RegularFile, 0b9588ad5b481d3c990320288c869bf1)
+          - proguard.txt (RegularFile, 3f5da536cf679cf0cf562d6157c9cf6a)
+          - R.txt (RegularFile, efbe1f89f693bda245fc87e8548c2c56)
+          - res (Directory, f56c9def088ef189b9df453245551016)
+            - drawable-anydpi-v24 (Directory, 0e66c5617bf60b0381652ac7b074a86e)
+              - payu_merchant_logo.xml (RegularFile, 8b7286783a1e995019d31ed8fc82c180)
+            - drawable-hdpi-v4 (Directory, bc0297d08642aadb3199a4796575e6bd)
+              - payu_merchant_logo.png (RegularFile, f6b66ab25daec9966fa7a36028068ece)
+            - drawable-ldpi-v4 (Directory, cd96980885a57d9e6c5d1a9b4d0355d9)
+              - payu_merchant_logo.png (RegularFile, 822613efe429ee77da86d59970d95754)
+            - drawable-mdpi-v4 (Directory, eaad77cb564f953a8f6e0116106c4824)
+              - payu_merchant_logo.png (RegularFile, 59cca09c6f40fee7f083a13282933fea)
+            - drawable-xhdpi-v4 (Directory, 2ffef1ef26de474876d8e44534ab8bde)
+              - payu_merchant_logo.png (RegularFile, 1a0794bab75d4a3579f16f6fc629145f)
+            - drawable-xxhdpi-v4 (Directory, f6034b2ccec23ffb7b1050c54147f005)
+              - payu_merchant_logo.png (RegularFile, a845ed6a27a57b658251b22cf39c6ec0)
+            - drawable-xxxhdpi-v4 (Directory, 2707139b10d16da0f2d4d2fea3df91d4)
+              - payu_merchant_logo.png (RegularFile, daffad076a753a1d871bc5e9c23ea792)
+            - values (Directory, cc71384043824e43bf07015926b59833)
+              - values.xml (RegularFile, bf34fc9765dfb70c08a931b214e61654)
+
+     resultsFile:
+      - results.bin (RegularFile, 035de7ace807450bf7a91ea070be05c6)
+
 
 * Try:
 > Run with --stacktrace option to get the stack trace.
@@ -13,6 +94,6 @@ Could not resolve all artifacts for configuration 'classpath'.
 > Run with --scan to generate a Build Scan (Powered by Develocity).
 > Get more help at https://help.gradle.org.
 
-BUILD FAILED in 2s
-Running Gradle task 'bundleRelease'...                           2,570ms
+BUILD FAILED in 7s
+Running Gradle task 'bundleRelease'...                              8.2s
 Gradle task bundleRelease failed with exit code 1

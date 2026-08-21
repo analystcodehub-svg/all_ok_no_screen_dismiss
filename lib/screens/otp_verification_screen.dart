@@ -95,43 +95,60 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
 
       if (userCredential.user != null) {
         // Successful login, check if user exists in Firestore
+        final uid = userCredential.user!.uid;
+        
         final userDoc = await FirebaseFirestore.instance
             .collection('users')
-            .doc(userCredential.user!.uid)
+            .doc(uid)
             .get();
 
         if (mounted) {
           if (userDoc.exists) {
-            // Profile exists, load gender and route appropriately
+            // Profile exists in users collection (Male Caller)
             final data = userDoc.data() ?? {};
-            final gender = (data['gender'] ?? 'male').toString();
 
             // Load app state
             final appState = context.read<AppState>();
             appState.setMobileNumber(widget.mobileNumber);
-            appState.setSelectedGender(gender == 'male' ? 'Male' : 'Female');
+            appState.setSelectedGender('Male');
             appState.setNickname((data['nickname'] ?? '').toString());
             
             // Navigate to Dashboard
-            if (gender == 'male') {
-              Navigator.pushAndRemoveUntil(
-                context,
-                MaterialPageRoute(builder: (context) => const MaleCallerDashboard()),
-                (route) => false,
-              );
-            } else {
+            Navigator.pushAndRemoveUntil(
+              context,
+              MaterialPageRoute(builder: (context) => const MaleCallerDashboard()),
+              (route) => false,
+            );
+          } else {
+            // Check if user exists in experts collection (Female Expert)
+            final expertDoc = await FirebaseFirestore.instance
+                .collection('experts')
+                .doc(uid)
+                .get();
+
+            if (expertDoc.exists) {
+              final data = expertDoc.data() ?? {};
+
+              // Load app state
+              final appState = context.read<AppState>();
+              appState.setMobileNumber(widget.mobileNumber);
+              appState.setSelectedGender('Female');
+              appState.setNickname((data['nickname'] ?? '').toString());
+              appState.setAudioVerified(true);
+              
+              // Navigate to Female Expert Dashboard
               Navigator.pushAndRemoveUntil(
                 context,
                 MaterialPageRoute(builder: (context) => const MainNavigation()),
                 (route) => false,
               );
+            } else {
+              // New user, navigate to Gender Selection to build profile
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (context) => const GenderSelectionScreen()),
+              );
             }
-          } else {
-            // New user, navigate to Gender Selection to build profile
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => const GenderSelectionScreen()),
-            );
           }
         }
       }
