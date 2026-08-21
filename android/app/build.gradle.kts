@@ -8,11 +8,11 @@ plugins {
 import java.util.Properties
 import java.io.FileInputStream
 
-val keystorePropertiesFile = rootProject.file("key.properties")
-val keystoreProperties = Properties()
-if (keystorePropertiesFile.exists()) {
-    keystoreProperties.load(FileInputStream(keystorePropertiesFile))
-}
+// val keystorePropertiesFile = rootProject.file("key.properties")
+// val keystoreProperties = Properties()
+// if (keystorePropertiesFile.exists()) {
+//     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+// }
 
 android {
     namespace = "com.sajnire.app"
@@ -30,14 +30,14 @@ android {
         abortOnError = false
     }
 
-    signingConfigs {
-        create("release") {
-            keyAlias = keystoreProperties["keyAlias"] as String?
-            keyPassword = keystoreProperties["keyPassword"] as String?
-            storeFile = keystoreProperties["storeFile"]?.let { file(it as String) }
-            storePassword = keystoreProperties["storePassword"] as String?
-        }
-    }
+//    signingConfigs {
+//        create("release") {
+//            keyAlias = keystoreProperties["keyAlias"] as String?
+//            keyPassword = keystoreProperties["keyPassword"] as String?
+//            storeFile = keystoreProperties["storeFile"]?.let { file(it as String) }
+//            storePassword = keystoreProperties["storePassword"] as String?
+//        }
+//    }
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
@@ -52,12 +52,8 @@ android {
 
     buildTypes {
         release {
-            // Fallback to debug signing for CI/CD if key.properties is missing
-            if (keystorePropertiesFile.exists()) {
-                signingConfig = signingConfigs.getByName("release")
-            } else {
-                signingConfig = signingConfigs.getByName("debug")
-            }
+            // Force debug signing for now as requested
+            signingConfig = signingConfigs.getByName("debug")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
