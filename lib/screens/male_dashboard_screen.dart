@@ -525,6 +525,7 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
           ],
         ),
       ),
+      ), // Closes SafeArea
     );
   }
 

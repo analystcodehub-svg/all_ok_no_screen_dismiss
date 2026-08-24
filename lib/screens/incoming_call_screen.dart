@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_database/firebase_database.dart';
@@ -32,6 +33,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
   StreamSubscription<DatabaseEvent>? _callSub;
   bool _isDismissing = false;
   late Future<Map<String, dynamic>> _callerDataFuture;
+  Timer? _vibrateTimer;
 
   Future<Map<String, dynamic>> _fetchCallerData() async {
     Map<String, dynamic> result = {
@@ -72,6 +74,13 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
       volume: 1.0,
       asAlarm: true, // Forces it to play out loud
     );
+    
+    // Continuous vibration pattern using HapticFeedback
+    _vibrateTimer = Timer.periodic(const Duration(seconds: 2), (timer) {
+      HapticFeedback.heavyImpact();
+      Future.delayed(const Duration(milliseconds: 200), () => HapticFeedback.heavyImpact());
+      Future.delayed(const Duration(milliseconds: 400), () => HapticFeedback.heavyImpact());
+    });
     
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final appState = context.read<AppState>();
@@ -134,6 +143,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
 
   @override
   void dispose() {
+    _vibrateTimer?.cancel();
     FlutterRingtonePlayer().stop();
     _callSub?.cancel();
     _pulseController.dispose();
@@ -150,6 +160,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
     
     final callerData = await _callerDataFuture;
     
+    _vibrateTimer?.cancel();
     FlutterRingtonePlayer().stop();
     
     if (mounted) {
@@ -178,6 +189,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
     if (_isDismissing) return;
     _isDismissing = true;
     
+    _vibrateTimer?.cancel();
     FlutterRingtonePlayer().stop();
     _callService.endCall(widget.callRoomId);
     if (mounted) {
