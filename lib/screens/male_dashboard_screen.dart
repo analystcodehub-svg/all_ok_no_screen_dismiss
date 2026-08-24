@@ -336,10 +336,11 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
       body: SafeArea(
         child: _buildBody(),
       ),
-      bottomNavigationBar: Container(
-        height: 64,
-        margin: const EdgeInsets.only(left: 16, right: 16, bottom: 16),
-        decoration: BoxDecoration(
+      bottomNavigationBar: SafeArea(
+        child: Container(
+          height: 64,
+          margin: const EdgeInsets.only(left: 16, right: 16, bottom: 16),
+          decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(24),
           boxShadow: [
