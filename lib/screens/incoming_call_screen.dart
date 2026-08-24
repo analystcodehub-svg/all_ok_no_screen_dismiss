@@ -76,11 +76,8 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
     );
     
     // Continuous real vibration using vibration package
-    _vibrateTimer = Timer.periodic(const Duration(seconds: 2), (timer) async {
-      bool? hasVibrator = await Vibration.hasVibrator();
-      if (hasVibrator == true) {
-        Vibration.vibrate(duration: 1000); // Vibrate for 1 second every 2 seconds
-      }
+    _vibrateTimer = Timer.periodic(const Duration(seconds: 2), (timer) {
+      Vibration.vibrate(duration: 1000); // Vibrate for 1 second every 2 seconds
     });
     
     WidgetsBinding.instance.addPostFrameCallback((_) {
