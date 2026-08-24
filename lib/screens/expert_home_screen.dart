@@ -341,24 +341,33 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
         ? appState.nickname
         : 'there';
 
-    return Scaffold(
-      backgroundColor: AppColors.bgLight,
-      body: SafeArea(
-        child: RefreshIndicator(
-          color: AppColors.primaryBlue,
-          onRefresh: _fetchExpertStats,
-          child: SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            child: SlideTransition(
-              position: _slideAnimation,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildHeader(displayName, appState),
-                  _buildAvailabilityCard(),
-                  _buildStatsCard(),
-                  const SizedBox(height: 24),
-                ],
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.light.copyWith(
+        statusBarColor: Colors.transparent,
+      ),
+      child: Scaffold(
+        backgroundColor: AppColors.primaryBlue, // Status bar background
+        body: SafeArea(
+          bottom: false,
+          child: Container(
+            color: AppColors.bgLight, // Main body background
+            child: RefreshIndicator(
+              color: AppColors.primaryBlue,
+              onRefresh: _fetchExpertStats,
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                child: SlideTransition(
+                  position: _slideAnimation,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildHeader(displayName, appState),
+                      _buildAvailabilityCard(),
+                      _buildStatsCard(),
+                      const SizedBox(height: 24),
+                    ],
+                  ),
+                ),
               ),
             ),
           ),
