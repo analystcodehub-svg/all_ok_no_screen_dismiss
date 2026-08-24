@@ -7,6 +7,7 @@ import '../providers/app_state.dart';
 import '../services/call_service.dart';
 import '../widgets/local_avatar_widget.dart';
 import 'active_call_page.dart';
+import 'package:flutter_ringtone_player/flutter_ringtone_player.dart';
 
 class IncomingCallScreen extends StatefulWidget {
   final String callRoomId;
@@ -62,6 +63,15 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
   void initState() {
     super.initState();
     _callerDataFuture = _fetchCallerData();
+    
+    // Start playing system ringtone and vibration when the screen opens
+    FlutterRingtonePlayer().play(
+      android: AndroidSounds.ringtone,
+      ios: IosSounds.glass,
+      looping: true,
+      volume: 1.0,
+      asAlarm: true, // Forces it to play out loud
+    );
     
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final appState = context.read<AppState>();
@@ -124,6 +134,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
 
   @override
   void dispose() {
+    FlutterRingtonePlayer().stop();
     _callSub?.cancel();
     _pulseController.dispose();
     super.dispose();
@@ -138,6 +149,8 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
     final currentUserId = appState.uid;
     
     final callerData = await _callerDataFuture;
+    
+    FlutterRingtonePlayer().stop();
     
     if (mounted) {
       Navigator.pushReplacement(
@@ -165,6 +178,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
     if (_isDismissing) return;
     _isDismissing = true;
     
+    FlutterRingtonePlayer().stop();
     _callService.endCall(widget.callRoomId);
     if (mounted) {
       Navigator.pop(context);

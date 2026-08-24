@@ -59,6 +59,7 @@ dependencies:
   firebase_storage: ^13.4.5
   webview_flutter: ^4.14.1
   smart_auth: ^3.2.0
+  flutter_ringtone_player: ^4.0.0+4
 
 
 dev_dependencies:
