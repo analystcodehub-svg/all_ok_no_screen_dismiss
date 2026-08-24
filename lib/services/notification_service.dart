@@ -58,7 +58,7 @@ Future<void> _showCallkitIncoming(Map<String, dynamic> data) async {
       isCustomNotification: true,
       isShowLogo: false,
       isShowCallID: false,
-      ringtonePath: '', // empty string forces default system ringtone
+      ringtonePath: 'system_ringtone_default', // explicitly request default system ringtone
       backgroundColor: '#1976D2',
       actionColor: '#4CAF50',
       textColor: '#ffffff',
