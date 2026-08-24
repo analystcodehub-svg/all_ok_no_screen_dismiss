@@ -60,6 +60,7 @@ dependencies:
   webview_flutter: ^4.14.1
   smart_auth: ^3.2.0
   flutter_ringtone_player: ^4.0.0+4
+  vibration: ^3.2.0
 
 
 dev_dependencies:

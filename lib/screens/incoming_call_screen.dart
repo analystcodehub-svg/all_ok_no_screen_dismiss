@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:vibration/vibration.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_database/firebase_database.dart';
@@ -75,11 +75,12 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
       asAlarm: true, // Forces it to play out loud
     );
     
-    // Continuous vibration pattern using HapticFeedback
-    _vibrateTimer = Timer.periodic(const Duration(seconds: 2), (timer) {
-      HapticFeedback.heavyImpact();
-      Future.delayed(const Duration(milliseconds: 200), () => HapticFeedback.heavyImpact());
-      Future.delayed(const Duration(milliseconds: 400), () => HapticFeedback.heavyImpact());
+    // Continuous real vibration using vibration package
+    _vibrateTimer = Timer.periodic(const Duration(seconds: 2), (timer) async {
+      bool? hasVibrator = await Vibration.hasVibrator();
+      if (hasVibrator == true) {
+        Vibration.vibrate(duration: 1000); // Vibrate for 1 second every 2 seconds
+      }
     });
     
     WidgetsBinding.instance.addPostFrameCallback((_) {
