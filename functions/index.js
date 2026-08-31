@@ -28,13 +28,12 @@ const messaging = admin.messaging();
  * This silently wakes the app's background isolate so flutter_callkit_incoming
  * can display the native call screen / ringtone even when the app is killed.
  */
-async function sendFcmMessage(fcmToken, data, notificationPayload = null) {
+async function sendFcmMessage(fcmToken, data, notificationPayload = null, isCall = false) {
   const message = {
     token: fcmToken,
     data: data, // All string values
     android: {
       priority: "high", // Required to wake killed app on Android
-      ttl: 30 * 1000,   // Message expires after 30s (call timeout)
     },
     apns: {
       headers: {
@@ -44,8 +43,17 @@ async function sendFcmMessage(fcmToken, data, notificationPayload = null) {
     },
   };
 
+  // Only expire calls after 30 seconds. Messages should not expire.
+  if (isCall) {
+    message.android.ttl = 30 * 1000;
+  }
+
   if (notificationPayload) {
     message.notification = notificationPayload;
+    // Explicitly set the Android channel ID based on type
+    message.android.notification = {
+      channelId: isCall ? "calls_channel" : "messages_channel"
+    };
   }
 
   try {
@@ -163,7 +171,7 @@ exports.onCallInitiated = functions.region("asia-south1").firestore
 
     // ── Step 5: Send the FCM data message ──────────────────────────────────
     // Note: No notification block because CallKit handles the ringing UI directly.
-    await sendFcmMessage(fcmToken, fcmData);
+    await sendFcmMessage(fcmToken, fcmData, null, true);
 
     functions.logger.info(
       `[onCallInitiated] Notification sent to expert '${receiverId}'.`
@@ -213,8 +221,7 @@ exports.onMessageSent = functions.region("asia-south1").database
     }
 
     const fcmToken = receiverData.fcmToken || null;
-    const isOnline = receiverData.isOnline || false;
-    const gender   = receiverData.gender   || (isExpert ? "female" : "male");
+
 
     // ── Step 1.5: Check if sender is blocked by receiver ───────────────────
     const blockedDoc = await db.collection("blocked_users").doc(receiverId).get();
@@ -227,13 +234,8 @@ exports.onMessageSent = functions.region("asia-south1").database
     }
 
     // ── Step 2: Business Logic Gate ────────────────────────────────────────
-    // Female/Expert: do NOT notify if offline
-    if (gender === "female" && isOnline === false) {
-      functions.logger.info(
-        `Expert '${receiverId}' is offline. Suppressing message notification.`
-      );
-      return null;
-    }
+    // For messages, we WANT to notify the expert even if they are offline (app closed).
+    // Removed the offline suppression logic here so they always get message alerts.
 
     if (!fcmToken) {
       functions.logger.warn(`Receiver '${receiverId}' has no FCM token.`);
