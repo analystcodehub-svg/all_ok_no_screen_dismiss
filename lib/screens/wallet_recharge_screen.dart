@@ -179,6 +179,14 @@ class _WalletRechargeScreenState extends State<WalletRechargeScreen> {
   Future<void> _buyProduct() async {
     setState(() => _isLoading = true);
     
+    // TEMPORARY BYPASS FOR TESTING: Immediately add coins
+    await _syncWalletToFirestore(
+      success: true, 
+      gateway: 'Test Bypass', 
+      txnId: 'test_txn_${DateTime.now().millisecondsSinceEpoch}'
+    );
+
+    /* --- COMMENTED OUT GOOGLE PLAY BILLING ---
     // Identify which Product ID maps to the selected amount
     final amount = _packages[_selectedPackageIndex].amount.toInt();
     final productId = 'sajnire_coins_$amount';
@@ -202,6 +210,7 @@ class _WalletRechargeScreenState extends State<WalletRechargeScreen> {
     final PurchaseParam purchaseParam = PurchaseParam(productDetails: productDetails);
     
     InAppPurchase.instance.buyConsumable(purchaseParam: purchaseParam, autoConsume: true);
+    --------------------------------------------- */
   }
 
   Widget _buildVerticalDivider() {

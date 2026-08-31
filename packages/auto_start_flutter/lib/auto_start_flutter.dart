@@ -202,3 +202,14 @@ Future<bool> executeInBackground(Function callback) async {
   }
 }
 
+/// Brings the application to the foreground.
+Future<bool> bringAppToForeground() async {
+  try {
+    final bool? success = await _channel.invokeMethod('bringAppToForeground');
+    return success ?? false;
+  } catch (e) {
+    debugPrint(e.toString());
+    return false;
+  }
+}
+

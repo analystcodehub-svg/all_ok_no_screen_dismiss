@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:auto_start_flutter/auto_start_flutter.dart' as auto_start;
 
 class AutoStartHelper {
   static Future<void> checkAndRequestAutoStart(BuildContext context) async {
@@ -34,6 +36,16 @@ class AutoStartHelper {
                 onPressed: () async {
                   Navigator.of(context).pop();
                   await Permission.systemAlertWindow.request();
+                  
+                  // Start a periodic timer to check if permission is granted
+                  Timer.periodic(const Duration(milliseconds: 1000), (timer) async {
+                    var currentStatus = await Permission.systemAlertWindow.status;
+                    if (currentStatus.isGranted) {
+                      timer.cancel();
+                      // Bring app back to foreground automatically
+                      auto_start.bringAppToForeground();
+                    }
+                  });
                 },
               ),
             ],

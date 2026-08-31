@@ -161,6 +161,21 @@ class AutoStartFlutterPlugin : FlutterPlugin, MethodCallHandler {
                     result.error("INVALID_ARGUMENT", "timestamp, callbackHandle, and taskId must not be null", null)
                 }
             }
+            "bringAppToForeground" -> {
+                try {
+                    val pm = context.packageManager
+                    val launchIntent = pm.getLaunchIntentForPackage(context.packageName)
+                    if (launchIntent != null) {
+                        launchIntent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+                        context.startActivity(launchIntent)
+                        result.success(true)
+                    } else {
+                        result.success(false)
+                    }
+                } catch (e: Exception) {
+                    result.success(false)
+                }
+            }
             else -> {
                 result.notImplemented()
             }
