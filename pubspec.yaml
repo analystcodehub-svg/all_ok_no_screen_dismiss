@@ -61,6 +61,7 @@ dependencies:
   smart_auth: ^3.2.0
   flutter_ringtone_player: ^4.0.0+4
   vibration: ^3.2.0
+  credential_manager: ^4.3.0
 
 
 dev_dependencies:

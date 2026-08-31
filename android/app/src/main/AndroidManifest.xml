@@ -30,6 +30,9 @@
 
     <!-- Allow showing on lock screen -->
     <application
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
         tools:replace="android:label"
         android:label="SajniRe"
         android:name="${applicationName}"
