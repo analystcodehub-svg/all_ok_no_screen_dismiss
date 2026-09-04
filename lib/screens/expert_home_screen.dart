@@ -13,10 +13,13 @@ import 'withdraw_screen.dart';
 import 'incoming_call_screen.dart';
 import '../services/notification_service.dart';
 import '../services/hybrid_chat_service.dart';
+import '../services/local_chat_database.dart';
 import '../widgets/local_avatar_widget.dart';
 
 class ExpertHomeScreen extends StatefulWidget {
-  const ExpertHomeScreen({super.key});
+  final VoidCallback? onNavigateToChat;
+
+  const ExpertHomeScreen({super.key, this.onNavigateToChat});
 
   @override
   State<ExpertHomeScreen> createState() => _ExpertHomeScreenState();
@@ -32,6 +35,8 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
   final CallService _callService = CallService();
   late final MatchmakingService _matchingService;
   StreamSubscription? _incomingCallSubscription;
+  StreamSubscription? _chatDbSubscription;
+  int _unreadMessageCount = 0;
 
   // Animations
   late AnimationController _pulseController;
@@ -43,6 +48,14 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
   void initState() {
     super.initState();
     _matchingService = MatchmakingService();
+    
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadUnreadCount();
+    });
+    
+    _chatDbSubscription = LocalChatDatabase.instance.updates.listen((_) {
+      _loadUnreadCount();
+    });
 
     _pulseController = AnimationController(
       vsync: this,
@@ -88,9 +101,22 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
   void dispose() {
     // HybridChatService.instance.dispose();
     _incomingCallSubscription?.cancel();
+    _chatDbSubscription?.cancel();
     _pulseController.dispose();
     _cardSlideController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadUnreadCount() async {
+    if (!mounted) return;
+    final uid = context.read<AppState>().uid;
+    if (uid.isEmpty) return;
+    final count = await LocalChatDatabase.instance.getTotalUnreadCount(uid);
+    if (mounted) {
+      setState(() {
+        _unreadMessageCount = count;
+      });
+    }
   }
 
   // ── Firestore ──────────────────────────────────────────────────────────
@@ -623,6 +649,99 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
                   ),
                 ],
               ),
+            ),
+          ),
+          
+          // Unread Messages Box
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+            child: StreamBuilder<void>(
+              stream: LocalChatDatabase.instance.updates,
+              builder: (context, _) {
+                final uid = context.read<AppState>().uid;
+                return FutureBuilder<int>(
+                  future: LocalChatDatabase.instance.getTotalUnreadCount(uid),
+                  builder: (context, snapshot) {
+                    final int unreadCount = snapshot.data ?? 0;
+                    
+                    return GestureDetector(
+                      onTap: () {
+                        if (widget.onNavigateToChat != null) {
+                          widget.onNavigateToChat!();
+                        }
+                      },
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 300),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                        decoration: BoxDecoration(
+                          color: unreadCount > 0
+                              ? Colors.orange.withValues(alpha: 0.08)
+                              : AppColors.bgLight,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: unreadCount > 0
+                                ? Colors.orange.withValues(alpha: 0.4)
+                                : Colors.transparent,
+                            width: 1.5,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            // Icon with animated bg
+                            AnimatedContainer(
+                              duration: const Duration(milliseconds: 300),
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: unreadCount > 0
+                                    ? Colors.orange.withValues(alpha: 0.15)
+                                    : AppColors.lightBlueBg,
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                Icons.message_rounded,
+                                color: unreadCount > 0
+                                    ? Colors.orange
+                                    : AppColors.primaryBlue,
+                                size: 22,
+                              ),
+                            ),
+                            const SizedBox(width: 14),
+                            // Label
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text('Unread Messages',
+                                      style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                          color: AppColors.textDark)),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    unreadCount > 0
+                                        ? 'You have $unreadCount new message(s)'
+                                        : 'No new messages',
+                                    style: TextStyle(
+                                        fontSize: 12,
+                                        color: unreadCount > 0
+                                            ? Colors.orange.shade800
+                                            : AppColors.textGrey),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Icon(
+                              Icons.arrow_forward_ios_rounded,
+                              size: 16,
+                              color: AppColors.textGrey.withValues(alpha: 0.5),
+                            )
+                          ],
+                        ),
+                      ),
+                    );
+                  }
+                );
+              }
             ),
           ),
         ],

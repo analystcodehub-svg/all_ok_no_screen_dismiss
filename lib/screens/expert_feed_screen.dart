@@ -262,6 +262,8 @@ class _ExpertFeedScreenState extends State<ExpertFeedScreen> {
                         myUid: myUid,
                         otherUid: expert['id'],
                         otherUserName: nickname,
+                        otherUserAvatarUrl: expert['profileImageUrl'] ?? expert['avatarUrl'],
+                        otherUserAvatarIndex: (expert['avatarIndex'] as num?)?.toInt() ?? 1,
                       ),
                     ),
                   );

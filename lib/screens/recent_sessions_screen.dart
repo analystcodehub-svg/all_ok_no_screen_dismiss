@@ -13,6 +13,58 @@ class RecentSessionsScreen extends StatefulWidget {
 }
 
 class _RecentSessionsScreenState extends State<RecentSessionsScreen> {
+
+  Future<List<Map<String, dynamic>>> _fetchEnrichedCallLogs(String uid) async {
+    final docs = await LocalChatDatabase.instance.getRecentCallLogs(uid);
+    final enriched = <Map<String, dynamic>>[];
+    for (var data in docs) {
+      final map = Map<String, dynamic>.from(data);
+      final isCaller = map['callerId'] == uid;
+      final otherUserId = (isCaller ? map['receiverId'] : map['callerId'])?.toString() ?? '';
+      
+      String displayName = (map['otherUserName']?.toString() ?? '').trim();
+      if (displayName.isEmpty) displayName = otherUserId;
+      
+      final collectionName = isCaller ? 'experts' : 'users';
+      
+      try {
+        if (otherUserId.isNotEmpty) {
+          final cachedProfile = await LocalChatDatabase.instance.getUserProfile(otherUserId);
+          if (cachedProfile != null) {
+            displayName = cachedProfile['name'] as String? ?? otherUserId;
+          } else {
+            final profileSnap = await FirebaseFirestore.instance.collection(collectionName).doc(otherUserId).get();
+            if (profileSnap.exists) {
+              final profileData = profileSnap.data() as Map<String, dynamic>?;
+              if (profileData != null) {
+                final nick = profileData['nickname']?.toString().trim() ?? '';
+                final name = profileData['name']?.toString().trim() ?? '';
+                displayName = nick.isNotEmpty ? nick : (name.isNotEmpty ? name : otherUserId);
+                
+                await LocalChatDatabase.instance.saveUserProfile({
+                  'uid': otherUserId,
+                  'name': displayName,
+                  'avatarUrl': profileData['profileImageUrl'] ?? profileData['avatarUrl'],
+                  'avatarIndex': profileData['avatarIndex'] ?? 1,
+                  'role': isCaller ? 'expert' : 'user',
+                  'timestamp': DateTime.now().millisecondsSinceEpoch,
+                });
+              }
+            }
+          }
+        }
+      } catch (e) {
+        // Ignore errors, fallback to default
+      }
+      
+      map['enrichedName'] = displayName;
+      map['otherUserId'] = otherUserId;
+      map['isCaller'] = isCaller;
+      enriched.add(map);
+    }
+    return enriched;
+  }
+
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
@@ -65,7 +117,7 @@ class _RecentSessionsScreenState extends State<RecentSessionsScreen> {
                 stream: LocalChatDatabase.instance.updates,
                 builder: (context, snapshot) {
                   return FutureBuilder<List<Map<String, dynamic>>>(
-                    future: LocalChatDatabase.instance.getRecentCallLogs(currentUserId),
+                    future: _fetchEnrichedCallLogs(currentUserId),
                     builder: (context, futureSnapshot) {
                       if (futureSnapshot.connectionState == ConnectionState.waiting) {
                         return const Center(child: CircularProgressIndicator());
@@ -80,23 +132,18 @@ class _RecentSessionsScreenState extends State<RecentSessionsScreen> {
                         return _buildEmptyState();
                       }
 
-                      if (allCalls.isEmpty) {
-                        return _buildEmptyState();
-                      }
-
                       return ListView.builder(
                         padding: const EdgeInsets.all(20),
                         itemCount: allCalls.length,
                         itemBuilder: (context, index) {
                           final data = allCalls[index];
                           
-                          final isCaller = data['callerId'] == currentUserId;
-                          final String? otherUserId = (isCaller ? data['receiverId'] : data['callerId'])?.toString();
+                          final isCaller = data['isCaller'] as bool;
+                          final String otherUserId = data['otherUserId'] as String;
                           final isMissed = data['status'] == 'missed';
                           
                           String timeText = 'Just now';
-                          String initialName = (data['otherUserName']?.toString() ?? '').trim();
-                          if (initialName.isEmpty) initialName = 'Loading...';
+                          String displayName = data['enrichedName'] as String;
                           
                           if (data['timestamp'] != null) {
                             final dt = DateTime.fromMillisecondsSinceEpoch(data['timestamp']);
@@ -132,34 +179,14 @@ class _RecentSessionsScreenState extends State<RecentSessionsScreen> {
                             }
                           }
 
-                          final collectionName = isCaller ? 'experts' : 'users';
-                          
-                          return FutureBuilder<DocumentSnapshot>(
-                            future: FirebaseFirestore.instance.collection(collectionName).doc(otherUserId).get(),
-                            builder: (context, profileSnapshot) {
-                              String displayName = initialName;
-                              
-                              if (profileSnapshot.connectionState == ConnectionState.done) {
-                                if (profileSnapshot.hasData && profileSnapshot.data!.exists) {
-                                  final profileData = profileSnapshot.data!.data() as Map<String, dynamic>;
-                                  final nick = profileData['nickname']?.toString().trim() ?? '';
-                                  final name = profileData['name']?.toString().trim() ?? '';
-                                  displayName = nick.isNotEmpty ? nick : (name.isNotEmpty ? name : (otherUserId ?? ''));
-                                } else {
-                                  displayName = otherUserId ?? '';
-                                }
-                              }
-
-                              return _buildCallCard(
-                                name: displayName,
-                                timeText: timeText,
-                                duration: durationText,
-                                cost: costText,
-                                isMissed: isMissed,
-                                otherUserId: otherUserId ?? '',
-                                isCaller: isCaller,
-                              );
-                            },
+                          return _buildCallCard(
+                            name: displayName,
+                            timeText: timeText,
+                            duration: durationText,
+                            cost: costText,
+                            isMissed: isMissed,
+                            otherUserId: otherUserId,
+                            isCaller: isCaller,
                           );
                         },
                       );

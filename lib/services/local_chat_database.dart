@@ -29,7 +29,7 @@ class LocalChatDatabase {
 
     return await openDatabase(
       path,
-      version: 3, // Upgraded for call logs with names
+      version: 4, // Upgraded for user_profiles cache
       onCreate: _createDB,
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -51,6 +51,18 @@ class LocalChatDatabase {
           } catch (e) {
             debugPrint('Error altering call_logs table: $e');
           }
+        }
+        if (oldVersion < 4) {
+          await db.execute('''
+            CREATE TABLE user_profiles (
+              uid TEXT PRIMARY KEY,
+              name TEXT,
+              avatarUrl TEXT,
+              avatarIndex INTEGER,
+              role TEXT,
+              timestamp INTEGER
+            )
+          ''');
         }
       },
     );
@@ -82,6 +94,17 @@ class LocalChatDatabase {
       )
     ''');
     await db.execute('CREATE INDEX idx_call_timestamp ON call_logs (timestamp DESC)');
+
+    await db.execute('''
+      CREATE TABLE user_profiles (
+        uid TEXT PRIMARY KEY,
+        name TEXT,
+        avatarUrl TEXT,
+        avatarIndex INTEGER,
+        role TEXT,
+        timestamp INTEGER
+      )
+    ''');
   }
 
   // Generate a deterministic room ID using double-underscore separator
@@ -112,6 +135,30 @@ class LocalChatDatabase {
     }
     return '';
   }
+
+  // ==== USER PROFILES CACHE ====
+  Future<Map<String, dynamic>?> getUserProfile(String uid) async {
+    final db = await instance.database;
+    final result = await db.query(
+      'user_profiles',
+      where: 'uid = ?',
+      whereArgs: [uid],
+    );
+    if (result.isNotEmpty) {
+      return result.first;
+    }
+    return null;
+  }
+
+  Future<void> saveUserProfile(Map<String, dynamic> profile) async {
+    final db = await instance.database;
+    await db.insert(
+      'user_profiles',
+      profile,
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+  // ============================
 
   Future<void> saveMessageLocally(Map<String, dynamic> message) async {
     final db = await instance.database;
@@ -151,6 +198,19 @@ class LocalChatDatabase {
       where: 'roomId = ? AND senderId = ? AND status < 3',
       whereArgs: [roomId, senderId],
     );
+  }
+
+  Future<int> getTotalUnreadCount(String myUid) async {
+    final db = await instance.database;
+    final result = await db.rawQuery('''
+      SELECT COUNT(*) as total
+      FROM messages
+      WHERE senderId != ? AND status < 3
+    ''', [myUid]);
+    if (result.isNotEmpty) {
+      return (result.first['total'] as int?) ?? 0;
+    }
+    return 0;
   }
 
   // getRecentChats for ChatListScreen

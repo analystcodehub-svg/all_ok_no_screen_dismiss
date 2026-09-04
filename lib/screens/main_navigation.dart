@@ -15,8 +15,14 @@ class MainNavigation extends StatefulWidget {
 class _MainNavigationState extends State<MainNavigation> {
   int _currentIndex = 0; // Default to Home
 
-  final List<Widget> _screens = [
-    const ExpertHomeScreen(),
+  List<Widget> get _screens => [
+    ExpertHomeScreen(
+      onNavigateToChat: () {
+        setState(() {
+          _currentIndex = 1;
+        });
+      },
+    ),
     const ChatListScreen(),
     const RecentSessionsScreen(),
     const ProfileScreen(),

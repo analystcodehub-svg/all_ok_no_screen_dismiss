@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
+import 'tier_application_screen.dart';
 
 class UpgradeProgramScreen extends StatelessWidget {
   const UpgradeProgramScreen({super.key});
@@ -83,6 +84,25 @@ class UpgradeProgramScreen extends StatelessWidget {
             // Tier Cards List
             _buildTierCard(
               context,
+              tierName: 'Gold Tier',
+              rate: '₹2.5/min',
+              badgeColor: const Color(0xFFD97706), // Golden color
+              bgGradient: const LinearGradient(
+                colors: [Color(0xFFFBBF24), Color(0xFFD97706)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              icon: Icons.workspace_premium_rounded,
+              benefits: [
+                'Add up to 50 Members',
+                'Gold Verification Status',
+                'Must be live from 5 PM to 11 PM for 3 months (3 महीने के लिए 5 PM से 11 PM तक लाइव रहना अनिवार्य है)',
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            _buildTierCard(
+              context,
               tierName: 'Silver Tier',
               rate: '₹1.6/min',
               badgeColor: const Color(0xFF64748B), // Slate/Silver
@@ -95,7 +115,7 @@ class UpgradeProgramScreen extends StatelessWidget {
               benefits: [
                 'Add up to 5 Members',
                 'Silver Verification Status',
-                'Direct Messaging Access',
+                'Must be live from 5 PM to 11 PM for 1 month (1 महीने के लिए 5 PM से 11 PM तक लाइव रहना अनिवार्य है)',
               ],
             ),
             const SizedBox(height: 16),
@@ -250,10 +270,10 @@ class UpgradeProgramScreen extends StatelessWidget {
                   const SizedBox(height: 16),
                   ElevatedButton(
                     onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Applied for $tierName program!'),
-                          backgroundColor: AppColors.successGreen,
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => TierApplicationScreen(tierName: tierName),
                         ),
                       );
                     },

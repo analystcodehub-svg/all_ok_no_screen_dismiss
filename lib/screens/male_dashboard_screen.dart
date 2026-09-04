@@ -47,6 +47,57 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
 
   StreamSubscription? _incomingCallSubscription;
 
+  Future<List<Map<String, dynamic>>> _fetchEnrichedCallLogs(String uid) async {
+    final docs = await LocalChatDatabase.instance.getRecentCallLogs(uid);
+    final enriched = <Map<String, dynamic>>[];
+    for (var data in docs) {
+      final map = Map<String, dynamic>.from(data);
+      final expertId = map['receiverId'] == uid ? map['callerId'] : map['receiverId'];
+      
+      String displayName = expertId;
+      String? avatarUrl;
+      int avatarIndex = 1;
+      
+      try {
+        final cachedProfile = await LocalChatDatabase.instance.getUserProfile(expertId);
+        if (cachedProfile != null) {
+          displayName = cachedProfile['name'] as String? ?? expertId;
+          avatarUrl = cachedProfile['avatarUrl'] as String?;
+          avatarIndex = (cachedProfile['avatarIndex'] as num?)?.toInt() ?? 1;
+        } else {
+          final expertSnap = await FirebaseFirestore.instance.collection('experts').doc(expertId).get();
+          if (expertSnap.exists) {
+            final expertData = expertSnap.data() as Map<String, dynamic>?;
+            if (expertData != null) {
+              displayName = expertData['nickname'] ?? expertData['name'] ?? expertId;
+              avatarUrl = expertData['profileImageUrl'] ?? expertData['avatarUrl'];
+              avatarIndex = (expertData['avatarIndex'] as num?)?.toInt() ?? 1;
+              
+              // Save to local cache
+              await LocalChatDatabase.instance.saveUserProfile({
+                'uid': expertId,
+                'name': displayName,
+                'avatarUrl': avatarUrl,
+                'avatarIndex': avatarIndex,
+                'role': 'expert',
+                'timestamp': DateTime.now().millisecondsSinceEpoch,
+              });
+            }
+          }
+        }
+      } catch (e) {
+        // Ignore errors, fallback to default
+      }
+      
+      map['enrichedName'] = displayName;
+      map['enrichedAvatarUrl'] = avatarUrl;
+      map['enrichedAvatarIndex'] = avatarIndex;
+      map['expertId'] = expertId;
+      enriched.add(map);
+    }
+    return enriched;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -1030,6 +1081,9 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
           languages: data['languages'] ?? 'Hindi',
           rating: (data['rating'] ?? 4.5).toDouble(),
           isOnline: isOnline,
+          avatarUrl: data['profileImageUrl'] ?? data['avatarUrl'],
+          avatarIndex: (data['avatarIndex'] as num?)?.toInt() ?? 1,
+          age: (data['age'] as num?)?.toInt() ?? 22,
         );
         _triggerCall(expert);
       } else {
@@ -1074,7 +1128,7 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
               stream: LocalChatDatabase.instance.updates,
               builder: (context, snapshot) {
                 return FutureBuilder<List<Map<String, dynamic>>>(
-                  future: LocalChatDatabase.instance.getRecentCallLogs(appState.uid),
+                  future: _fetchEnrichedCallLogs(appState.uid),
                   builder: (context, futureSnapshot) {
                 if (futureSnapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
@@ -1090,7 +1144,7 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
                   itemCount: docs.length,
                   itemBuilder: (context, index) {
                     final data = docs[index];
-                    final expertId = data['receiverId'] == appState.uid ? data['callerId'] : data['receiverId'];
+                    final expertId = data['expertId'] as String;
                     final durationSeconds = data['durationSeconds'] ?? 0;
                     
                     final m = durationSeconds ~/ 60;
@@ -1108,66 +1162,54 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
                       }
                     }
 
-                    return FutureBuilder<DocumentSnapshot>(
-                      future: FirebaseFirestore.instance.collection('experts').doc(expertId).get(),
-                      builder: (context, expertSnap) {
-                        String displayName = expertId;
-                        String? avatarUrl;
-                        int avatarIndex = 1;
-                        
-                        if (expertSnap.hasData && expertSnap.data!.exists) {
-                          final expertData = expertSnap.data!.data() as Map<String, dynamic>?;
-                          if (expertData != null) {
-                            displayName = expertData['nickname'] ?? displayName;
-                            avatarUrl = expertData['profileImageUrl'] ?? expertData['avatarUrl'];
-                            avatarIndex = (expertData['avatarIndex'] as num?)?.toInt() ?? 1;
-                          }
-                        }
+                    final displayName = data['enrichedName'] as String;
+                    final avatarUrl = data['enrichedAvatarUrl'] as String?;
+                    final avatarIndex = data['enrichedAvatarIndex'] as int;
 
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 16),
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: brandCardBg,
-                            borderRadius: BorderRadius.circular(24),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.03),
-                                blurRadius: 12,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 16),
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: brandCardBg,
+                        borderRadius: BorderRadius.circular(24),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.03),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
                           ),
-                          child: Row(
-                            children: [
-                              // Avatar
-                              Container(
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: Colors.blue.shade200,
-                                    width: 1.5,
-                                  ),
-                                ),
-                                child: LocalAvatarWidget(
-                                  uid: expertId,
-                                  role: 'expert',
-                                  radius: 28,
-                                  avatarUrl: avatarUrl,
-                                  avatarIndex: avatarIndex,
-                                ),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          // Avatar
+                          Container(
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: Colors.blue.shade200,
+                                width: 1.5,
                               ),
-                              const SizedBox(width: 16),
+                            ),
+                            child: LocalAvatarWidget(
+                              uid: expertId,
+                              role: 'expert',
+                              radius: 28,
+                              avatarUrl: avatarUrl,
+                              avatarIndex: avatarIndex,
+                            ),
+                          ),
+                          const SizedBox(width: 16),
 
-                              // Details
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
+                          // Details
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
                                   children: [
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: Text(
+                                    Expanded(
+                                      child: Text(
                                             displayName,
                                             style: const TextStyle(
                                               fontSize: 16,
@@ -1216,8 +1258,6 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
                             ],
                           ),
                         );
-                      },
-                    );
                   },
                 );
               },

@@ -39,43 +39,68 @@ class _ChatListScreenState extends State<ChatListScreen> {
       String role = isCurrentMale ? 'expert' : 'user';
 
       try {
-        // Try experts collection first
-        final expertDoc = await FirebaseFirestore.instance.collection('experts').doc(otherUser).get();
-        if (expertDoc.exists && expertDoc.data() != null) {
-          final expertData = expertDoc.data()!;
-          
-          String? eName = expertData['nickname']?.toString().trim();
-          if (eName == null || eName.isEmpty) eName = expertData['name']?.toString().trim();
-          if (eName == null || eName.isEmpty) eName = expertData['displayName']?.toString().trim();
-          if (eName == null || eName.isEmpty) eName = expertData['fullName']?.toString().trim();
-          
-          if (eName != null && eName.isNotEmpty) {
-            displayName = eName;
-          }
-
-          data['avatarUrl'] = expertData['profileImageUrl'] ?? expertData['avatarUrl'];
-          data['avatarIndex'] = (expertData['avatarIndex'] as num?)?.toInt() ?? 1;
+        final cachedProfile = await LocalChatDatabase.instance.getUserProfile(otherUser);
+        if (cachedProfile != null) {
+          displayName = cachedProfile['name'] as String? ?? otherUser;
+          data['avatarUrl'] = cachedProfile['avatarUrl'];
+          data['avatarIndex'] = cachedProfile['avatarIndex'] ?? 1;
         } else {
-          // Try users collection
-          final userDoc = await FirebaseFirestore.instance.collection('users').doc(otherUser).get();
-          if (userDoc.exists && userDoc.data() != null) {
-            final userData = userDoc.data()!;
+          // Try experts collection first
+          final expertDoc = await FirebaseFirestore.instance.collection('experts').doc(otherUser).get();
+          if (expertDoc.exists && expertDoc.data() != null) {
+            final expertData = expertDoc.data()!;
             
-            String? uName = userData['nickname']?.toString().trim();
-            if (uName == null || uName.isEmpty) uName = userData['name']?.toString().trim();
-            if (uName == null || uName.isEmpty) uName = userData['displayName']?.toString().trim();
-            if (uName == null || uName.isEmpty) uName = userData['fullName']?.toString().trim();
+            String? eName = expertData['nickname']?.toString().trim();
+            if (eName == null || eName.isEmpty) eName = expertData['name']?.toString().trim();
+            if (eName == null || eName.isEmpty) eName = expertData['displayName']?.toString().trim();
+            if (eName == null || eName.isEmpty) eName = expertData['fullName']?.toString().trim();
             
-            if (uName != null && uName.isNotEmpty) {
-              displayName = uName;
-            } else {
-              displayName = otherUser; // Show UID as-is if no name found
+            if (eName != null && eName.isNotEmpty) {
+              displayName = eName;
             }
+
+            data['avatarUrl'] = expertData['profileImageUrl'] ?? expertData['avatarUrl'];
+            data['avatarIndex'] = (expertData['avatarIndex'] as num?)?.toInt() ?? 1;
             
-            data['avatarUrl'] = userData['avatarUrl'];
-            data['avatarIndex'] = (userData['avatarIndex'] as num?)?.toInt() ?? 1;
+            await LocalChatDatabase.instance.saveUserProfile({
+              'uid': otherUser,
+              'name': displayName,
+              'avatarUrl': data['avatarUrl'],
+              'avatarIndex': data['avatarIndex'],
+              'role': 'expert',
+              'timestamp': DateTime.now().millisecondsSinceEpoch,
+            });
           } else {
-            displayName = otherUser; // Show UID as-is if user doc not found
+            // Try users collection
+            final userDoc = await FirebaseFirestore.instance.collection('users').doc(otherUser).get();
+            if (userDoc.exists && userDoc.data() != null) {
+              final userData = userDoc.data()!;
+              
+              String? uName = userData['nickname']?.toString().trim();
+              if (uName == null || uName.isEmpty) uName = userData['name']?.toString().trim();
+              if (uName == null || uName.isEmpty) uName = userData['displayName']?.toString().trim();
+              if (uName == null || uName.isEmpty) uName = userData['fullName']?.toString().trim();
+              
+              if (uName != null && uName.isNotEmpty) {
+                displayName = uName;
+              } else {
+                displayName = otherUser; // Show UID as-is if no name found
+              }
+              
+              data['avatarUrl'] = userData['avatarUrl'];
+              data['avatarIndex'] = (userData['avatarIndex'] as num?)?.toInt() ?? 1;
+              
+              await LocalChatDatabase.instance.saveUserProfile({
+                'uid': otherUser,
+                'name': displayName,
+                'avatarUrl': data['avatarUrl'],
+                'avatarIndex': data['avatarIndex'],
+                'role': 'user',
+                'timestamp': DateTime.now().millisecondsSinceEpoch,
+              });
+            } else {
+              displayName = otherUser; // Show UID as-is if user doc not found
+            }
           }
         }
       } catch (e) {
@@ -180,6 +205,8 @@ class _ChatListScreenState extends State<ChatListScreen> {
                                     myUid: myUid,
                                     otherUid: otherUser,
                                     otherUserName: displayName,
+                                    otherUserAvatarUrl: data['avatarUrl'] as String?,
+                                    otherUserAvatarIndex: (data['avatarIndex'] as num?)?.toInt() ?? 1,
                                   ),
                                 ),
                               );
@@ -245,8 +272,14 @@ class _ChatListScreenState extends State<ChatListScreen> {
         ),
         child: Row(
           children: [
-
-
+            LocalAvatarWidget(
+              uid: uid,
+              role: role,
+              radius: 26,
+              avatarIndex: avatarIndex ?? 1,
+              avatarUrl: avatarUrl,
+            ),
+            const SizedBox(width: 16),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,

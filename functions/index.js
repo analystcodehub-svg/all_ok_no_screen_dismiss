@@ -242,15 +242,19 @@ exports.onMessageSent = functions.region("asia-south1").database
       return null;
     }
 
-    // ── Step 3: Fetch Sender Name ──────────────────────────────────────────
+    // ── Step 3: Fetch Sender Name & Avatar ─────────────────────────────────
     let senderName = senderId;
+    let senderAvatar = null;
+    
     let senderDoc = await db.collection("users").doc(senderId).get();
     if (senderDoc.exists) {
       senderName = senderDoc.data().nickname || senderId;
+      senderAvatar = senderDoc.data().avatarUrl || null;
     } else {
       senderDoc = await db.collection("experts").doc(senderId).get();
       if (senderDoc.exists) {
         senderName = senderDoc.data().nickname || senderId;
+        senderAvatar = senderDoc.data().profileImageUrl || senderDoc.data().avatarUrl || null;
       }
     }
 
@@ -268,6 +272,11 @@ exports.onMessageSent = functions.region("asia-south1").database
       title: senderName,
       body: messageText,
     };
+    
+    if (senderAvatar) {
+      notificationPayload.image = senderAvatar;
+    }
+    
     await sendFcmMessage(fcmToken, fcmData, notificationPayload);
 
     functions.logger.info(

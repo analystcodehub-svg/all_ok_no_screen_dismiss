@@ -14,12 +14,16 @@ class HybridChatScreen extends StatefulWidget {
   final String myUid;
   final String otherUid;
   final String otherUserName;
+  final String? otherUserAvatarUrl;
+  final int otherUserAvatarIndex;
 
   const HybridChatScreen({
     super.key,
     required this.myUid,
     required this.otherUid,
     required this.otherUserName,
+    this.otherUserAvatarUrl,
+    this.otherUserAvatarIndex = 1,
   });
 
   @override
@@ -34,6 +38,52 @@ class _HybridChatScreenState extends State<HybridChatScreen> with WidgetsBinding
   late String _roomId;
   List<Map<String, dynamic>> _messages = [];
   StreamSubscription? _dbUpdateSubscription;
+  Future<Map<String, dynamic>>? _profileFuture;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _profileFuture ??= _fetchProfileData();
+  }
+
+  Future<Map<String, dynamic>> _fetchProfileData() async {
+    final appState = context.read<AppState>();
+    final otherRole = appState.selectedGender == 'Female' ? 'user' : 'expert';
+    
+    // 1. Try local cache
+    final cachedProfile = await LocalChatDatabase.instance.getUserProfile(widget.otherUid);
+    if (cachedProfile != null) {
+      return cachedProfile;
+    }
+    
+    // 2. Fallback to Firestore
+    try {
+      final doc = await FirebaseFirestore.instance.collection(otherRole == 'expert' ? 'experts' : 'users').doc(widget.otherUid).get();
+      if (doc.exists && doc.data() != null) {
+        final data = doc.data() as Map<String, dynamic>;
+        
+        final profile = {
+          'uid': widget.otherUid,
+          'name': data['nickname'] ?? data['name'] ?? data['displayName'] ?? data['fullName'] ?? widget.otherUserName,
+          'avatarUrl': data['profileImageUrl'] ?? data['avatarUrl'],
+          'avatarIndex': (data['avatarIndex'] as num?)?.toInt() ?? 1,
+          'role': otherRole,
+          'timestamp': DateTime.now().millisecondsSinceEpoch,
+        };
+        
+        // Save to cache for next time
+        await LocalChatDatabase.instance.saveUserProfile(profile);
+        return profile;
+      }
+    } catch (e) {
+      debugPrint('Error fetching profile for chat appbar: $e');
+    }
+    
+    return {
+      'avatarIndex': 1,
+      'avatarUrl': null,
+    };
+  }
 
   @override
   void initState() {
@@ -246,18 +296,19 @@ class _HybridChatScreenState extends State<HybridChatScreen> with WidgetsBinding
           children: [
             Stack(
               children: [
-                FutureBuilder<DocumentSnapshot>(
-                  future: FirebaseFirestore.instance.collection(otherRole == 'expert' ? 'experts' : 'users').doc(widget.otherUid).get(),
+                FutureBuilder<Map<String, dynamic>>(
+                  future: _profileFuture,
+                  initialData: {
+                    'avatarIndex': widget.otherUserAvatarIndex,
+                    'avatarUrl': widget.otherUserAvatarUrl,
+                  },
                   builder: (context, snapshot) {
                     int avatarIndex = 1;
                     String? avatarUrl;
-                    if (snapshot.hasData && snapshot.data!.exists) {
-                      final data = snapshot.data!.data() as Map<String, dynamic>;
+                    if (snapshot.hasData) {
+                      final data = snapshot.data!;
                       avatarIndex = (data['avatarIndex'] as num?)?.toInt() ?? 1;
                       avatarUrl = data['avatarUrl'] as String?;
-                      if (otherRole == 'expert') {
-                        avatarUrl ??= data['profileImageUrl'] as String?;
-                      }
                     }
                     return LocalAvatarWidget(
                       uid: widget.otherUid,
@@ -267,32 +318,6 @@ class _HybridChatScreenState extends State<HybridChatScreen> with WidgetsBinding
                       avatarUrl: avatarUrl,
                     );
                   },
-                ),
-                Positioned(
-                  bottom: 0,
-                  right: 0,
-                  child: StreamBuilder<DatabaseEvent>(
-                    stream: FirebaseDatabase.instanceFor(
-                      app: FirebaseDatabase.instance.app,
-                      databaseURL: 'https://zegochat-c44b0.asia-southeast1.firebasedatabase.app',
-                    ).ref('status/${widget.otherUid}/isOnline').onValue,
-                    builder: (context, snapshot) {
-                      Color statusColor = Colors.grey;
-                      if (snapshot.hasData && snapshot.data!.snapshot.value != null) {
-                        final isOnline = snapshot.data!.snapshot.value == true;
-                        statusColor = isOnline ? Colors.green : Colors.grey;
-                      }
-                      return Container(
-                        width: 12,
-                        height: 12,
-                        decoration: BoxDecoration(
-                          color: statusColor,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: AppColors.primaryBlue, width: 2),
-                        ),
-                      );
-                    },
-                  ),
                 ),
               ],
             ),

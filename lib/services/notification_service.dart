@@ -16,6 +16,9 @@ import 'package:flutter_callkit_incoming/entities/ios_params.dart';
 import 'package:flutter_callkit_incoming/entities/call_event.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:provider/provider.dart';
+import '../providers/app_state.dart';
+import '../screens/hybrid_chat_screen.dart';
 // ─── TOP-LEVEL BACKGROUND HANDLER ─────────────────────────────────────────
 //
 // MUST be a top-level function (outside any class).
@@ -269,9 +272,38 @@ class NotificationService {
   }
 
   void _routeFromNotification(Map<String, dynamic> data) {
-    // Call routing is handled via CallKit events (see _listenCallKitEvents).
-    // Add chat routing here for 'message' type if needed:
-    // if (data['type'] == 'message') navigatorKey?.currentState?.pushNamed('/chat', ...);
+    if (data['type'] == 'message') {
+      int retries = 0;
+      void pushRoute() {
+        final currentState = navigatorKey?.currentState;
+        
+        if (currentState != null) {
+          try {
+            currentState.pushNamed(
+              '/chat',
+              arguments: <String, dynamic>{
+                'otherUid': data['senderId'] ?? '',
+                'otherUserName': data['senderName'] ?? 'User',
+              },
+            );
+            debugPrint('[FCM] Successfully routed to chat!');
+          } catch (e) {
+            debugPrint('[FCM] Error routing to chat: $e');
+            if (retries < 5) {
+              retries++;
+              Future.delayed(const Duration(milliseconds: 500), pushRoute);
+            }
+          }
+        } else {
+          if (retries < 5) {
+            retries++;
+            Future.delayed(const Duration(milliseconds: 500), pushRoute);
+          }
+        }
+      }
+      // Wait slightly before the first try to ensure UI is ready
+      Future.delayed(const Duration(milliseconds: 300), pushRoute);
+    }
   }
 
   // ── CALLKIT EVENT LISTENER ────────────────────────────────────────────
