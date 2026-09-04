@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'firebase_options.dart';
 import 'providers/app_state.dart';
 import 'theme/app_theme.dart';
@@ -50,6 +51,10 @@ void main() async {
 
   // ── 2. Initialize Notification Service (FCM + CallKit) ─────────────────
   if (firebaseInitialized) {
+    // CRITICAL: Register background handler BEFORE NotificationService.initialize()
+    // This must be a top-level function call, not inside any class.
+    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+    
     AppState.syncPendingChatDeductions();
     await NotificationService.instance.initialize(navKey: navigatorKey);
     // Initialize Foreground Task Service

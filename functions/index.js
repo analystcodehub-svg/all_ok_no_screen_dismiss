@@ -50,10 +50,13 @@ async function sendFcmMessage(fcmToken, data, notificationPayload = null, isCall
 
   if (notificationPayload) {
     message.notification = notificationPayload;
-    // Explicitly set the Android channel ID based on type
-    message.android.notification = {
-      channelId: isCall ? "calls_channel" : "messages_channel"
-    };
+    if (isCall) {
+      // Calls use their specific channel for ringtone/fullscreen
+      message.android.notification = {
+        channelId: "calls_channel"
+      };
+    }
+    // For messages, no channelId → Android uses the default from AndroidManifest.xml (messages_channel)
   }
 
   try {
@@ -264,20 +267,20 @@ exports.onMessageSent = functions.region("asia-south1").database
       roomId:     roomId || "",
       senderId:   senderId,
       senderName: senderName,
+      senderAvatar: senderAvatar || "",
       body:       messageText,
     };
 
-    // ── Step 5: Send notification ───────────────────────────────────────────
+    // ── Step 5: Send notification payload + data ────────────────────────────
+    // notification block → OS shows notification even when app is KILLED (most reliable)
+    // data block → Flutter uses this for routing to the correct Chat Screen on tap
     const notificationPayload = {
       title: senderName,
-      body: messageText,
+      body:  messageText,
     };
-    
-    if (senderAvatar) {
-      notificationPayload.image = senderAvatar;
-    }
-    
+
     await sendFcmMessage(fcmToken, fcmData, notificationPayload);
+
 
     functions.logger.info(
       `[onMessageSent] Message notification sent to '${receiverId}'.`

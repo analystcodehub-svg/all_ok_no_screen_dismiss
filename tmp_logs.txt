@@ -1,0 +1,15 @@
+2026-09-04T14:50:26.105771523Z D onMessageSent: Function execution started
+2026-09-04T14:50:26.116828Z I onMessageSent: [onMessageSent] msgId=-P0gtYcIxBoG-gVkUZCj, roomId=7qP40pezJlV5CzauzYQ33YQ2lcr2__lVFMJ1gu8DZuTQuYic9wjCbs9LL2, from=7qP40pezJlV5CzauzYQ33YQ2lcr2, to=lVFMJ1gu8DZuTQuYic9wjCbs9LL2
+2026-09-04T14:50:26.986660Z I onMessageSent: FCM sent successfully: projects/zegochat-c44b0/messages/0:1788533426930499%92fdd450f9fd7ecd
+2026-09-04T14:50:26.986682Z I onMessageSent: [onMessageSent] Message notification sent to 'lVFMJ1gu8DZuTQuYic9wjCbs9LL2'.
+2026-09-04T14:50:26.988016459Z D onMessageSent: Function execution took 882 ms, finished with status: 'ok'
+2026-09-04T14:52:46.198261413Z D onMessageSent: Function execution started
+2026-09-04T14:52:46.202604Z I onMessageSent: [onMessageSent] msgId=-P0gu4pKfIhLT5GAqViX, roomId=7qP40pezJlV5CzauzYQ33YQ2lcr2__lVFMJ1gu8DZuTQuYic9wjCbs9LL2, from=7qP40pezJlV5CzauzYQ33YQ2lcr2, to=lVFMJ1gu8DZuTQuYic9wjCbs9LL2
+2026-09-04T14:52:46.776389Z I onMessageSent: FCM sent successfully: projects/zegochat-c44b0/messages/0:1788533566652545%92fdd450f9fd7ecd
+2026-09-04T14:52:46.776416Z I onMessageSent: [onMessageSent] Message notification sent to 'lVFMJ1gu8DZuTQuYic9wjCbs9LL2'.
+2026-09-04T14:52:46.778009986Z D onMessageSent: Function execution took 579 ms, finished with status: 'ok'
+2026-09-04T14:52:51.608482649Z D onMessageSent: Function execution started
+2026-09-04T14:52:51.611983Z I onMessageSent: [onMessageSent] msgId=-P0gu69_VURAtVTBnTM3, roomId=7qP40pezJlV5CzauzYQ33YQ2lcr2__lVFMJ1gu8DZuTQuYic9wjCbs9LL2, from=7qP40pezJlV5CzauzYQ33YQ2lcr2, to=lVFMJ1gu8DZuTQuYic9wjCbs9LL2
+2026-09-04T14:52:54.531373Z I onMessageSent: FCM sent successfully: projects/zegochat-c44b0/messages/0:1788533573305328%92fdd450f9fd7ecd
+2026-09-04T14:52:54.531425Z I onMessageSent: [onMessageSent] Message notification sent to 'lVFMJ1gu8DZuTQuYic9wjCbs9LL2'.
+2026-09-04T14:52:54.532712066Z D onMessageSent: Function execution took 2924 ms, finished with status: 'ok'

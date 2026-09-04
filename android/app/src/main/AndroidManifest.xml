@@ -86,10 +86,10 @@
             android:name="flutterEmbedding"
             android:value="2" />
 
-        <!-- FCM: Default notification channel for Android 8+ -->
+        <!-- FCM: Default notification channel for Android 8+ (messages) -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
-            android:value="calls_channel" />
+            android:value="messages_channel" />
 
         <!-- FCM: Default notification icon -->
         <meta-data

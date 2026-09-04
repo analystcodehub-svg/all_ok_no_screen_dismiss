@@ -1,8 +1,12 @@
 package com.sajnire.app
 
 import android.app.Activity
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.content.Context
 import android.content.Intent
 import android.content.IntentSender
+import android.os.Build
 import com.google.android.gms.auth.api.identity.GetPhoneNumberHintIntentRequest
 import com.google.android.gms.auth.api.identity.Identity
 import io.flutter.embedding.android.FlutterActivity
@@ -14,7 +18,39 @@ class MainActivity : FlutterActivity() {
     private val REQUEST_PHONE_HINT = 1001
     private var pendingResult: MethodChannel.Result? = null
 
+    // Create notification channels natively so they exist even BEFORE Flutter code runs.
+    // This is critical for showing FCM notifications in killed/terminated app state.
+    private fun createNotificationChannels() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+            // Messages channel — used for chat message notifications
+            val messagesChannel = NotificationChannel(
+                "messages_channel",
+                "Messages",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Chat message notifications"
+                enableVibration(true)
+            }
+            manager.createNotificationChannel(messagesChannel)
+
+            // Calls channel — used for incoming call notifications
+            val callsChannel = NotificationChannel(
+                "calls_channel",
+                "Incoming Calls",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Incoming call notifications"
+                enableVibration(true)
+            }
+            manager.createNotificationChannel(callsChannel)
+        }
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
+        // Create channels FIRST before Flutter engine starts
+        createNotificationChannels()
         super.configureFlutterEngine(flutterEngine)
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->

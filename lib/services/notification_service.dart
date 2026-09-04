@@ -6,6 +6,8 @@
 
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
@@ -33,8 +35,69 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   if (type == 'call') {
     await _showCallkitIncoming(data);
   } else if (type == 'message') {
-    // Handled natively by FCM notification payload in background/killed state.
+    // We MUST initialize the plugin in the background isolate before showing
+    final plugin = FlutterLocalNotificationsPlugin();
+    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const iosSettings = DarwinInitializationSettings();
+    await plugin.initialize(
+      settings: const InitializationSettings(android: androidSettings, iOS: iosSettings),
+    );
+    
+    await showChatNotification(data);
   }
+}
+
+// ─── LOCAL CHAT NOTIFICATION HELPER ──────────────────────────────────────────
+
+Future<void> showChatNotification(Map<String, dynamic> data) async {
+  final plugin = FlutterLocalNotificationsPlugin();
+  
+  ByteArrayAndroidBitmap? largeIcon;
+  Uint8List? iconBytes;
+  final avatarUrl = data['senderAvatar'] as String?;
+  
+  if (avatarUrl != null && avatarUrl.isNotEmpty) {
+    try {
+      final request = await HttpClient().getUrl(Uri.parse(avatarUrl));
+      final response = await request.close();
+      if (response.statusCode == 200) {
+        iconBytes = await consolidateHttpClientResponseBytes(response);
+        largeIcon = ByteArrayAndroidBitmap(iconBytes);
+      }
+    } catch (e) {
+      debugPrint('[FCM] Error downloading avatar for notification: $e');
+    }
+  }
+
+  // Use MessagingStyle for a chat-like premium look
+  final person = Person(
+    name: data['senderName'] ?? 'New Message',
+    icon: iconBytes != null ? ByteArrayAndroidIcon(iconBytes) : null,
+  );
+  
+  final styleInfo = MessagingStyleInformation(
+    person,
+    messages: [
+      Message(data['body'] ?? '', DateTime.now(), person),
+    ],
+  );
+
+  await plugin.show(
+    id: DateTime.now().millisecondsSinceEpoch ~/ 1000, // Unique ID
+    title: data['senderName'] ?? 'New Message',
+    body: data['body'] ?? '',
+    notificationDetails: NotificationDetails(
+      android: AndroidNotificationDetails(
+        'messages_channel',
+        'Messages',
+        importance: Importance.high,
+        priority: Priority.high,
+        styleInformation: styleInfo,
+        largeIcon: largeIcon,
+      ),
+    ),
+    payload: jsonEncode(data),
+  );
 }
 
 // ─── CALLKIT HELPER (top-level, callable from background isolate) ──────────
@@ -243,25 +306,8 @@ class NotificationService {
       // Show native CallKit even when the app is open — consistent UX
       await _showCallkitIncoming(data);
     } else if (type == 'message') {
-      await _showLocalNotification(data);
+      await showChatNotification(data);
     }
-  }
-
-  Future<void> _showLocalNotification(Map<String, dynamic> data) async {
-    await _localNotifications.show(
-      id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
-      title: data['senderName'] ?? 'New Message',
-      body: data['body'] ?? '',
-      notificationDetails: const NotificationDetails(
-        android: AndroidNotificationDetails(
-          'messages_channel',
-          'Messages',
-          importance: Importance.high,
-          priority: Priority.high,
-        ),
-      ),
-      payload: jsonEncode(data),
-    );
   }
 
   // ── BACKGROUND TAP HANDLER ────────────────────────────────────────────
@@ -289,13 +335,13 @@ class NotificationService {
             debugPrint('[FCM] Successfully routed to chat!');
           } catch (e) {
             debugPrint('[FCM] Error routing to chat: $e');
-            if (retries < 5) {
+            if (retries < 20) {
               retries++;
               Future.delayed(const Duration(milliseconds: 500), pushRoute);
             }
           }
         } else {
-          if (retries < 5) {
+          if (retries < 20) {
             retries++;
             Future.delayed(const Duration(milliseconds: 500), pushRoute);
           }
