@@ -7,20 +7,23 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
+import 'dart:ui';
+import 'dart:isolate';
 import 'package:flutter/foundation.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
 import 'package:flutter_callkit_incoming/entities/call_kit_params.dart';
+import 'package:flutter_callkit_incoming/entities/notification_params.dart';
 import 'package:flutter_callkit_incoming/entities/android_params.dart';
 import 'package:flutter_callkit_incoming/entities/ios_params.dart';
-import 'package:flutter_callkit_incoming/entities/call_event.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:provider/provider.dart';
-import '../providers/app_state.dart';
-import '../screens/hybrid_chat_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter_callkit_incoming/entities/call_event.dart';
+import 'call_service.dart';
+
 // ─── TOP-LEVEL BACKGROUND HANDLER ─────────────────────────────────────────
 //
 // MUST be a top-level function (outside any class).
@@ -31,6 +34,19 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   debugPrint('[BG Handler] data: ${message.data}');
   final data = message.data;
   final type = data['type'] ?? '';
+
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.reload(); // Critical for background isolates to read latest state
+  final userRole = prefs.getString('userRole') ?? '';
+  
+  if (userRole == 'female') {
+    final isExpertOnline = prefs.getBool('isExpertOnline') ?? false;
+
+    if (!isExpertOnline) {
+      debugPrint('[BG Handler] Female expert is offline. Ignoring notification.');
+      return;
+    }
+  }
 
   if (type == 'call') {
     await _showCallkitIncoming(data);
@@ -121,7 +137,7 @@ Future<void> _showCallkitIncoming(Map<String, dynamic> data) async {
     },
     headers: <String, dynamic>{'platform': 'android'},
     android: const AndroidParams(
-      isCustomNotification: true,
+      isCustomNotification: false,
       isShowLogo: false,
       isShowCallID: false,
       ringtonePath: 'ringtone_default', // use embedded MP3/WAV from res/raw
@@ -302,6 +318,17 @@ class NotificationService {
     final data = message.data;
     final type = data['type'] ?? '';
 
+    final prefs = await SharedPreferences.getInstance();
+    final userRole = prefs.getString('userRole') ?? '';
+    
+    if (userRole == 'female') {
+      final isExpertOnline = prefs.getBool('isExpertOnline') ?? false;
+      if (!isExpertOnline) {
+        debugPrint('[FCM] Female is offline. Ignoring foreground notification.');
+        return;
+      }
+    }
+
     if (type == 'call') {
       // Show native CallKit even when the app is open — consistent UX
       await _showCallkitIncoming(data);
@@ -388,16 +415,22 @@ class NotificationService {
         final callRoomId = event.id;
         debugPrint('[CallKit] Declined: $callRoomId');
 
-        // Notify caller by updating Firestore call status
+        // End call properly via CallService (this also unlocks both users in RTDB)
         if (callRoomId.isNotEmpty) {
-          await FirebaseFirestore.instance
-              .collection('calls')
-              .doc(callRoomId)
-              .update({'status': 'ended'}).catchError(
-                  (e) => debugPrint('[CallKit] Firestore error: $e'));
+          try {
+            await CallService().endCall(callRoomId);
+          } catch (e) {
+            debugPrint('[CallKit] RTDB error: $e');
+          }
         }
       } else if (event is CallEventActionCallTimeout) {
+        final callRoomId = event.id;
         debugPrint('[CallKit] Call timed out.');
+        
+        // End call properly via CallService to release locks
+        if (callRoomId != null && callRoomId.isNotEmpty) {
+           await CallService().endCall(callRoomId);
+        }
         await FlutterCallkitIncoming.endAllCalls();
       }
     });

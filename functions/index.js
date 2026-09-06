@@ -125,12 +125,21 @@ exports.onCallInitiated = functions.region("asia-south1").firestore
 
     // ── Step 2: Business Logic Gate ────────────────────────────────────────
     //
+    // Fetch RTDB presence for accurate online/offline detection (especially when app is killed)
+    let rtdbIsOnline = false;
+    if (gender === "female") {
+      const statusSnap = await admin.database().ref(`status/${receiverId}`).once("value");
+      if (statusSnap.exists()) {
+        rtdbIsOnline = statusSnap.val().isOnline === true;
+      }
+    }
+
     // CONDITION 1 (Female/Expert): If isOnline == false → DO NOT send notification.
     // CONDITION 2 (Male/User):     Always send.
     //
-    if (gender === "female" && isOnline === false) {
+    if (gender === "female" && !rtdbIsOnline) {
       functions.logger.info(
-        `Receiver '${receiverId}' (female) is offline. Suppressing call notification.`
+        `Receiver '${receiverId}' (female) is offline in RTDB. Suppressing call notification.`
       );
       // Also update call status to 'rejected' so the caller gets feedback
       await snap.ref.update({ status: "rejected_offline" });
@@ -173,8 +182,14 @@ exports.onCallInitiated = functions.region("asia-south1").firestore
     };
 
     // ── Step 5: Send the FCM data message ──────────────────────────────────
-    // Note: No notification block because CallKit handles the ringing UI directly.
-    await sendFcmMessage(fcmToken, fcmData, null, true);
+    // We send BOTH a data payload (for flutter_callkit_incoming when alive)
+    // AND a notification payload (for Android system to show as heads-up when
+    // background Dart isolate is blocked by battery optimization on Infinix/MIUI).
+    const notificationPayload = {
+      title: `Incoming Call`,
+      body: callerName,
+    };
+    await sendFcmMessage(fcmToken, fcmData, notificationPayload, true);
 
     functions.logger.info(
       `[onCallInitiated] Notification sent to expert '${receiverId}'.`
@@ -223,6 +238,7 @@ exports.onMessageSent = functions.region("asia-south1").database
       receiverData = receiverDoc.data();
     }
 
+    const gender = receiverData.gender || (isExpert ? "female" : "male");
     const fcmToken = receiverData.fcmToken || null;
 
 
@@ -237,8 +253,21 @@ exports.onMessageSent = functions.region("asia-south1").database
     }
 
     // ── Step 2: Business Logic Gate ────────────────────────────────────────
-    // For messages, we WANT to notify the expert even if they are offline (app closed).
-    // Removed the offline suppression logic here so they always get message alerts.
+    
+    let rtdbIsOnline = false;
+    if (gender === "female") {
+      const statusSnap = await admin.database().ref(`status/${receiverId}`).once("value");
+      if (statusSnap.exists()) {
+        rtdbIsOnline = statusSnap.val().isOnline === true;
+      }
+    }
+
+    if (gender === "female" && !rtdbIsOnline) {
+      functions.logger.info(
+        `Receiver '${receiverId}' (female) is offline in RTDB. Suppressing message notification.`
+      );
+      return null;
+    }
 
     if (!fcmToken) {
       functions.logger.warn(`Receiver '${receiverId}' has no FCM token.`);

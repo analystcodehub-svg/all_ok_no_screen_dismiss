@@ -66,6 +66,7 @@ class AppState extends ChangeNotifier {
 
   void setSelectedGender(String gender) {
     _selectedGender = gender;
+    SharedPreferences.getInstance().then((prefs) => prefs.setString('userRole', gender.toLowerCase()));
     notifyListeners();
   }
 
@@ -115,6 +116,7 @@ class AppState extends ChangeNotifier {
 
   void setOnlineStatus(bool online) {
     _isOnline = online;
+    SharedPreferences.getInstance().then((prefs) => prefs.setBool('isExpertOnline', online));
     notifyListeners();
   }
 

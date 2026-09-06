@@ -13,6 +13,8 @@ import 'services/foreground_task_service.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'screens/maintenance_screen.dart';
 import 'screens/hybrid_chat_screen.dart';
+import 'dart:ui';
+import 'dart:isolate';
 
 /// Global navigator key — used by NotificationService to navigate
 /// after a call is accepted from the background / lock screen.
@@ -20,6 +22,10 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Register port to reliably identify if UI isolate is alive from the background
+  IsolateNameServer.removePortNameMapping('ui_isolate');
+  IsolateNameServer.registerPortWithName(ReceivePort().sendPort, 'ui_isolate');
 
   // Lock app to portrait mode — prevents overflow on landscape rotation
   await SystemChrome.setPreferredOrientations([

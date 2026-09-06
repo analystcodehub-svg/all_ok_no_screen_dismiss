@@ -67,11 +67,13 @@ class MatchmakingService {
         // Set presence first, and set callStatus to available
         await presenceRef.update({
           'isOnline': true,
+          'status': 'online',
           'callStatus': 'available',
           'lastChanged': ServerValue.timestamp,
         });
         await presenceRef.onDisconnect().update({
           'isOnline': false,
+          'status': 'offline',
           'callStatus': 'offline',
           'lastChanged': ServerValue.timestamp,
         });
@@ -86,6 +88,10 @@ class MatchmakingService {
           if (avatarUrl != null && avatarUrl.isNotEmpty) 'avatarUrl': avatarUrl,
         });
         await docRef.onDisconnect().remove();
+        
+        // Force clear active_calls lock just in case they were stuck
+        await _db.ref('active_calls/$expertId').remove();
+        
         debugPrint('Expert $expertId added to $bucketPath.');
       } else {
         await docRef.remove();
@@ -93,10 +99,15 @@ class MatchmakingService {
         
         await presenceRef.update({
           'isOnline': false,
+          'status': 'offline',
           'callStatus': 'offline',
           'lastChanged': ServerValue.timestamp,
         });
         await presenceRef.onDisconnect().cancel();
+        
+        // Clear active_calls lock just in case
+        await _db.ref('active_calls/$expertId').remove();
+        
         debugPrint('Expert $expertId removed from queue & status.');
       }
     } catch (e) {

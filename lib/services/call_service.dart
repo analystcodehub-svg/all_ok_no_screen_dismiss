@@ -344,9 +344,28 @@ class CallService {
     try {
       final DatabaseReference roomRef = _database.ref('calls/$callRoomId');
       
-      // Update room status to ended and remove node
-      await roomRef.update({'status': 'ended'});
-      await roomRef.remove();
+      // Fetch caller and receiver ID to forcefully unlock them
+      final snapshot = await roomRef.get();
+      if (snapshot.exists) {
+        final data = Map<String, dynamic>.from(snapshot.value as Map);
+        final callerId = data['callerId']?.toString();
+        final receiverId = data['receiverId']?.toString();
+        
+        // Update room status to ended and remove node
+        await roomRef.update({'status': 'ended'});
+        await roomRef.remove();
+        
+        // Unlock both parties
+        if (callerId != null) {
+          await unlockUserFromCall(callerId);
+        }
+        if (receiverId != null) {
+          await unlockUserFromCall(receiverId);
+        }
+      } else {
+        await roomRef.update({'status': 'ended'});
+        await roomRef.remove();
+      }
     } catch (e) {
       debugPrint('Error ending call document: $e');
     } finally {

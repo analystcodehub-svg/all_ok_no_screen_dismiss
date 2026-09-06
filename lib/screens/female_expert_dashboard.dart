@@ -21,11 +21,12 @@ class FemaleExpertDashboard extends StatefulWidget {
   State<FemaleExpertDashboard> createState() => _FemaleExpertDashboardState();
 }
 
-class _FemaleExpertDashboardState extends State<FemaleExpertDashboard> with SingleTickerProviderStateMixin {
+class _FemaleExpertDashboardState extends State<FemaleExpertDashboard> with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   late AnimationController _pulseController;
   final CallService _callService = CallService();
   late final MatchmakingService _matchingService;
   StreamSubscription? _incomingCallSubscription;
+  bool _isInCall = false; // guard against re-starting listener during active call
 
   @override
   void initState() {
@@ -35,6 +36,8 @@ class _FemaleExpertDashboardState extends State<FemaleExpertDashboard> with Sing
       vsync: this,
       duration: const Duration(seconds: 2),
     )..repeat();
+
+    WidgetsBinding.instance.addObserver(this);
 
     // Start listening for calls if already online
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -71,9 +74,22 @@ class _FemaleExpertDashboardState extends State<FemaleExpertDashboard> with Sing
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _stopIncomingCallListener();
     _pulseController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && !_isInCall) {
+      // Re-sync RTDB presence ONLY when NOT already in an incoming/active call.
+      // If we refresh during a call, it re-starts the listener and freezes buttons.
+      final appState = context.read<AppState>();
+      if (appState.isOnline) {
+        _updateOnlineStatus(true);
+      }
+    }
   }
 
   void _startIncomingCallListener(String expertId) {
@@ -125,6 +141,8 @@ class _FemaleExpertDashboardState extends State<FemaleExpertDashboard> with Sing
   }
 
   void _showIncomingCallDialog(String roomId, String callerId) {
+    if (_isInCall) return; // prevent double-showing
+    _isInCall = true;
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -134,6 +152,7 @@ class _FemaleExpertDashboardState extends State<FemaleExpertDashboard> with Sing
         ),
       ),
     ).then((_) {
+      _isInCall = false;
       if (mounted) {
         final appState = context.read<AppState>();
         _loadEarningsFromFirestore(appState);
