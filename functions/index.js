@@ -14,7 +14,9 @@
 const admin = require("firebase-admin");
 const functions = require("firebase-functions");
 
-admin.initializeApp();
+admin.initializeApp({
+  databaseURL: "https://zegochat-c44b0.asia-southeast1.firebasedatabase.app",
+});
 
 const db = admin.firestore();
 const messaging = admin.messaging();
@@ -74,10 +76,11 @@ async function sendFcmMessage(fcmToken, data, notificationPayload = null, isCall
 // Triggered when a new document is created in the `calls` collection.
 // ─────────────────────────────────────────────────────────────────────────────
 
-exports.onCallInitiated = functions.region("asia-south1").firestore
-  .document("calls/{callId}")
+exports.onCallInitiated = functions.region("asia-south1").database
+  .instance('zegochat-c44b0')
+  .ref("calls/{callId}")
   .onCreate(async (snap, context) => {
-    const callData = snap.data();
+    const callData = snap.val();
     const callId = context.params.callId;
 
     const receiverId = callData.receiverId; // Expert's nickname (lowercase)
@@ -182,14 +185,11 @@ exports.onCallInitiated = functions.region("asia-south1").firestore
     };
 
     // ── Step 5: Send the FCM data message ──────────────────────────────────
-    // We send BOTH a data payload (for flutter_callkit_incoming when alive)
-    // AND a notification payload (for Android system to show as heads-up when
-    // background Dart isolate is blocked by battery optimization on Infinix/MIUI).
-    const notificationPayload = {
-      title: `Incoming Call`,
-      body: callerName,
-    };
-    await sendFcmMessage(fcmToken, fcmData, notificationPayload, true);
+    // IMPORTANT: Send ONLY data payload (no notification block).
+    // If notification block is present, Android handles it at system level
+    // and does NOT call our Dart background handler — so CallKit never shows.
+    // Data-only messages always wake our firebaseMessagingBackgroundHandler.
+    await sendFcmMessage(fcmToken, fcmData, null, true);
 
     functions.logger.info(
       `[onCallInitiated] Notification sent to expert '${receiverId}'.`

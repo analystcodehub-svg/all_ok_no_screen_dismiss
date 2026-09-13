@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import '../theme/app_colors.dart';
 import '../providers/app_state.dart';
 import '../services/local_chat_database.dart';
-import '../widgets/local_avatar_widget.dart';
 class RecentSessionsScreen extends StatefulWidget {
   const RecentSessionsScreen({super.key});
 
@@ -35,7 +34,7 @@ class _RecentSessionsScreenState extends State<RecentSessionsScreen> {
           } else {
             final profileSnap = await FirebaseFirestore.instance.collection(collectionName).doc(otherUserId).get();
             if (profileSnap.exists) {
-              final profileData = profileSnap.data() as Map<String, dynamic>?;
+              final profileData = profileSnap.data();
               if (profileData != null) {
                 final nick = profileData['nickname']?.toString().trim() ?? '';
                 final name = profileData['name']?.toString().trim() ?? '';

@@ -67,7 +67,7 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
         } else {
           final expertSnap = await FirebaseFirestore.instance.collection('experts').doc(expertId).get();
           if (expertSnap.exists) {
-            final expertData = expertSnap.data() as Map<String, dynamic>?;
+            final expertData = expertSnap.data();
             if (expertData != null) {
               displayName = expertData['nickname'] ?? expertData['name'] ?? expertId;
               avatarUrl = expertData['profileImageUrl'] ?? expertData['avatarUrl'];

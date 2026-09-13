@@ -46,13 +46,18 @@ void main() async {
   // ── 1. Initialize Firebase ──────────────────────────────────────────────
   bool firebaseInitialized = false;
   try {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
+    if (Firebase.apps.isEmpty) {
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+    }
     firebaseInitialized = true;
     debugPrint('Firebase initialized successfully.');
   } catch (e) {
     debugPrint('Firebase initialization failed: $e');
+    if (e.toString().contains('duplicate-app')) {
+      firebaseInitialized = true;
+    }
   }
 
   // ── 2. Initialize Notification Service (FCM + CallKit) ─────────────────

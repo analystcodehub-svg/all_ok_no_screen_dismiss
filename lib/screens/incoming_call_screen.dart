@@ -44,7 +44,11 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
       'hasUsedFreeCall': true,
     };
     try {
-      final doc = await FirebaseFirestore.instance.collection('users').doc(widget.callerId).get();
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.callerId)
+          .get()
+          .timeout(const Duration(seconds: 2));
       if (doc.exists && doc.data() != null) {
         final data = doc.data()!;
         if (data['nickname'] != null && data['nickname'].toString().isNotEmpty) {
@@ -189,10 +193,15 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
     
     _vibrateTimer?.cancel();
     FlutterRingtonePlayer().stop();
-    _callService.endCall(widget.callRoomId);
+    
     if (mounted) {
       Navigator.pop(context);
     }
+    
+    // Perform network call asynchronously after popping
+    _callService.endCall(widget.callRoomId).catchError((e) {
+      debugPrint('Error ending call: $e');
+    });
   }
 
   @override

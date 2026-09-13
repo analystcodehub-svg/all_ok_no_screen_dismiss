@@ -5,7 +5,6 @@ import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../providers/app_state.dart';
 import 'payment_history_screen.dart';
-import 'payment_success_screen.dart';
 class RechargePackage {
   final double amount;
   final int coins;

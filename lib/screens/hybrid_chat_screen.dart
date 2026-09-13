@@ -6,7 +6,6 @@ import '../theme/app_colors.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_state.dart';
 import '../widgets/local_avatar_widget.dart';
-import 'package:firebase_database/firebase_database.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'wallet_recharge_screen.dart';
 import '../services/block_service.dart';

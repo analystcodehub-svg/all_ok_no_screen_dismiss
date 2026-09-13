@@ -1,0 +1,81 @@
+{
+    "configurations": [
+        {
+            "name": "Cloud Run: Run/Debug Locally",
+            "type": "cloudcode.cloudrun",
+            "request": "launch",
+            "build": {
+                "buildpacks": {
+                    "path": "android/build.gradle.kts",
+                    "builder": "gcr.io/buildpacks/builder:v1"
+                }
+            },
+            "image": "vimal",
+            "service": {
+                "name": "vimal",
+                "containerPort": 8080,
+                "resources": {
+                    "limits": {
+                        "memory": "256Mi"
+                    }
+                }
+            },
+            "target": {
+                "minikube": {}
+            },
+            "watch": false,
+            "externalPortForward": 3000
+        },
+        {
+            "name": "Cloud Run: Run/Debug Locally",
+            "type": "cloudcode.cloudrun",
+            "request": "launch",
+            "build": {
+                "buildpacks": {
+                    "path": "android/build.gradle.kts",
+                    "builder": "gcr.io/buildpacks/builder:v1"
+                }
+            },
+            "image": "vimal",
+            "service": {
+                "name": "vimal",
+                "containerPort": 8080,
+                "resources": {
+                    "limits": {
+                        "memory": "256Mi"
+                    }
+                }
+            },
+            "target": {
+                "minikube": {}
+            },
+            "watch": true,
+            "externalPortForward": 3000
+        },
+        {
+            "name": "Cloud Run: Run/Debug Locally",
+            "type": "cloudcode.cloudrun",
+            "request": "launch",
+            "build": {
+                "buildpacks": {
+                    "path": "android/build.gradle.kts",
+                    "builder": "gcr.io/buildpacks/builder:v1"
+                }
+            },
+            "image": "vimal",
+            "service": {
+                "name": "vimal",
+                "containerPort": 8080,
+                "resources": {
+                    "limits": {
+                        "memory": "256Mi"
+                    }
+                }
+            },
+            "target": {
+                "minikube": {}
+            },
+            "watch": true
+        }
+    ]
+}

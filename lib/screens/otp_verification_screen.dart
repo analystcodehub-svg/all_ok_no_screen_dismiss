@@ -8,7 +8,6 @@ import '../theme/app_theme.dart';
 import 'gender_selection_screen.dart';
 import 'main_navigation.dart';
 import 'male_dashboard_screen.dart';
-import 'dart:async';
 
 class OtpVerificationScreen extends StatefulWidget {
   final String verificationId;
