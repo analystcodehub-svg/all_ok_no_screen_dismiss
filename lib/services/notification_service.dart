@@ -14,6 +14,7 @@ import 'package:flutter_callkit_incoming/entities/call_kit_params.dart';
 import 'package:flutter_callkit_incoming/entities/android_params.dart';
 import 'package:flutter_callkit_incoming/entities/ios_params.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter_ringtone_player/flutter_ringtone_player.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_callkit_incoming/entities/call_event.dart';
@@ -119,13 +120,33 @@ Future<void> _showCallkitIncoming(Map<String, dynamic> data) async {
   final callerName   = data['callerName']  ?? 'Unknown Caller';
   final callRoomId   = data['callRoomId']  ?? '';
 
+  // Explicitly play the ringtone using flutter_ringtone_player to bypass OS restrictions
+  FlutterRingtonePlayer().play(
+    android: AndroidSounds.ringtone,
+    ios: IosSounds.glass,
+    looping: true,
+    volume: 1.0,
+    asAlarm: true,
+  );
+
+  // Stop ringtone when the user interacts or it times out
+  FlutterCallkitIncoming.onEvent.listen((event) {
+    if (event is CallEventActionCallAccept ||
+        event is CallEventActionCallDecline ||
+        event is CallEventActionCallTimeout ||
+        event is CallEventActionCallEnded) {
+      FlutterRingtonePlayer().stop();
+    }
+  });
+
+
   final params = CallKitParams(
     id: uuid,
     nameCaller: callerName,
     appName: 'SajniRe',
     handle: 'SajniRe Audio Call',
     type: 0,          // 0 = audio call
-    duration: 30000,  // auto-dismiss after 30s
+    duration: 15000,  // auto-dismiss and stop ringing after 15s
     // Pass call info through extra so we can navigate on Accept
     extra: <String, dynamic>{
       'callRoomId': callRoomId,
@@ -136,7 +157,7 @@ Future<void> _showCallkitIncoming(Map<String, dynamic> data) async {
       isCustomNotification: true,
       isShowLogo: false,
       isShowCallID: false,
-      ringtonePath: 'ringtone_default', // use embedded MP3/WAV from res/raw
+      ringtonePath: '', // Handled manually by flutter_ringtone_player
       backgroundColor: '#1976D2',
       actionColor: '#4CAF50',
       textColor: '#ffffff',
@@ -387,6 +408,7 @@ class NotificationService {
       debugPrint('[CallKit] Event: ${event.eventName}');
 
       if (event is CallEventActionCallAccept) {
+        FlutterRingtonePlayer().stop();
         // The UUID we passed as CallKitParams.id equals the Firestore callRoomId
         final callRoomId = event.id;
         debugPrint('[CallKit] Accepted: $callRoomId');
@@ -409,6 +431,7 @@ class NotificationService {
         }
         pushRoute();
       } else if (event is CallEventActionCallDecline) {
+        FlutterRingtonePlayer().stop();
         final callRoomId = event.id;
         debugPrint('[CallKit] Declined: $callRoomId');
 
