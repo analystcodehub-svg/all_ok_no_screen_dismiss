@@ -82,8 +82,39 @@ class MainActivity : FlutterActivity() {
                         pendingResult?.error("HINT_UNAVAILABLE", "Phone hint not available: ${e.message}", null)
                         pendingResult = null
                     }
+            } else if (call.method == "bringToForeground") {
+                val intent = Intent(context, MainActivity::class.java)
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+                startActivity(intent)
+                result.success(null)
+            } else if (call.method == "setAppCloseHandler") {
+                val expertId = call.argument<String>("expertId")
+                val serviceIntent = Intent(context, AppCloseService::class.java)
+                serviceIntent.putExtra("expertId", expertId)
+                context.startService(serviceIntent)
+                result.success(null)
+            } else if (call.method == "clearAppCloseHandler") {
+                val serviceIntent = Intent(context, AppCloseService::class.java)
+                context.stopService(serviceIntent)
+                result.success(null)
             } else {
                 result.notImplemented()
+            }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        // Catch CallKit accept action!
+        if (intent.action == "com.sajnire.app.com.hiennv.flutter_callkit_incoming.ACTION_CALL_ACCEPT" ||
+            intent.action == "com.hiennv.flutter_callkit_incoming.ACTION_CALL_ACCEPT") {
+            
+            // AppUtils uses EXTRA_CALLKIT_CALL_DATA
+            val data = intent.getBundleExtra("EXTRA_CALLKIT_CALL_DATA")
+            val callRoomId = data?.getString("EXTRA_CALLKIT_ID")
+            
+            flutterEngine?.dartExecutor?.binaryMessenger?.let { messenger ->
+                MethodChannel(messenger, CHANNEL).invokeMethod("onCallAcceptFallback", callRoomId)
             }
         }
     }

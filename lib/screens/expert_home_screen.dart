@@ -1,6 +1,10 @@
+import "../utils/permission_helper.dart";
+import "../utils/auto_start_helper.dart";
+import "../services/foreground_task_service.dart";
 import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -15,6 +19,8 @@ import '../services/notification_service.dart';
 import '../services/hybrid_chat_service.dart';
 import '../services/local_chat_database.dart';
 import '../widgets/local_avatar_widget.dart';
+import '../screens/blocked_users_screen.dart';
+import '../utils/auto_start_helper.dart';
 
 class ExpertHomeScreen extends StatefulWidget {
   final VoidCallback? onNavigateToChat;
@@ -26,7 +32,7 @@ class ExpertHomeScreen extends StatefulWidget {
 }
 
 class _ExpertHomeScreenState extends State<ExpertHomeScreen>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   bool _isAudioOn = false;
   int _totalTalktimeMinutes = 0;
   double _redeemableBalance = 0.0;
@@ -36,6 +42,7 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
   late final MatchmakingService _matchingService;
   StreamSubscription? _incomingCallSubscription;
   StreamSubscription? _chatDbSubscription;
+  StreamSubscription<DocumentSnapshot>? _expertStatsSubscription;
   int _unreadMessageCount = 0;
 
   // Animations
@@ -47,10 +54,14 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _matchingService = MatchmakingService();
     
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadUnreadCount();
+      
+      // Check for auto-start permissions (Infinix, Xiaomi, etc.)
+      AutoStartHelper.checkAndRequestAutoStart(context);
     });
     
     _chatDbSubscription = LocalChatDatabase.instance.updates.listen((_) {
@@ -76,6 +87,8 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
     _cardSlideController.forward();
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      AutoStartHelper.checkAndRequestAutoStart(context);
+      
       if (FirebaseAuth.instance.currentUser == null) {
         try {
           await FirebaseAuth.instance.signInAnonymously();
@@ -99,9 +112,11 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     // HybridChatService.instance.dispose();
     _incomingCallSubscription?.cancel();
     _chatDbSubscription?.cancel();
+    _expertStatsSubscription?.cancel();
     _pulseController.dispose();
     _cardSlideController.dispose();
     super.dispose();
@@ -121,9 +136,17 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
 
   // ── Firestore ──────────────────────────────────────────────────────────
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      if (mounted) {
+        _fetchExpertStats();
+      }
+    }
+  }
+
   Future<void> _fetchExpertStats() async {
     if (!mounted) return;
-    setState(() => _isLoadingStats = true);
     final appState = context.read<AppState>();
     final expertId = appState.uid;
     if (expertId.isEmpty) {
@@ -137,32 +160,70 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
       collection: 'experts',
     );
     
-    try {
-      final doc = await FirebaseFirestore.instance
-          .collection('experts')
-          .doc(expertId)
-          .get();
+    _expertStatsSubscription?.cancel();
+    _expertStatsSubscription = FirebaseFirestore.instance
+        .collection('experts')
+        .doc(expertId)
+        .snapshots()
+        .listen((doc) {
       if (doc.exists && mounted) {
         final data = doc.data()!;
         setState(() {
-          _totalTalktimeMinutes =
-              (data['totalTalktimeMinutes'] as num?)?.toInt() ?? 0;
-          _redeemableBalance =
-              (data['redeemableBalance'] as num?)?.toDouble() ?? 0.0;
+          _totalTalktimeMinutes = (data['totalTalktimeMinutes'] as num?)?.toInt() ?? 0;
+          _redeemableBalance = (data['redeemableBalance'] as num?)?.toDouble() ?? 0.0;
+          _isLoadingStats = false;
         });
         
         if (data.containsKey('avatarIndex')) {
           context.read<AppState>().setAvatarIndex((data['avatarIndex'] as num).toInt());
         }
       }
-    } catch (e) {
-      debugPrint('Error fetching expert stats: $e');
-    } finally {
+    }, onError: (e) {
+      debugPrint('Error listening to expert stats: $e');
       if (mounted) setState(() => _isLoadingStats = false);
-    }
+    });
   }
 
   Future<void> _updateOnlineStatus(bool value) async {
+    if (value) {
+      // 1. Check Notifications Permission
+      final hasNotif = await Permission.notification.request().isGranted;
+      if (!hasNotif) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Notifications permission is required to receive calls.')),
+          );
+        }
+        setState(() => _isAudioOn = false);
+        return;
+      }
+
+      // 2. Check System Alert Window (Display over other apps)
+      final hasAlert = await Permission.systemAlertWindow.request().isGranted;
+      if (!hasAlert) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Display over other apps permission is required for incoming calls.')),
+          );
+        }
+        setState(() => _isAudioOn = false);
+        return;
+      }
+
+      // 3. Check Microphone Permission (Required for Foreground Service to not crash)
+      final hasMic = await Permission.microphone.request().isGranted;
+      if (!hasMic) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Microphone permission is required to talk on calls.')),
+          );
+        }
+        // Force the switch back to offline if permission denied
+        setState(() => _isAudioOn = false);
+        return;
+      }
+    }
+
     final appState = context.read<AppState>();
     appState.setOnlineStatus(value);
     setState(() => _isAudioOn = value);
@@ -185,7 +246,7 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
           'nickname': appState.nickname,
           'mobileNumber': appState.mobileNumber,
           'age': 2026 - appState.birthYear,
-          'pricePerMin': 5,
+          'pricePerMin': 3,
           'languages': appState.primaryLanguage,
           'rating': 4.8,
         }, SetOptions(merge: true));
@@ -198,8 +259,12 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
     }
     if (value) {
       _startIncomingCallListener(expertId);
+      // Keep app alive in background while expert is online
+      ForegroundTaskService.startService();
     } else {
       _incomingCallSubscription?.cancel();
+      // Stop keeping the app alive if expert goes offline
+      ForegroundTaskService.stopService();
     }
   }
 
@@ -207,8 +272,9 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
     _incomingCallSubscription?.cancel();
     _incomingCallSubscription = _callService.listenForIncomingCalls(
       expertId: expertId,
-      onCallReceived: (roomId, callerId) =>
-          _showIncomingCallDialog(roomId, callerId),
+      onCallReceived: (roomId, callerId) {
+        // Native CallKit will be triggered by FCM instead.
+      },
     );
   }
 
@@ -221,7 +287,9 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
           callerId: callerId,
           onCallEnded: () {
             if (mounted) {
-              _fetchExpertStats();
+              Future.delayed(const Duration(milliseconds: 1500), () {
+                if (mounted) _fetchExpertStats();
+              });
             }
           },
         ),
@@ -379,7 +447,10 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
             color: AppColors.bgLight, // Main body background
             child: RefreshIndicator(
               color: AppColors.primaryBlue,
-              onRefresh: _fetchExpertStats,
+              onRefresh: () async {
+                await _fetchExpertStats();
+                await Future.delayed(const Duration(milliseconds: 500));
+              },
               child: SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 child: SlideTransition(
@@ -492,6 +563,7 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
                   ],
                 ),
               ),
+
               // Balance pill
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -743,6 +815,76 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
                 );
               }
             ),
+            ),
+          
+          // Blocked Users Box
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+            child: GestureDetector(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const BlockedUsersScreen()),
+                );
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                decoration: BoxDecoration(
+                  color: AppColors.bgLight,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: Colors.transparent,
+                    width: 1.5,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    // Icon
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: const BoxDecoration(
+                        color: AppColors.lightBlueBg,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.block,
+                        color: AppColors.primaryBlue,
+                        size: 22,
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    // Label
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: const [
+                          Text(
+                            'Blocked Users',
+                            style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.textDark),
+                          ),
+                          SizedBox(height: 2),
+                          Text(
+                            'Manage your blocked list',
+                            style: TextStyle(
+                                fontSize: 12,
+                                color: AppColors.textGrey),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Icon(
+                      Icons.arrow_forward_ios_rounded,
+                      size: 16,
+                      color: AppColors.textGrey.withValues(alpha: 0.5),
+                    )
+                  ],
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -797,7 +939,10 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
                 ),
                 const Spacer(),
                 GestureDetector(
-                  onTap: _fetchExpertStats,
+                  onTap: () {
+                    setState(() => _isLoadingStats = true);
+                    _fetchExpertStats();
+                  },
                   child: const Icon(Icons.refresh_rounded,
                       color: AppColors.primaryBlue, size: 20),
                 ),

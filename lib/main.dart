@@ -38,9 +38,8 @@ void main() async {
     SystemUiMode.manual,
     overlays: [SystemUiOverlay.top, SystemUiOverlay.bottom],
   );
-  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-    statusBarColor: Colors.transparent,
-    statusBarIconBrightness: Brightness.dark,
+  SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle.light.copyWith(
+    statusBarColor: Colors.black, // Black background
   ));
 
   // ── 1. Initialize Firebase ──────────────────────────────────────────────
@@ -80,8 +79,36 @@ void main() async {
   );
 }
 
-class SajniReApp extends StatelessWidget {
+class SajniReApp extends StatefulWidget {
   const SajniReApp({super.key});
+
+  @override
+  State<SajniReApp> createState() => _SajniReAppState();
+}
+
+class _SajniReAppState extends State<SajniReApp> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    // Limit ImageCache size globally for memory optimization
+    PaintingBinding.instance.imageCache.maximumSizeBytes = 50 * 1024 * 1024; // 50 MB
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.hidden) {
+      // Clear bitmap memory when app goes to background (Android Vitals optimization)
+      PaintingBinding.instance.imageCache.clear();
+      PaintingBinding.instance.imageCache.clearLiveImages();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -124,12 +151,19 @@ class SajniReApp extends StatelessWidget {
         '/active-call': (context) {
           final args = ModalRoute.of(context)!.settings.arguments
               as Map<String, dynamic>;
+          
+          // Resolve callerId properly from arguments if available, fallback to name
+          final passedCallerId = args['callerId'] as String?;
+          final resolvedCallerId = (passedCallerId != null && passedCallerId.isNotEmpty) 
+              ? passedCallerId 
+              : args['callerName'] as String;
+
           return ActiveCallPage(
             callRoomId: args['callRoomId'] as String,
             receiverId: '',      // Will be resolved inside ActiveCallPage
-            callerId:   args['callerName'] as String,
+            callerId:   resolvedCallerId,
             nickname:   args['callerName'] as String,
-            pricePerMin: 5.0,
+            pricePerMin: 3.0,
             isCaller: false,     // Receiver is accepting
           );
         },

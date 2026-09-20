@@ -176,7 +176,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
             nickname: callerData['nickname'] ?? 'User',
             avatarUrl: callerData['avatarUrl'] as String?,
             avatarIndex: (callerData['avatarIndex'] as num?)?.toInt() ?? 1,
-            pricePerMin: 5.0,
+            pricePerMin: 3.0,
             isCaller: false,
             callerCoinBalance: (callerData['coinBalance'] as num?)?.toInt() ?? 0,
             callerHasUsedFreeCall: callerData['hasUsedFreeCall'] as bool? ?? true,
@@ -207,201 +207,106 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A), // Dark slate premium bg
-      body: SafeArea(
-        child: Column(
-          children: [
-            const Spacer(flex: 2),
-            
-            // Header text
-            const Text(
-              'Incoming Call',
-              style: TextStyle(
-                color: Colors.white70,
-                fontSize: 22,
-                fontWeight: FontWeight.w500,
-                letterSpacing: 2,
-              ),
-            ),
-            const SizedBox(height: 16),
-            FutureBuilder<Map<String, dynamic>>(
-              future: _callerDataFuture,
-              builder: (context, snapshot) {
-                final data = snapshot.data ?? {'nickname': 'User'};
-                final displayName = data['nickname'] as String;
-                return Text(
-                  displayName.toUpperCase(),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 32,
-                    fontWeight: FontWeight.bold,
-                  ),
-                );
-              },
-            ),
-            
-            const Spacer(flex: 3),
-            
-            // Pulsing Avatar
-            Center(
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  // Rings
-                  AnimatedBuilder(
-                    animation: _pulseController,
-                    builder: (context, child) {
-                      return Stack(
-                        alignment: Alignment.center,
-                        children: List.generate(3, (index) {
-                          final delay = index * 0.33;
-                          double progress =
-                              (_pulseController.value + delay) % 1.0;
-                          return Transform.scale(
-                            scale: 1.0 + (progress * 1.5),
-                            child: Opacity(
-                              opacity: (1.0 - progress).clamp(0.0, 1.0),
-                              child: Container(
-                                width: 140,
-                                height: 140,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: Colors.greenAccent,
-                                    width: 2,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          );
-                        }),
-                      );
-                    },
-                  ),
-                  
-                  // Center Avatar
-                  Container(
-                    width: 140,
-                    height: 140,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: const Color(0xFF1E293B),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.greenAccent.withValues(alpha: 0.3),
-                          blurRadius: 24,
-                          spreadRadius: 4,
-                        ),
-                      ],
-                    ),
-                    child: FutureBuilder<Map<String, dynamic>>(
-                      future: _callerDataFuture,
-                      builder: (context, snapshot) {
-                        final data = snapshot.data ?? {};
-                        return LocalAvatarWidget(
-                          uid: widget.callerId,
-                          role: 'user', // Assuming callers are always users
-                          radius: 70,
-                          avatarUrl: data['avatarUrl'] as String?,
-                          avatarIndex: (data['avatarIndex'] as int?) ?? 1,
-                        );
-                      }
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            
-            const Spacer(flex: 4),
-            
-            // Action Buttons
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 40),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  // Decline
-                  Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      GestureDetector(
-                        onTap: _declineCall,
-                        child: Container(
-                          width: 72,
-                          height: 72,
-                          decoration: BoxDecoration(
-                            color: Colors.redAccent,
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.redAccent.withValues(alpha: 0.4),
-                                blurRadius: 16,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: const Icon(
-                            Icons.call_end,
-                            color: Colors.white,
-                            size: 32,
-                          ),
-                        ),
+      backgroundColor: Colors.black,
+      body: Stack(
+        children: [
+          SafeArea(
+            child: Column(
+              children: [
+                const SizedBox(height: 80),
+
+                // Caller name
+                FutureBuilder<Map<String, dynamic>>(
+                  future: _callerDataFuture,
+                  builder: (context, snapshot) {
+                    final name = (snapshot.data?['nickname'] as String?) ?? 'User';
+                    return Text(
+                      name,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 32,
+                        fontWeight: FontWeight.bold,
                       ),
-                      const SizedBox(height: 12),
-                      const Text(
-                        'Decline',
-                        style: TextStyle(
-                          color: Colors.white70,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
+                    );
+                  },
+                ),
+
+                const SizedBox(height: 8),
+
+                const Text(
+                  'calling ....',
+                  style: TextStyle(
+                    color: Color(0xFFA3A3A3),
+                    fontSize: 18,
                   ),
-                  
-                  // Accept
-                  Column(
-                    mainAxisSize: MainAxisSize.min,
+                ),
+
+                const Spacer(),
+
+                // ─── Action Buttons ───────────────────────────────────────
+                Padding(
+                  padding: const EdgeInsets.only(
+                      left: 40, right: 40, bottom: 60, top: 40),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      GestureDetector(
+                      // Accept (Moved to Left)
+                      _buildActionButton(
+                        label: 'Accept',
+                        icon: Icons.call,
+                        color: const Color(0xFF10B981),
                         onTap: _acceptCall,
-                        child: Container(
-                          width: 72,
-                          height: 72,
-                          decoration: BoxDecoration(
-                            color: Colors.greenAccent.shade700,
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.greenAccent.withValues(alpha: 0.4),
-                                blurRadius: 16,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: const Icon(
-                            Icons.call,
-                            color: Colors.white,
-                            size: 32,
-                          ),
-                        ),
                       ),
-                      const SizedBox(height: 12),
-                      const Text(
-                        'Accept',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
+
+                      // Decline (Moved to Right)
+                      _buildActionButton(
+                        label: 'Decline',
+                        icon: Icons.call_end,
+                        color: const Color(0xFFEF4444),
+                        onTap: _declineCall,
                       ),
                     ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─── Helper Widgets ──────────────────────────────────────────────────────
+
+  Widget _buildActionButton({
+    required String label,
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 72,
+            height: 72,
+            decoration: BoxDecoration(
+              color: color,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: Colors.white, size: 32),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            label,
+            style: const TextStyle(
+              color: Color(0xFFD1D5DB),
+              fontSize: 16,
+            ),
+          ),
+        ],
       ),
     );
   }

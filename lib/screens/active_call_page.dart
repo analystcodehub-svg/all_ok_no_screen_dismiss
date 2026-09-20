@@ -5,11 +5,12 @@ import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
 import 'package:firebase_database/firebase_database.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../providers/app_state.dart';
 import '../services/call_service.dart';
 import '../services/local_chat_database.dart';
 import '../services/block_service.dart';
-import '../widgets/local_avatar_widget.dart';
+import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
 
 class ActiveCallPage extends StatefulWidget {
   final String? callRoomId; // Supplied for receiver/expert, generated for caller
@@ -64,12 +65,19 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
   // Tier-based expert earning rate (resolved from Firestore on connect)
   double _expertEarningRate = 1.0; // default Bronze
   bool _tierResolved = false;
+  int? _callerCoinBalance;
+  bool? _callerHasUsedFreeCall;
 
   @override
   void initState() {
     super.initState();
     _roomId = widget.callRoomId;
     _callService = widget.preStartedCallService ?? CallService();
+    
+    if (!widget.isCaller) {
+      _resolveRemoteData();
+    }
+    
     _initRenderersAndCall();
 
     if (widget.isCaller) {
@@ -92,15 +100,152 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Microphone permission is required for WebRTC audio calling.')),
           );
-          Navigator.pop(context);
-          return;
         }
+        return;
       }
+
       await _localRenderer.initialize();
       await _remoteRenderer.initialize();
-      await _initCall();
+
+      if (widget.preStartedCallService != null) {
+        await _initCall();
+        return;
+      }
+
+      if (!widget.isCaller) {
+        await _callService.acceptCall(
+          callRoomId: widget.callRoomId!,
+          onRemoteStream: (stream) {
+            if (mounted) {
+              setState(() {
+                _remoteRenderer.srcObject = stream;
+                _isConnected = true;
+                _isSpeakerOn = true;
+              });
+              Future.delayed(const Duration(milliseconds: 500), () {
+                Helper.setSpeakerphoneOn(true);
+              });
+              _ringingTimer?.cancel();
+              _startCallTimer();
+            }
+          },
+          onCallEnded: _hangupLocal,
+        );
+
+        if (mounted) {
+          setState(() {
+            if (_callService.localStream != null) {
+              _localRenderer.srcObject = _callService.localStream;
+            }
+            if (_callService.remoteStream != null) {
+              _remoteRenderer.srcObject = _callService.remoteStream;
+              _isConnected = true;
+              _isSpeakerOn = true;
+              _startCallTimer();
+            }
+          });
+        }
+        return;
+      }
+
+      if (widget.isCaller) {
+        try {
+          final generatedRoomId = await _callService.startCall(
+            expertId: widget.receiverId,
+            callerId: widget.callerId,
+            onRemoteStream: (stream) {
+              if (mounted) {
+                setState(() {
+                  _remoteRenderer.srcObject = stream;
+                  _isConnected = true;
+                  _isSpeakerOn = true;
+                });
+                Future.delayed(const Duration(milliseconds: 500), () {
+                  Helper.setSpeakerphoneOn(true);
+                });
+                _ringingTimer?.cancel();
+                _startCallTimer();
+              }
+            },
+            onCallEnded: _hangupLocal,
+          );
+          if (mounted) {
+            setState(() {
+              _roomId = generatedRoomId;
+              if (_callService.localStream != null) {
+                _localRenderer.srcObject = _callService.localStream;
+              }
+            });
+          }
+        } catch (e) {
+          debugPrint('Error starting call: $e');
+          _hangupLocal();
+        }
+      }
     } catch (e) {
-      debugPrint('Error during renderer initialization: $e');
+      debugPrint('Error in _initRenderersAndCall: $e');
+      _hangupLocal();
+    }
+  }
+
+  Future<void> _resolveRemoteData() async {
+    if (_tierResolved) return;
+    _tierResolved = true;
+    try {
+      String actualExpertId = widget.receiverId;
+      String actualCallerId = widget.callerId;
+
+      debugPrint('[_resolveRemoteData] Initial - expert: $actualExpertId, caller: $actualCallerId');
+
+      if (actualExpertId.isEmpty || actualCallerId.isEmpty || actualCallerId.contains(' ') || actualCallerId == 'Unknown Caller') {
+        final FirebaseDatabase database = FirebaseDatabase.instanceFor(
+          app: FirebaseDatabase.instance.app,
+          databaseURL: 'https://zegochat-c44b0.asia-southeast1.firebasedatabase.app',
+        );
+        final callDoc = await database.ref('calls/${widget.callRoomId}').get();
+        if (callDoc.exists) {
+          final data = Map<String, dynamic>.from(callDoc.value as Map);
+          actualCallerId = data['callerId'] ?? actualCallerId;
+          actualExpertId = data['receiverId'] ?? actualExpertId;
+          debugPrint('[_resolveRemoteData] Fetched from calls - expert: $actualExpertId, caller: $actualCallerId');
+        }
+      }
+
+      if (actualExpertId.isNotEmpty) {
+        final expertDoc = await FirebaseFirestore.instance
+            .collection('experts')
+            .doc(actualExpertId)
+            .get();
+        if (expertDoc.exists) {
+          final tier = expertDoc.data()?['tier'] as String? ?? 'bronze';
+          if (mounted) {
+            setState(() {
+              _expertEarningRate = tier == 'silver' ? 1.6 : 1.0;
+            });
+          }
+        }
+      }
+
+      if (actualCallerId.isNotEmpty) {
+        final callerDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(actualCallerId)
+            .get();
+        debugPrint('[_resolveRemoteData] callerDoc exists: ${callerDoc.exists}, data: ${callerDoc.data()}');
+        if (callerDoc.exists) {
+          final b = (callerDoc.data()?['coinBalance'] as num?)?.toInt() ?? 0;
+          final f = callerDoc.data()?['freeCallUsed'] as bool? ?? true;
+          debugPrint('[_resolveRemoteData] Setting balance: $b, freeUsed: $f');
+          if (mounted) {
+            setState(() {
+              _callerCoinBalance = b;
+              _callerHasUsedFreeCall = f;
+            });
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error resolving remote data: $e');
     }
   }
 
@@ -120,7 +265,6 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
             });
             _ringingTimer?.cancel();
             _startCallTimer();
-            if (!widget.isCaller) _resolveExpertTier();
           }
         },
         onCallEnded: _hangupLocal,
@@ -159,7 +303,6 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
               });
               _ringingTimer?.cancel();
               _startCallTimer();
-              if (!widget.isCaller) _resolveExpertTier();
             }
           },
           onCallEnded: _hangupLocal,
@@ -195,7 +338,6 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
                 Helper.setSpeakerphoneOn(true);
               });
               _startCallTimer();
-              if (!widget.isCaller) _resolveExpertTier();
             }
           },
           onCallEnded: _hangupLocal,
@@ -227,29 +369,6 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
     }, SetOptions(merge: true));
   }
 
-  Future<void> _resolveExpertTier() async {
-    if (_tierResolved) return;
-    _tierResolved = true;
-    try {
-      final expertId = widget.receiverId;
-      final expertDoc = await FirebaseFirestore.instance
-          .collection('experts')
-          .doc(expertId)
-          .get();
-
-      if (!expertDoc.exists) return;
-
-      final tier = expertDoc.data()?['tier'] as String? ?? 'bronze';
-      if (mounted) {
-        setState(() {
-          _expertEarningRate = tier == 'silver' ? 1.6 : 1.0;
-        });
-      }
-      debugPrint('Expert tier: $tier → ₹$_expertEarningRate/min');
-    } catch (e) {
-      debugPrint('Error resolving expert tier: $e');
-    }
-  }
 
   void _startCallTimer() {
     if (_timer != null && _timer!.isActive) return;
@@ -280,19 +399,24 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
       }
 
       // Deduct balances at the start of every minute (1s, 61s, 121s) after free period
+      // Deduct balances at the start of every minute (1s, 61s, 121s) after free period
       if (_duration > 0 && (_duration - 1) % 60 == 0) {
         if (widget.isCaller) {
           if (widget.isFirstFreeCall && _duration <= 120) {
             // First 2 minutes are free, do not deduct wallet
           } else {
             final requiredCoins = (widget.pricePerMin * 10).toInt();
-            context.read<AppState>().deductCoinBalance(requiredCoins);
-            final balance = context.read<AppState>().coinBalance;
-            if (balance < 0) { // Since we already deducted, check if it went negative
+            final currentBalance = context.read<AppState>().coinBalance;
+            
+            // Check if they have enough balance for this new minute
+            if (currentBalance < requiredCoins) {
               _triggerHangup();
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Call ended: Insufficient balance')),
               );
+            } else {
+              // Deduct for the upcoming minute
+              context.read<AppState>().deductCoinBalance(requiredCoins);
             }
           }
         }
@@ -311,6 +435,9 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
   void _hangupLocal() {
     if (_isHangingUp) return;
     _isHangingUp = true;
+    
+    // Clear CallKit Native Notifications
+    FlutterCallkitIncoming.endAllCalls();
     
     // Unlock both parties safely (unlockUserFromCall checks experts collection internally)
     _callService.unlockUserFromCall(widget.callerId);
@@ -342,17 +469,26 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
     }
 
     // Credit expert earnings and update talk time at end of call (only if >= 50 seconds)
-    if (!widget.isCaller && _duration >= 50) {
-      int callMinutes = _duration ~/ 60;
-      if (_duration % 60 >= 50) {
-        callMinutes += 1;
+    if (!widget.isCaller) {
+      if (_duration >= 50) {
+        int callMinutes = _duration ~/ 60;
+        if (_duration % 60 >= 50) {
+          callMinutes += 1;
+        }
+        final earned = _expertEarningRate * callMinutes;
+        
+        _updateExpertStats(earned, _duration, 'hindi');
+        debugPrint('Expert earned: ₹${earned.toStringAsFixed(2)} (${_duration}s at ₹$_expertEarningRate/min, billed as $callMinutes min)');
+      } else if (_duration > 0) {
+        // Female talked for less than 50 seconds
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Aapko Rs 1 earn karne ke liye kam se kam 50 seconds baat karni hogi.'),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 4),
+          ),
+        );
       }
-      final earned = _expertEarningRate * callMinutes;
-      
-      // Update all stats in Firestore
-      // We don't rely on AppState for language here, fallback to 'hindi' if not provided
-      _updateExpertStats(earned, _duration, 'hindi');
-      debugPrint('Expert earned: ₹${earned.toStringAsFixed(2)} (${_duration}s at ₹$_expertEarningRate/min, billed as $callMinutes min)');
     }
     
     if (mounted) {
@@ -363,7 +499,10 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
 
   Future<void> _updateExpertStats(double earned, int seconds, String language) async {
     try {
-      final expertId = widget.receiverId;
+      String expertId = widget.receiverId;
+      if (expertId.isEmpty) {
+        expertId = FirebaseAuth.instance.currentUser?.uid ?? '';
+      }
       if (expertId.isEmpty) return;
       final docRef = FirebaseFirestore.instance.collection('experts').doc(expertId);
       
@@ -468,20 +607,29 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
   }
 
   String _formatDuration(int sec) {
-    if (!widget.isCaller && widget.callerCoinBalance != null) {
+    final balance = _callerCoinBalance ?? widget.callerCoinBalance;
+    final usedFree = _callerHasUsedFreeCall ?? widget.callerHasUsedFreeCall ?? true;
+    
+    // Expert (female) sees a countdown based on caller's maximum affordable minutes
+    if (!widget.isCaller && balance != null) {
       int reqCoins = (widget.pricePerMin * 10).toInt();
-      int maxMins = widget.callerCoinBalance! ~/ reqCoins;
-      if (widget.callerHasUsedFreeCall == false) {
-        maxMins += 2;
+      if (reqCoins <= 0) reqCoins = 1;
+      
+      int maxMins = balance ~/ reqCoins;
+      if (usedFree == false) {
+        maxMins += 2; // Add 2 free minutes if not used
       }
+      
       int maxSecs = maxMins * 60;
       int remaining = maxSecs - sec;
       if (remaining < 0) remaining = 0;
+      
       final m = (remaining ~/ 60).toString().padLeft(2, '0');
       final s = (remaining % 60).toString().padLeft(2, '0');
       return '$m:$s';
     }
 
+    // Caller (male) sees a normal count-up timer
     final m = (sec ~/ 60).toString().padLeft(2, '0');
     final s = (sec % 60).toString().padLeft(2, '0');
     return '$m:$s';
@@ -515,7 +663,8 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
                   icon: const Icon(Icons.more_vert, color: Colors.white70),
                   onSelected: (value) async {
                     if (value == 'report') {
-                      final reporterId = widget.isCaller ? widget.callerId : widget.receiverId;
+                      final currentUid = FirebaseAuth.instance.currentUser?.uid ?? '';
+                      final reporterId = widget.isCaller ? widget.callerId : (widget.receiverId.isEmpty ? currentUid : widget.receiverId);
                       final reportedId = widget.isCaller ? widget.receiverId : widget.callerId;
                       await FirebaseFirestore.instance.collection('reports').add({
                         'reporterId': reporterId,
@@ -530,7 +679,8 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
                         );
                       }
                     } else if (value == 'block') {
-                      final myId = widget.isCaller ? widget.callerId : widget.receiverId;
+                      final currentUid = FirebaseAuth.instance.currentUser?.uid ?? '';
+                      final myId = widget.isCaller ? widget.callerId : (widget.receiverId.isEmpty ? currentUid : widget.receiverId);
                       final otherId = widget.isCaller ? widget.receiverId : widget.callerId;
                       await BlockService.instance.blockUser(myId, otherId);
                       if (context.mounted) {
@@ -569,39 +719,91 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
               // Call header containing Profile details
               Column(
                 children: [
-                  LocalAvatarWidget(
-                    uid: widget.isCaller ? widget.receiverId : widget.callerId,
-                    role: widget.isCaller ? 'expert' : 'user',
-                    radius: 64,
-                    avatarUrl: widget.avatarUrl,
-                    avatarIndex: widget.avatarIndex,
+                  const SizedBox(height: 10),
+                  
+                  // ── Male & Female Image Avatars ──────────────────────────────
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // Male Image Avatar
+                      _buildImageAvatar(
+                        imagePath: 'assets/male_avatar.png',
+                        color: const Color(0xFF3B82F6),
+                        label: 'Male',
+                      ),
+
+                      // Animated connection arrows
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            TweenAnimationBuilder<double>(
+                              tween: Tween(begin: 0.4, end: 1.0),
+                              duration: const Duration(milliseconds: 900),
+                              curve: Curves.easeInOut,
+                              builder: (_, val, __) {
+                                return Row(
+                                  children: List.generate(3, (i) {
+                                    return Container(
+                                      margin: const EdgeInsets.symmetric(horizontal: 2),
+                                      width: 6,
+                                      height: 6,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: const Color(0xFF34D399).withValues(
+                                          alpha: i == 0 ? val : i == 1 ? (val * 0.7) : (val * 0.4),
+                                        ),
+                                      ),
+                                    );
+                                  }),
+                                );
+                              },
+                            ),
+                            const SizedBox(height: 4),
+                            const Icon(Icons.compare_arrows_rounded,
+                                color: Color(0xFF34D399), size: 24),
+                          ],
+                        ),
+                      ),
+
+                      // Female Image Avatar
+                      _buildImageAvatar(
+                        imagePath: 'assets/female.jpeg',
+                        color: const Color(0xFFEC4899),
+                        label: 'Female',
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 20),
+
                   Text(
                     widget.nickname,
                     style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 28,
+                      fontSize: 26,
                       fontWeight: FontWeight.bold,
+                      letterSpacing: 1.2,
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 4),
                   Text(
                     _isConnected ? 'Connected' : 'Calling...',
                     style: TextStyle(
-                      color: _isConnected ? Colors.greenAccent : Colors.white60,
+                      color: _isConnected ? const Color(0xFF34D399) : Colors.white60,
                       fontSize: 16,
-                      fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                   if (_isConnected) ...[
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 4),
                     Text(
                       _formatDuration(_duration),
                       style: const TextStyle(
                         color: Colors.white,
-                        fontSize: 20,
+                        fontSize: 18,
                         fontFamily: 'monospace',
+                        letterSpacing: 2.0,
                       ),
                     ),
                   ],
@@ -616,7 +818,7 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
                     children: [
                       _buildCallActionCircle(
                         icon: _isMuted ? Icons.mic_off_rounded : Icons.mic_rounded,
-                        label: _isMuted ? 'Unmute' : 'Mute',
+                        label: _isMuted ? 'Mic On' : 'Mic Off',
                         isActive: _isMuted,
                         onTap: _toggleMute,
                       ),
@@ -685,6 +887,40 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
         Text(
           label,
           style: const TextStyle(color: Colors.white54, fontSize: 12),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildImageAvatar({
+    required String imagePath,
+    required Color color,
+    required String label,
+  }) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 120,
+          height: 130,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: color.withValues(alpha: 0.8),
+              width: 2.0,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: color.withValues(alpha: 0.4),
+                blurRadius: 24,
+                spreadRadius: 3,
+              ),
+            ],
+            image: DecorationImage(
+              image: ResizeImage(AssetImage(imagePath), width: 300),
+              fit: BoxFit.cover,
+            ),
+          ),
         ),
       ],
     );

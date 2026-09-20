@@ -1,0 +1,26 @@
+=========================================================
+SAJNI RE - PROJECT SUMMARY & NEXT STEPS
+Date: 2026-09-19
+=========================================================
+
+** CURRENT APP STATUS **
+- Version: 1.0.16
+- Live Status: Waiting for Google Play Console Approval
+- BillDesk: Application submitted, waiting for App to be Live on Play Store so we can resume verification.
+
+** WHAT WE DID SO FAR **
+1. Fixed Female Expert Screen UI (moved blocked users button).
+2. Hid the "Buy Coins/Wallet" screen temporarily so Google reviewers don't reject the app for fake payments.
+3. Implemented a "200 Coins Welcome Bonus (Rs 20)" for new male users with a beautiful popup.
+4. Fixed the black status bar issue on Infinix screens (White icons on black background).
+5. Built Release APK and AAB for Version 1.0.16.
+
+** NEXT STEPS AFTER FORMATTING & INSTALLING FLUTTER **
+1. Install Flutter, Android Studio, and VS Code.
+2. Open this folder in VS Code.
+3. Wait for the Play Store to approve Version 1.0.16.
+4. Once Live, go to the BillDesk email, click "Resume", and give them the Live Play Store Link.
+5. Once BillDesk approves the merchant account, ask the AI to "Integrate Google Play Billing for in-app purchases". We will then un-hide the wallet screen.
+
+** HOW TO RESTORE THIS AI CHAT **
+If you backed up the ~/.gemini folder, just paste it back to your Home folder (~/) before starting Antigravity, and your chat history will be restored.

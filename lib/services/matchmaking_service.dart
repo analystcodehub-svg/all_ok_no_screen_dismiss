@@ -4,8 +4,11 @@ import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
 import 'block_service.dart';
 
+import 'package:flutter/services.dart';
+
 class MatchmakingService {
   final FirebaseDatabase _db;
+  static const MethodChannel _platform = MethodChannel('com.sajnire.app/auth');
 
   MatchmakingService()
       : _db = FirebaseDatabase.instanceFor(
@@ -30,6 +33,8 @@ class MatchmakingService {
   int _getInstantPoolSize() {
     return (_currentActiveMales * 3).clamp(30, 2000);
   }
+
+  StreamSubscription? _connectionSubscription;
 
   /// Female Expert Logic (Joining/Leaving the Queue)
   Future<void> setExpertOnlineStatus({
@@ -64,36 +69,61 @@ class MatchmakingService {
           debugPrint('Error fetching expert data: $e');
         }
 
-        // Set presence first, and set callStatus to available
-        await presenceRef.update({
-          'isOnline': true,
-          'status': 'online',
-          'callStatus': 'available',
-          'lastChanged': ServerValue.timestamp,
-        });
-        await presenceRef.onDisconnect().update({
-          'isOnline': false,
-          'status': 'offline',
-          'callStatus': 'offline',
-          'lastChanged': ServerValue.timestamp,
-        });
+        // Auto-reconnect listener handles both the first connection and subsequent drops
+        await _connectionSubscription?.cancel();
+        _connectionSubscription = _db.ref('.info/connected').onValue.listen((event) async {
+          if (event.snapshot.value == true) {
+            // Set presence first, and set callStatus to available
+            await presenceRef.update({
+              'isOnline': true,
+              'status': 'online',
+              'callStatus': 'available',
+              'lastChanged': ServerValue.timestamp,
+            });
 
-        // Add to language queue with timestamp for ordering
-        await docRef.update({
-          'timestamp': ServerValue.timestamp,
-          'totalTalkSeconds': talkSeconds,
-          'nickname': nickname,
-          'age': age,
-          'avatarIndex': avatarIndex,
-          if (avatarUrl != null && avatarUrl.isNotEmpty) 'avatarUrl': avatarUrl,
+            // Set onDisconnect logic: if socket drops, instantly go offline
+            await presenceRef.onDisconnect().update({
+              'isOnline': false,
+              'status': 'offline',
+              'callStatus': 'offline',
+              'lastChanged': ServerValue.timestamp,
+            });
+
+            // Add to language queue with timestamp for ordering
+            await docRef.update({
+              'timestamp': ServerValue.timestamp,
+              'totalTalkSeconds': talkSeconds,
+              'nickname': nickname,
+              'age': age,
+              'avatarIndex': avatarIndex,
+              if (avatarUrl != null && avatarUrl.isNotEmpty) 'avatarUrl': avatarUrl,
+            });
+            await docRef.onDisconnect().remove();
+            
+            // Force clear active_calls lock just in case they were stuck
+            await _db.ref('active_calls/$expertId').remove();
+            
+            debugPrint('Expert $expertId (re)connected and added to $bucketPath.');
+          }
         });
-        await docRef.onDisconnect().remove();
         
-        // Force clear active_calls lock just in case they were stuck
-        await _db.ref('active_calls/$expertId').remove();
-        
-        debugPrint('Expert $expertId added to $bucketPath.');
+        // Start native task removed listener
+        try {
+          await _platform.invokeMethod('setAppCloseHandler', {'expertId': expertId});
+        } catch (e) {
+          debugPrint('Could not set native app close handler: $e');
+        }
+
       } else {
+        await _connectionSubscription?.cancel();
+        _connectionSubscription = null;
+        
+        try {
+          await _platform.invokeMethod('clearAppCloseHandler');
+        } catch (e) {
+          debugPrint('Could not clear native app close handler: $e');
+        }
+
         await docRef.remove();
         await docRef.onDisconnect().cancel();
         
@@ -119,6 +149,14 @@ class MatchmakingService {
   /// Helper method to lock an expert for a call
   Future<bool> lockExpertForCall(String expertUid, String callerUid) async {
     try {
+      // 1. Check if the expert is actually online
+      final statusSnapshot = await _db.ref('status/$expertUid/isOnline').get();
+      if (!statusSnapshot.exists || statusSnapshot.value == false) {
+        debugPrint('Expert $expertUid is offline. Cannot lock.');
+        return false;
+      }
+
+      // 2. Proceed to lock via transaction
       final ref = _db.ref('active_calls/$expertUid');
       final result = await ref.runTransaction((Object? post) {
         if (post == null) {

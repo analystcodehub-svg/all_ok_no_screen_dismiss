@@ -32,10 +32,10 @@ android {
 
     signingConfigs {
         create("release") {
-            keyAlias = keystoreProperties["keyAlias"] as String?
-            keyPassword = keystoreProperties["keyPassword"] as String?
-            storeFile = keystoreProperties["storeFile"]?.let { file(it as String) }
-            storePassword = keystoreProperties["storePassword"] as String?
+            // keyAlias = keystoreProperties["keyAlias"] as String?
+            // keyPassword = keystoreProperties["keyPassword"] as String?
+            // storeFile = keystoreProperties["storeFile"]?.let { file(it as String) }
+            // storePassword = keystoreProperties["storePassword"] as String?
         }
     }
 
@@ -54,11 +54,11 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            if (keystorePropertiesFile.exists()) {
-                signingConfig = signingConfigs.getByName("release")
-            } else {
+            // if (keystorePropertiesFile.exists()) {
+            //     signingConfig = signingConfigs.getByName("release")
+            // } else {
                 signingConfig = signingConfigs.getByName("debug")
-            }
+            // }
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
@@ -77,4 +77,7 @@ flutter {
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
     implementation("com.google.android.gms:play-services-auth:21.1.1")
+    implementation(platform("com.google.firebase:firebase-bom:33.1.2"))
+    implementation("com.google.firebase:firebase-database")
+    implementation("com.google.firebase:firebase-auth")
 }

@@ -1,5 +1,7 @@
+import "package:flutter/services.dart";
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -35,28 +37,14 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
     _authSubscription = FirebaseAuth.instance.authStateChanges().listen((User? user) async {
       if (user != null && mounted) {
         // User was automatically logged in by Firebase in the background
-        
         // 1. Visibly fill the OTP code if it was caught by PhoneAuthScreen
         final autoCode = context.read<AppState>().autoRetrievedSmsCode;
         if (autoCode != null && autoCode.isNotEmpty) {
           _otpController.text = autoCode;
           context.read<AppState>().setAutoRetrievedSmsCode(null);
         }
-
-        // 2. Wait for AuthWrapper (root) to finish loading user from Firestore
-        // We replicate the wait here so we don't pop while it's still loading
-        try {
-          await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-        } catch (_) {}
-
-        // 3. Add a small delay so the user can actually see the filled OTP magically!
-        await Future.delayed(const Duration(milliseconds: 1500));
-
-        if (mounted) {
-          // 4. Pop to root. Because AuthWrapper has already swapped PhoneAuthScreen 
-          // with GenderSelectionScreen, this reveals the new screen seamlessly!
-          Navigator.of(context).popUntil((route) => route.isFirst);
-        }
+        
+        // We STOP here. The user must manually press 'Proceed' to continue.
       }
     });
   }
@@ -82,19 +70,23 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
     });
 
     try {
-      // Create a PhoneAuthCredential with the code
-      PhoneAuthCredential credential = PhoneAuthProvider.credential(
-        verificationId: widget.verificationId,
-        smsCode: otp,
-      );
+      User? currentUser = FirebaseAuth.instance.currentUser;
+      
+      // If user is not automatically logged in by Android Auto-Retrieval, sign them in manually
+      if (currentUser == null) {
+        PhoneAuthCredential credential = PhoneAuthProvider.credential(
+          verificationId: widget.verificationId,
+          smsCode: otp,
+        );
 
-      // Sign the user in (or link) with the credential
-      UserCredential userCredential =
-          await FirebaseAuth.instance.signInWithCredential(credential);
+        UserCredential userCredential =
+            await FirebaseAuth.instance.signInWithCredential(credential);
+        currentUser = userCredential.user;
+      }
 
-      if (userCredential.user != null) {
+      if (currentUser != null) {
         // Successful login, check if user exists in Firestore
-        final uid = userCredential.user!.uid;
+        final uid = currentUser.uid;
         
         final userDoc = await FirebaseFirestore.instance
             .collection('users')
@@ -153,12 +145,6 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
       }
     } on FirebaseAuthException catch (e) {
       if (mounted) {
-        // If the session expired BUT the user is actually logged in (due to auto-retrieval)
-        if (e.code == 'session-expired' && FirebaseAuth.instance.currentUser != null) {
-          // Do nothing, let the auth state listener pop the screen automatically
-          return;
-        }
-
         String message = 'Invalid OTP. Please try again.';
         if (e.code == 'invalid-verification-code') {
           message = 'The OTP you entered is incorrect.';
@@ -170,11 +156,11 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
         );
       }
     } catch (e, stackTrace) {
-      debugPrint("OTP Verification Error: $e");
-      debugPrint("Stack Trace: $stackTrace");
+      debugPrint("OTP Verification Error: \$e");
+      debugPrint("Stack Trace: \$stackTrace");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('An error occurred: $e')),
+          SnackBar(content: Text('An error occurred: \$e')),
         );
       }
     } finally {
@@ -189,85 +175,199 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const SizedBox(height: 20),
-              const Text(
-                'Enter OTP',
-                style: TextStyle(
-                  fontSize: 32,
-                  fontWeight: FontWeight.bold,
-                  color: AppTheme.textBlack,
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        elevation: 0,
+        toolbarHeight: 0,
+        systemOverlayStyle: const SystemUiOverlayStyle(
+          statusBarColor: Colors.black,
+          statusBarIconBrightness: Brightness.light,
+          statusBarBrightness: Brightness.dark,
+        ),
+      ),
+      body: Stack(
+        children: [
+          // Background soft glow
+          Center(
+            child: Container(
+              width: 300,
+              height: 300,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    const Color(0xFF4C75F2).withOpacity(0.15),
+                    Colors.white.withOpacity(0.0),
+                  ],
+                  stops: const [0.0, 1.0],
                 ),
               ),
-              const SizedBox(height: 12),
-              Text(
-                'We have sent a 6-digit code to +91 ${widget.mobileNumber}',
-                style: const TextStyle(
-                  fontSize: 16,
-                  color: AppTheme.textGrey,
-                ),
-              ),
-              const SizedBox(height: 40),
-              // OTP Input Field
-              Container(
-                decoration: BoxDecoration(
-                  color: AppTheme.inputBg,
-                  borderRadius: BorderRadius.circular(15),
-                  border: Border.all(
-                    color: AppTheme.borderGrey,
-                    width: 1.0,
-                  ),
-                ),
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: TextField(
-                  controller: _otpController,
-                  keyboardType: TextInputType.number,
-                  maxLength: 6,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 24,
-                    letterSpacing: 12,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.textBlack,
-                  ),
-                  decoration: const InputDecoration(
-                    counterText: "",
-                    border: InputBorder.none,
-                    hintText: "------",
-                    hintStyle: TextStyle(
-                      color: AppTheme.borderGrey,
-                      letterSpacing: 12,
+            ),
+          ),
+          SafeArea(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const SizedBox(height: 60),
+                
+                // Instructions Text
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                  child: RichText(
+                    textAlign: TextAlign.center,
+                    text: TextSpan(
+                      style: const TextStyle(
+                        fontSize: 15,
+                        color: Colors.black54,
+                        height: 1.4,
+                      ),
+                      children: [
+                        TextSpan(text: 'Your login OTP is sent to +91 ${widget.mobileNumber}.\n'),
+                        const TextSpan(text: 'Not your number? '),
+                        TextSpan(
+                          text: 'Change here.',
+                          style: const TextStyle(
+                            color: Colors.black87,
+                            fontWeight: FontWeight.w600,
+                            decoration: TextDecoration.underline,
+                          ),
+                          recognizer: TapGestureRecognizer()..onTap = () {
+                            Navigator.pop(context);
+                          },
+                        ),
+                      ],
                     ),
                   ),
-                  onChanged: (value) {
-                    if (value.length == 6) {
-                      _verifyOtp();
-                    }
-                  },
                 ),
-              ),
-              const SizedBox(height: 40),
-              ElevatedButton(
-                onPressed: _isLoading ? null : _verifyOtp,
-                child: _isLoading
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          color: Colors.white,
-                          strokeWidth: 2,
+                const SizedBox(height: 40),
+                
+                // OTP Field with Gradient Border
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(8),
+                      color: const Color(0xFF4C75F2), // Solid blue border
+                    ),
+                    padding: const EdgeInsets.all(1.5), // Border thickness
+                    child: Container(
+                      clipBehavior: Clip.antiAlias,
+                      decoration: BoxDecoration(
+                        color: Colors.white, // Inner background
+                        borderRadius: BorderRadius.circular(7), // Slightly less than outer radius
+                      ),
+                      child: TextField(
+                        controller: _otpController,
+                        keyboardType: TextInputType.number,
+                        maxLength: 6,
+                        style: const TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.black87,
+                          letterSpacing: 2,
                         ),
-                      )
-                    : const Text('Verify & Continue'),
-              ),
-            ],
+                        decoration: const InputDecoration(
+                          counterText: "",
+                          border: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          errorBorder: InputBorder.none,
+                          disabledBorder: InputBorder.none,
+                          filled: true,
+                          fillColor: Colors.transparent,
+                          contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                        ),
+                        // Removed auto-verify from onChanged
+                        onChanged: (value) {},
+                      ),
+                    ),
+                  ),
+                ),
+                
+                const SizedBox(height: 30),
+                
+                // Proceed Button
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 70.0),
+                  child: ElevatedButton(
+                    onPressed: _isLoading ? null : _verifyOtp,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF4C75F2),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(30),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    child: _isLoading
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Text(
+                            'Proceed',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                  ),
+                ),
+                
+                const SizedBox(height: 24),
+                
+                // Resend OTP
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                  child: RichText(
+                    textAlign: TextAlign.center,
+                    text: TextSpan(
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: Colors.black87,
+                      ),
+                      children: [
+                        const TextSpan(text: "Didn't receive an OTP? "),
+                        TextSpan(
+                          text: 'Resend code',
+                          style: const TextStyle(
+                            color: Color(0xFF4C75F2),
+                          ),
+                          recognizer: TapGestureRecognizer()..onTap = () async {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Resending OTP...')),
+                            );
+                            await FirebaseAuth.instance.verifyPhoneNumber(
+                              phoneNumber: '+91${widget.mobileNumber}',
+                              verificationCompleted: (PhoneAuthCredential credential) {},
+                              verificationFailed: (FirebaseAuthException e) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('Failed to resend: ${e.message}')),
+                                );
+                              },
+                              codeSent: (String verificationId, int? resendToken) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('OTP sent successfully!')),
+                                );
+                              },
+                              codeAutoRetrievalTimeout: (String verificationId) {},
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }

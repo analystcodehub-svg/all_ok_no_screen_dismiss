@@ -10,6 +10,7 @@ import '../services/call_service.dart';
 import '../services/matchmaking_service.dart';
 import '../services/local_chat_database.dart';
 import '../widgets/local_avatar_widget.dart';
+import '../screens/blocked_users_screen.dart';
 import '../utils/auto_start_helper.dart';
 import '../services/foreground_task_service.dart';
 
@@ -97,7 +98,8 @@ class _FemaleExpertDashboardState extends State<FemaleExpertDashboard> with Widg
     _incomingCallSubscription = _callService.listenForIncomingCalls(
       expertId: expertId,
       onCallReceived: (roomId, callerId) {
-        _showIncomingCallDialog(roomId, callerId);
+        // Native CallKit will be triggered by FCM instead.
+        // We leave this listener active so CallService can handle auto-rejects for blocked users.
       },
     );
   }
@@ -194,6 +196,16 @@ class _FemaleExpertDashboardState extends State<FemaleExpertDashboard> with Widg
         title: const Text('Expert Dashboard'),
         centerTitle: true,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.block, color: Colors.grey),
+            tooltip: 'Blocked Users',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const BlockedUsersScreen()),
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.logout_rounded, color: Colors.redAccent),
             tooltip: 'Logout / Reset',

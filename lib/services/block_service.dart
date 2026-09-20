@@ -48,6 +48,56 @@ class BlockService {
     return _blockedUids.contains(uid);
   }
 
+  /// Asynchronously checks if a user is blocked (Memory -> Local Cache -> Firestore Database)
+  Future<bool> isUserBlockedAsync(String myUid, String otherUid) async {
+    // 1. Check Memory
+    if (_blockedUids.contains(otherUid)) return true;
+
+    // 2. Check Local Cache (SharedPreferences)
+    final prefs = await SharedPreferences.getInstance();
+    final cached = prefs.getStringList('blocked_uids_$myUid') ?? [];
+    if (cached.contains(otherUid)) {
+      _blockedUids.add(otherUid);
+      return true;
+    }
+
+    // 3. Check Database (Firestore)
+    try {
+      final doc = await FirebaseFirestore.instance.collection('blocked_users').doc(myUid).get();
+      if (doc.exists && doc.data() != null) {
+        final uids = List<String>.from(doc.data()!['uids'] ?? []);
+        // Sync local cache
+        await prefs.setStringList('blocked_uids_$myUid', uids);
+        _blockedUids.clear();
+        _blockedUids.addAll(uids);
+        return uids.contains(otherUid);
+      }
+    } catch (e) {
+      debugPrint('Error checking firestore for block status: $e');
+    }
+
+    return false;
+  }
+
+  /// Checks if the otherUid is blocked by ANY locally logged-in user.
+  /// Useful in background isolates where myUid might not be immediately available.
+  Future<bool> isUserBlockedAnywhereAsync(String otherUid) async {
+    // 1. Check Memory (if main isolate)
+    if (_blockedUids.contains(otherUid)) return true;
+
+    // 2. Check all SharedPreferences keys
+    final prefs = await SharedPreferences.getInstance();
+    for (String key in prefs.getKeys()) {
+      if (key.startsWith('blocked_uids_')) {
+        final cached = prefs.getStringList(key) ?? [];
+        if (cached.contains(otherUid)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
   /// Block a user and update both Firestore and Local Cache.
   Future<void> blockUser(String myUid, String otherUid) async {
     if (_blockedUids.contains(otherUid)) return;

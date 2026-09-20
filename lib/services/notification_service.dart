@@ -9,6 +9,8 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
 import 'package:flutter_callkit_incoming/entities/call_kit_params.dart';
 import 'package:flutter_callkit_incoming/entities/android_params.dart';
@@ -21,6 +23,7 @@ import 'package:flutter_callkit_incoming/entities/call_event.dart';
 import 'package:firebase_core/firebase_core.dart';
 import '../firebase_options.dart';
 import 'call_service.dart';
+import 'block_service.dart';
 
 // ─── TOP-LEVEL BACKGROUND HANDLER ─────────────────────────────────────────
 //
@@ -82,6 +85,25 @@ Future<void> showChatNotification(Map<String, dynamic> data) async {
     }
   }
 
+  // Fallback to static default avatar if no valid avatar was fetched
+  if (iconBytes == null) {
+    try {
+      final receiverGender = data['receiverGender'] as String?;
+      
+      // If receiver is male, the message is FROM a female (use female avatar).
+      // Otherwise, use male avatar.
+      final assetPath = receiverGender == 'male' 
+          ? 'assets/female_avatar_small.png' 
+          : 'assets/male_avatar_small.png';
+          
+      final ByteData byteData = await rootBundle.load(assetPath);
+      iconBytes = byteData.buffer.asUint8List();
+      largeIcon = ByteArrayAndroidBitmap(iconBytes);
+    } catch (e) {
+      debugPrint('[FCM] Error loading default avatar asset: $e');
+    }
+  }
+
   // Use MessagingStyle for a chat-like premium look
   final person = Person(
     name: data['senderName'] ?? 'New Message',
@@ -119,6 +141,21 @@ Future<void> _showCallkitIncoming(Map<String, dynamic> data) async {
   final uuid         = data['callUuid']    ?? 'uuid-${DateTime.now().millisecondsSinceEpoch}';
   final callerName   = data['callerName']  ?? 'Unknown Caller';
   final callRoomId   = data['callRoomId']  ?? '';
+  final callerId     = data['callerId']    ?? '';
+
+  // 1. Check if caller is blocked anywhere locally before ringing
+  if (callerId.isNotEmpty) {
+    bool isBlocked = await BlockService.instance.isUserBlockedAnywhereAsync(callerId);
+    if (isBlocked) {
+      debugPrint('[CallKit] Caller $callerId is blocked locally. Suppressing call.');
+      return;
+    }
+  }
+
+  NotificationService.lastCallerName = callerName;
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setString('callerName_$callRoomId', callerName);
+  await prefs.setString('callerId_$callRoomId', callerId);
 
   // Explicitly play the ringtone using flutter_ringtone_player to bypass OS restrictions
   FlutterRingtonePlayer().play(
@@ -158,8 +195,8 @@ Future<void> _showCallkitIncoming(Map<String, dynamic> data) async {
       isShowLogo: false,
       isShowCallID: false,
       ringtonePath: '', // Handled manually by flutter_ringtone_player
-      backgroundColor: '#1976D2',
-      actionColor: '#4CAF50',
+      backgroundColor: '#0A0A0A',
+      actionColor: '#10B981',
       textColor: '#ffffff',
       isShowFullLockedScreen: true,
       isImportant: true,
@@ -189,6 +226,7 @@ Future<void> _showCallkitIncoming(Map<String, dynamic> data) async {
 // ─── NOTIFICATION SERVICE CLASS ───────────────────────────────────────────
 
 class NotificationService {
+  static String? lastCallerName;
   NotificationService._();
   static final NotificationService instance = NotificationService._();
 
@@ -204,23 +242,14 @@ class NotificationService {
   Future<void> initialize({required GlobalKey<NavigatorState> navKey}) async {
     navigatorKey = navKey;
 
+    // Permissions (like push notifications) should now be requested gracefully 
+    // via PermissionHelper bottom sheet in the dashboard, NOT here.
 
-    await _messaging.requestPermission(
-      alert: true,
-      badge: true,
-      sound: true,
-      criticalAlert: true,
-    );
+    // 2.5 Request System Alert Window (Display over other apps)
 
-    // 2.5 Request System Alert Window (Display over other apps) and Notification permission via permission_handler
     try {
       if (Platform.isAndroid) {
-         // This is critical for showing full screen incoming call and ringing like WhatsApp
-         final status = await Permission.systemAlertWindow.status;
-         if (!status.isGranted) {
-           await Permission.systemAlertWindow.request();
-         }
-         await Permission.notification.request();
+         // Moved SystemAlertWindow request to Dashboards via AutoStartHelper
       }
     } catch (e) {
       debugPrint('[Permission] Error requesting system alert window: $e');
@@ -346,12 +375,12 @@ class NotificationService {
     // We trust the backend and just process the notification.
 
     if (type == 'call') {
-      // The app is in the foreground, so the RTDB listener in the UI 
-      // will push the IncomingCallScreen (Flutter UI).
-      // We don't need to show the native CallKit UI here.
-      debugPrint('[FCM] App is in foreground. Skipping CallKit (Flutter UI will handle it).');
+      // The app is in the foreground. User requested native CallKit UI here too.
+      await _showCallkitIncoming(data);
     } else if (type == 'message') {
-      await showChatNotification(data);
+      // User requested not to show heads-up notifications when the app is in the foreground.
+      // The chat screen will update automatically via Firestore streams.
+      debugPrint('[FCM] Received message in foreground, skipping local notification.');
     }
   }
 
@@ -403,6 +432,38 @@ class NotificationService {
   /// On Accept → navigates to ActiveCallPage.
   /// On Decline → marks call as 'ended' in Firestore.
   void _listenCallKitEvents() {
+    // Fallback: Listen to Native MainActivity intent for "Accept"
+    final channel = MethodChannel('com.sajnire.app/auth');
+    channel.setMethodCallHandler((call) async {
+      if (call.method == 'onCallAcceptFallback') {
+        final callRoomId = call.arguments as String?;
+        debugPrint('[CallKit] Accepted via Fallback: $callRoomId');
+        FlutterRingtonePlayer().stop();
+        if (callRoomId != null) {
+          final prefs = await SharedPreferences.getInstance();
+          final storedCallerName = prefs.getString('callerName_$callRoomId');
+          final resolvedName = storedCallerName ?? NotificationService.lastCallerName ?? 'Unknown';
+          final resolvedCallerId = prefs.getString('callerId_$callRoomId') ?? '';
+
+          void pushRoute() {
+            if (navigatorKey?.currentState != null) {
+              navigatorKey!.currentState!.pushNamed(
+                '/active-call',
+                arguments: <String, dynamic>{
+                  'callRoomId': callRoomId,
+                  'callerName': resolvedName,
+                  'callerId': resolvedCallerId,
+                },
+              );
+            } else {
+              Future.delayed(const Duration(milliseconds: 200), pushRoute);
+            }
+          }
+          pushRoute();
+        }
+      }
+    });
+
     FlutterCallkitIncoming.onEvent.listen((CallEvent? event) async {
       if (event == null) return;
       debugPrint('[CallKit] Event: ${event.eventName}');
@@ -416,13 +477,19 @@ class NotificationService {
         // Navigate to active call screen
         // If app was killed, navigatorKey.currentState might be null briefly.
         // We poll for it to become ready before pushing.
+        final prefs = await SharedPreferences.getInstance();
+        final storedCallerName = prefs.getString('callerName_$callRoomId');
+        final resolvedName = storedCallerName ?? NotificationService.lastCallerName ?? 'Unknown';
+        final resolvedCallerId = prefs.getString('callerId_$callRoomId') ?? '';
+
         void pushRoute() {
           if (navigatorKey?.currentState != null) {
             navigatorKey!.currentState!.pushNamed(
               '/active-call',
               arguments: <String, dynamic>{
                 'callRoomId': callRoomId,
-                'callerName': 'Caller',
+                'callerName': resolvedName,
+                'callerId': resolvedCallerId,
               },
             );
           } else {

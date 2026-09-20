@@ -179,6 +179,7 @@ exports.onCallInitiated = functions.region("asia-south1").database
       type:        "call",
       callUuid:    callId,           // Used as CallKit UUID
       callRoomId:  callId,           // Firestore document ID of the call
+      callerId:    callerId,
       callerName:  callerName,
       callerAvatar: callerAvatar,
       receiverId:  receiverId,
@@ -298,17 +299,12 @@ exports.onMessageSent = functions.region("asia-south1").database
       senderName: senderName,
       senderAvatar: senderAvatar || "",
       body:       messageText,
+      receiverGender: gender,
     };
 
-    // ── Step 5: Send notification payload + data ────────────────────────────
-    // notification block → OS shows notification even when app is KILLED (most reliable)
-    // data block → Flutter uses this for routing to the correct Chat Screen on tap
-    const notificationPayload = {
-      title: senderName,
-      body:  messageText,
-    };
-
-    await sendFcmMessage(fcmToken, fcmData, notificationPayload);
+    // ── Step 5: Send data only ────────────────────────────
+    // data block → wakes up background handler which creates a local notification with our custom circular avatar
+    await sendFcmMessage(fcmToken, fcmData, null);
 
 
     functions.logger.info(
@@ -351,3 +347,49 @@ exports.onExpertStatusChanged = functions.region("asia-south1").firestore
     }
     return null;
   });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CLOUD FUNCTION 4: onRtdbPresenceChanged
+// Removes an expert from all queues when their RTDB status flips to offline.
+// ─────────────────────────────────────────────────────────────────────────────
+
+exports.onRtdbPresenceChanged = functions.region("asia-south1").database
+  .instance('zegochat-c44b0')
+  .ref("status/{expertId}")
+  .onUpdate(async (change, context) => {
+    const before = change.before.val();
+    const after = change.after.val();
+    const expertId = context.params.expertId;
+
+    // Check if the expert went from online to offline
+    if (before.isOnline === true && after.isOnline === false) {
+      functions.logger.info(`Expert '${expertId}' went offline in RTDB. Removing from all queues.`);
+      
+      const adminDb = admin.database();
+      
+      try {
+        // Fetch all buckets in 'queues' to find and remove the expert
+        const queuesSnap = await adminDb.ref('queues').once('value');
+        if (queuesSnap.exists()) {
+          const queues = queuesSnap.val();
+          
+          // Loop through buckets (e.g., female_hindi, male_english, etc.)
+          for (const bucketKey of Object.keys(queues)) {
+            if (queues[bucketKey] && queues[bucketKey][expertId]) {
+              await adminDb.ref(`queues/${bucketKey}/${expertId}`).remove();
+              functions.logger.info(`Removed '${expertId}' from queue bucket '${bucketKey}'.`);
+            }
+          }
+        }
+        
+        // Also ensure active_calls lock is cleared
+        await adminDb.ref(`active_calls/${expertId}`).remove();
+        
+      } catch (error) {
+        functions.logger.error(`Error sweeping expert '${expertId}':`, error);
+      }
+    }
+    return null;
+  });
+
+// ─────────────────────────────────────────────────────────────────────────────

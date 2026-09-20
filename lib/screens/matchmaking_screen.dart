@@ -246,7 +246,7 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> with SingleTicker
       _callStatusSub = db.ref('calls/$callRoomId/status').onValue.listen((event) {
         if (event.snapshot.value == 'connected') {
           if (!_ringingCompleter!.isCompleted) _ringingCompleter!.complete(true); // Success
-        } else if (event.snapshot.value == 'ended') {
+        } else if (event.snapshot.value == 'ended' || event.snapshot.value == 'rejected_blocked') {
           if (!_ringingCompleter!.isCompleted) _ringingCompleter!.complete(false); // Rejected/Ended
         }
       });
@@ -523,7 +523,7 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> with SingleTicker
                       opacity: (1.0 - ((radius - 60) / 60)).clamp(0.0, 1.0),
                       child: CircleAvatar(
                         radius: 14,
-                        backgroundImage: AssetImage('assets/avatars/female_${index + 1}.png'),
+                        backgroundImage: ResizeImage(AssetImage('assets/avatars/female_${index + 1}.png'), width: 200),
                         backgroundColor: Colors.white,
                       ),
                     ),
@@ -556,7 +556,7 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> with SingleTicker
                 ),
                 child: CircleAvatar(
                   radius: 40,
-                  backgroundImage: AssetImage('assets/avatars/female_$avatarIndex.png'),
+                  backgroundImage: ResizeImage(AssetImage('assets/avatars/female_$avatarIndex.png'), width: 200),
                   backgroundColor: Colors.white,
                 ),
               );

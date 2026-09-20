@@ -3,6 +3,8 @@ import 'dart:ui';
 
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_database/firebase_database.dart';
 
 class ForegroundTaskService {
   static final ForegroundTaskService _instance = ForegroundTaskService._internal();
@@ -77,6 +79,10 @@ Future<bool> onIosBackground(ServiceInstance service) async {
 @pragma('vm:entry-point')
 void onStart(ServiceInstance service) async {
   DartPluginRegistrant.ensureInitialized();
+  await Firebase.initializeApp();
+
+  final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+      FlutterLocalNotificationsPlugin();
 
   if (service is AndroidServiceInstance) {
     service.on('setAsForeground').listen((event) {
@@ -92,27 +98,35 @@ void onStart(ServiceInstance service) async {
     service.stopSelf();
   });
 
-  // You can also use this space to keep an isolate alive with a timer
-  Timer.periodic(const Duration(seconds: 1), (timer) async {
+  // Listen to Firebase RTDB connection state
+  final db = FirebaseDatabase.instanceFor(
+    app: Firebase.app(),
+    databaseURL: 'https://zegochat-c44b0.asia-southeast1.firebasedatabase.app',
+  );
+  
+  db.ref('.info/connected').onValue.listen((event) async {
+    final isConnected = event.snapshot.value == true;
+    
     if (service is AndroidServiceInstance) {
       if (await service.isForegroundService()) {
-        // Keeps updating the notification, though optional.
-        /*
         flutterLocalNotificationsPlugin.show(
-          notificationId,
-          'SajniRe',
-          'Waiting for calls...',
-          const NotificationDetails(
+          id: ForegroundTaskService.notificationId,
+          title: 'SajniRe',
+          body: isConnected ? 'Online - Waiting for calls...' : 'Offline - No Internet Connection',
+          notificationDetails: const NotificationDetails(
             android: AndroidNotificationDetails(
-              notificationChannelId,
+              ForegroundTaskService.notificationChannelId,
               'Background Service',
-              icon: 'ic_bg_service_small',
+              icon: 'ic_launcher',
               ongoing: true,
             ),
           ),
         );
-        */
       }
     }
+  });
+
+  Timer.periodic(const Duration(seconds: 10), (timer) async {
+    // Keep alive tick
   });
 }

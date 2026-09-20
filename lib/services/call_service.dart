@@ -174,9 +174,7 @@ class CallService {
         }
 
         final data = Map<String, dynamic>.from(event.snapshot.value as Map);
-
-        // Check if call was ended remotely
-        if (data['status'] == 'ended') {
+        if (data['status'] == 'ended' || data['status'] == 'rejected_blocked') {
           onCallEndedListener?.call();
           return;
         }

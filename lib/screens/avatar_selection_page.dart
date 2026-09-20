@@ -95,7 +95,7 @@ class _AvatarSelectionPageState extends State<AvatarSelectionPage> {
                   child: Padding(
                     padding: const EdgeInsets.all(4.0),
                     child: CircleAvatar(
-                      backgroundImage: AssetImage(assetPath),
+                      backgroundImage: ResizeImage(AssetImage(assetPath), width: 200),
                       backgroundColor: AppTheme.inputBg,
                     ),
                   ),

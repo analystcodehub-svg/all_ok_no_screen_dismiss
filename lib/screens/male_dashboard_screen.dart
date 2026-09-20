@@ -1,3 +1,5 @@
+import "../utils/permission_helper.dart";
+import "package:flutter/services.dart";
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -98,6 +100,18 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
     return enriched;
   }
 
+  int _unreadCount = 0;
+  StreamSubscription<void>? _chatUpdatesSubscription;
+
+  void _updateUnreadCount(String uid) async {
+    final count = await LocalChatDatabase.instance.getTotalUnreadCount(uid);
+    if (mounted) {
+      setState(() {
+        _unreadCount = count;
+      });
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -125,15 +139,86 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
       HybridChatService.instance.initListeners(myUid);
       LocalChatDatabase.instance.syncCallLogsFromFirestore(myUid);
       
+      // Update initial unread count and listen for updates
+      _updateUnreadCount(myUid);
+      _chatUpdatesSubscription = LocalChatDatabase.instance.updates.listen((_) {
+        _updateUnreadCount(myUid);
+      });
+      
       // Check for auto-start permissions (Infinix, Xiaomi, etc.)
       AutoStartHelper.checkAndRequestAutoStart(context);
+      
+      // Check and request notification permissions gracefully via bottom sheet
+      PermissionHelper.checkAndRequestNotificationPermission(context);
       
       // Keep app alive in background (always ON for male users)
       ForegroundTaskService.startService();
     });
   }
 
+
+  void _showWelcomeBonusPopup() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          elevation: 0,
+          backgroundColor: Colors.transparent,
+          child: Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [
+                BoxShadow(color: Colors.black26, blurRadius: 10, offset: const Offset(0, 10)),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(color: const Color(0xFFFEF3C7), shape: BoxShape.circle),
+                  child: const Icon(Icons.card_giftcard_rounded, size: 48, color: Color(0xFFF59E0B)),
+                ),
+                const SizedBox(height: 24),
+                const Text(
+                  '₹20 Welcome Bonus!',
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'You have received ₹20 (200 Coins) as a welcome gift. You can use these coins to start making calls right away!',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 15, color: Color(0xFF64748B), height: 1.5),
+                ),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF4F46E5),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: const Text('Claim Coins', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   void _setupMalePresenceAndCallListener() {
+
     final appState = context.read<AppState>();
     final myUid = appState.uid;
     
@@ -176,6 +261,7 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
   void dispose() {
     // We don't dispose the singleton, just let it run or implement a cleanup method if needed.
     // HybridChatService.instance.dispose();
+    _chatUpdatesSubscription?.cancel();
     _incomingCallSubscription?.cancel();
     super.dispose();
   }
@@ -204,6 +290,20 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
           coinBalance = (data['coinBalance'] as num?)?.toInt() ?? 0;
         }
 
+        // Welcome Bonus Logic
+        final bool welcomeBonusReceived = data['welcomeBonusReceived'] as bool? ?? false;
+        if (!welcomeBonusReceived) {
+          coinBalance += 200;
+          await FirebaseFirestore.instance.collection('users').doc(myUid).update({
+            'coinBalance': coinBalance,
+            'welcomeBonusReceived': true,
+          });
+          
+          if (mounted) {
+            _showWelcomeBonusPopup();
+          }
+        }
+
         final hasUsedFreeCall = data['hasUsedFreeCall'] as bool? ?? false;
         final freeMessagesUsed = (data['freeMessagesUsed'] as num?)?.toInt() ?? 0;
         appState.setCoinBalance(coinBalance);
@@ -217,14 +317,20 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
       } else {
         await FirebaseFirestore.instance.collection('users').doc(myUid).set({
           'uid': myUid,
-          'coinBalance': 0,
+          'coinBalance': 200,
+          'welcomeBonusReceived': true,
           'hasUsedFreeCall': false,
+          'createdAt': FieldValue.serverTimestamp(),
           'freeMessagesUsed': 0,
           'gender': 'male',
         }, SetOptions(merge: true));
-        appState.setCoinBalance(0);
+        appState.setCoinBalance(200);
         appState.setHasUsedFreeCall(false);
         appState.setFreeMessagesUsed(0);
+        
+        if (mounted) {
+          _showWelcomeBonusPopup();
+        }
       }
       
       // Save FCM Token for push notifications
@@ -380,203 +486,96 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
     }
   }
 
+  Widget _buildIconWithBadge(IconData icon, String count, {bool isActive = false}) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Icon(icon, size: 26),
+        if (count.isNotEmpty)
+          Positioned(
+            top: -4,
+            right: -4,
+            child: Container(
+              padding: const EdgeInsets.all(4),
+              decoration: const BoxDecoration(
+                color: Colors.red,
+                shape: BoxShape.circle,
+              ),
+              child: Text(
+                count,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: brandBg,
-      body: SafeArea(
-        child: _buildBody(),
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Colors.black,
+        statusBarIconBrightness: Brightness.light,
       ),
-      bottomNavigationBar: SafeArea(
-        child: Container(
-          height: 64,
-          margin: const EdgeInsets.only(left: 16, right: 16, bottom: 16),
-          decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(24),
+      child: Scaffold(
+        backgroundColor: brandBg,
+        body: SafeArea(
+          child: _buildBody(),
+        ),
+            bottomNavigationBar: Container(
+        decoration: BoxDecoration(
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 16,
-              offset: const Offset(0, -2),
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 10,
+              offset: const Offset(0, -5),
             ),
           ],
         ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            // Home Tab Button
-            GestureDetector(
-              onTap: () {
-                setState(() {
-                  _currentTab = 0;
-                });
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
-                decoration: _currentTab == 0
-                    ? BoxDecoration(
-                        color: brandPrimary.withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(16),
-                      )
-                    : null,
-                child: Row(
-                  children: [
-                    Icon(
-                      _currentTab == 0
-                          ? Icons.home_rounded
-                          : Icons.home_outlined,
-                      color: _currentTab == 0 ? brandPrimary : brandTextGrey,
-                      size: 22,
-                    ),
-                    if (_currentTab == 0) ...[
-                      const SizedBox(width: 8),
-                      const Text(
-                        'Home',
-                        style: TextStyle(
-                          color: brandPrimary,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
+        child: BottomNavigationBar(
+          currentIndex: _currentTab,
+          onTap: (index) {
+            setState(() {
+              _currentTab = index;
+            });
+          },
+          type: BottomNavigationBarType.fixed,
+          backgroundColor: Colors.white,
+          selectedItemColor: brandPrimary,
+          unselectedItemColor: Colors.grey.shade500,
+          selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+          unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal, fontSize: 12),
+          items: [
+            const BottomNavigationBarItem(
+              icon: Icon(Icons.home_outlined, size: 26),
+              activeIcon: Icon(Icons.home_rounded, size: 26),
+              label: 'Home',
             ),
-            // Recents Tab Button
-            GestureDetector(
-              onTap: () {
-                setState(() {
-                  _currentTab = 1;
-                });
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
-                decoration: _currentTab == 1
-                    ? BoxDecoration(
-                        color: brandPrimary.withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(16),
-                      )
-                    : null,
-                child: Row(
-                  children: [
-                    Icon(
-                      _currentTab == 1
-                          ? Icons.access_time_filled_rounded
-                          : Icons.access_time_rounded,
-                      color: _currentTab == 1 ? brandPrimary : brandTextGrey,
-                      size: 22,
-                    ),
-                    if (_currentTab == 1) ...[
-                      const SizedBox(width: 8),
-                      const Text(
-                        'Recents',
-                        style: TextStyle(
-                          color: brandPrimary,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
+            const BottomNavigationBarItem(
+              icon: Icon(Icons.access_time_rounded, size: 26),
+              activeIcon: Icon(Icons.access_time_filled_rounded, size: 26),
+              label: 'Recents',
             ),
-            // Chats Tab Button
-            GestureDetector(
-              onTap: () {
-                setState(() {
-                  _currentTab = 2;
-                });
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
-                decoration: _currentTab == 2
-                    ? BoxDecoration(
-                        color: brandPrimary.withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(16),
-                      )
-                    : null,
-                child: Row(
-                  children: [
-                    Icon(
-                      _currentTab == 2
-                          ? Icons.chat_bubble_rounded
-                          : Icons.chat_bubble_outline_rounded,
-                      color: _currentTab == 2 ? brandPrimary : brandTextGrey,
-                      size: 22,
-                    ),
-                    if (_currentTab == 2) ...[
-                      const SizedBox(width: 8),
-                      const Text(
-                        'Chats',
-                        style: TextStyle(
-                          color: brandPrimary,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
+            BottomNavigationBarItem(
+              icon: _buildIconWithBadge(Icons.chat_bubble_outline_rounded, _unreadCount > 0 ? (_unreadCount > 99 ? '99+' : _unreadCount.toString()) : ''),
+              activeIcon: _buildIconWithBadge(Icons.chat_bubble_rounded, _unreadCount > 0 ? (_unreadCount > 99 ? '99+' : _unreadCount.toString()) : '', isActive: true),
+              label: 'Chat',
             ),
-            // Profile Tab Button
-            GestureDetector(
-              onTap: () {
-                setState(() {
-                  _currentTab = 3;
-                });
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
-                decoration: _currentTab == 3
-                    ? BoxDecoration(
-                        color: brandPrimary.withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(16),
-                      )
-                    : null,
-                child: Row(
-                  children: [
-                    Icon(
-                      _currentTab == 3
-                          ? Icons.person_rounded
-                          : Icons.person_outline_rounded,
-                      color: _currentTab == 3 ? brandPrimary : brandTextGrey,
-                      size: 22,
-                    ),
-                    if (_currentTab == 3) ...[
-                      const SizedBox(width: 8),
-                      const Text(
-                        'Profile',
-                        style: TextStyle(
-                          color: brandPrimary,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
+            const BottomNavigationBarItem(
+              icon: Icon(Icons.person_outline_rounded, size: 26),
+              activeIcon: Icon(Icons.person_rounded, size: 26),
+              label: 'Profile',
             ),
           ],
         ),
       ),
-      ), // Closes SafeArea
+    ),
     );
   }
 
@@ -1171,7 +1170,6 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
                         color: brandCardBg,
-                        borderRadius: BorderRadius.circular(24),
                         boxShadow: [
                           BoxShadow(
                             color: Colors.black.withValues(alpha: 0.03),

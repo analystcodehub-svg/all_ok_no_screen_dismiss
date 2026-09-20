@@ -1,3 +1,4 @@
+import "package:flutter/services.dart";
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -7,7 +8,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
 import 'otp_verification_screen.dart';
+import 'terms_condition_screen.dart';
+import 'privacy_policy_screen.dart';
 import 'package:smart_auth/smart_auth.dart';
+import 'package:flutter/gestures.dart';
 class PhoneAuthScreen extends StatefulWidget {
   const PhoneAuthScreen({super.key});
 
@@ -26,6 +30,7 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
   bool _referralChecking = false;
   bool _isLoading = false;
   String? _referralError;
+  bool _showReferralField = false;
 
   final List<Map<String, dynamic>> _bannerSlides = [
     {
@@ -228,7 +233,7 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 24.0,
-                    vertical: 20.0,
+                    vertical: 10.0,
                   ),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -237,19 +242,19 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
                       // Header Logo
                       Column(
                         children: [
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 10),
                           Text(
                             'SajniRe!',
                             textAlign: TextAlign.center,
                             style: GoogleFonts.yellowtail(
-                              fontSize: 48,
+                              fontSize: 42,
                               fontWeight: FontWeight.w700,
                               color: AppTheme.primaryBlue,
                             ),
                           ),
-                          const SizedBox(height: 40),
+                          const SizedBox(height: 20),
                           Container(
-                            height: 220,
+                            height: 190,
                             decoration: BoxDecoration(
                               gradient: const LinearGradient(
                                 colors: [
@@ -346,7 +351,7 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            const SizedBox(height: 40),
+                            const SizedBox(height: 20),
                             // Phone Number Field
                             Container(
                               decoration: BoxDecoration(
@@ -436,94 +441,114 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
                             ),
                             const SizedBox(height: 16),
                             // Optional Referral Code Field
-                            Container(
-                              decoration: BoxDecoration(
-                                color: _referralValid
-                                    ? Colors.green.shade50
-                                    : AppTheme.inputBg,
-                                borderRadius: BorderRadius.circular(15),
-                                border: Border.all(
+                            if (!_showReferralField)
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: TextButton(
+                                  onPressed: () {
+                                    setState(() {
+                                      _showReferralField = true;
+                                    });
+                                  },
+                                  child: const Text(
+                                    'Have a referral code?',
+                                    style: TextStyle(
+                                      color: AppTheme.primaryBlue,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ),
+                              )
+                            else
+                              Container(
+                                decoration: BoxDecoration(
                                   color: _referralValid
-                                      ? Colors.green.shade400
-                                      : _referralError != null
-                                          ? Colors.red.shade300
-                                          : AppTheme.borderGrey,
-                                  width: 1.2,
+                                      ? Colors.green.shade50
+                                      : AppTheme.inputBg,
+                                  borderRadius: BorderRadius.circular(15),
+                                  border: Border.all(
+                                    color: _referralValid
+                                        ? Colors.green.shade400
+                                        : _referralError != null
+                                            ? Colors.red.shade300
+                                            : AppTheme.borderGrey,
+                                    width: 1.2,
+                                  ),
+                                ),
+                                padding: const EdgeInsets.symmetric(horizontal: 16),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      _referralValid
+                                          ? Icons.check_circle_rounded
+                                          : Icons.card_giftcard_rounded,
+                                      color: _referralValid
+                                          ? Colors.green
+                                          : AppTheme.textGrey,
+                                      size: 20,
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: TextFormField(
+                                        controller: _referralController,
+                                        textCapitalization:
+                                            TextCapitalization.characters,
+                                        style: TextStyle(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w600,
+                                          color: _referralValid
+                                              ? Colors.green.shade700
+                                              : AppTheme.textBlack,
+                                          letterSpacing: 2,
+                                        ),
+                                        decoration: InputDecoration(
+                                          hintText: 'Referral Code (Optional)',
+                                          hintStyle: const TextStyle(
+                                            color: AppTheme.textGrey,
+                                            fontWeight: FontWeight.normal,
+                                            letterSpacing: 0,
+                                            fontSize: 14,
+                                          ),
+                                          filled: false,
+                                          border: InputBorder.none,
+                                          enabledBorder: InputBorder.none,
+                                          focusedBorder: InputBorder.none,
+                                          contentPadding: EdgeInsets.zero,
+                                          errorText: _referralError,
+                                        ),
+                                        onChanged: (v) {
+                                          if (v.trim().length >= 6) {
+                                            _validateReferralCode(v);
+                                          } else if (v.isEmpty) {
+                                            setState(() {
+                                              _referralValid = false;
+                                              _referralError = null;
+                                            });
+                                          }
+                                        },
+                                      ),
+                                    ),
+                                    if (_referralChecking)
+                                      const SizedBox(
+                                        width: 18,
+                                        height: 18,
+                                        child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: AppTheme.primaryBlue),
+                                      ),
+                                    if (_referralValid)
+                                      const Text(
+                                        'Applied!',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.green,
+                                        ),
+                                      ),
+                                  ],
                                 ),
                               ),
-                              padding: const EdgeInsets.symmetric(horizontal: 16),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    _referralValid
-                                        ? Icons.check_circle_rounded
-                                        : Icons.card_giftcard_rounded,
-                                    color: _referralValid
-                                        ? Colors.green
-                                        : AppTheme.textGrey,
-                                    size: 20,
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: TextFormField(
-                                      controller: _referralController,
-                                      textCapitalization:
-                                          TextCapitalization.characters,
-                                      style: TextStyle(
-                                        fontSize: 15,
-                                        fontWeight: FontWeight.w600,
-                                        color: _referralValid
-                                            ? Colors.green.shade700
-                                            : AppTheme.textBlack,
-                                        letterSpacing: 2,
-                                      ),
-                                      decoration: InputDecoration(
-                                        hintText: 'Referral Code (Optional)',
-                                        hintStyle: const TextStyle(
-                                          color: AppTheme.textGrey,
-                                          fontWeight: FontWeight.normal,
-                                          letterSpacing: 0,
-                                          fontSize: 14,
-                                        ),
-                                        filled: false,
-                                        border: InputBorder.none,
-                                        enabledBorder: InputBorder.none,
-                                        focusedBorder: InputBorder.none,
-                                        contentPadding: EdgeInsets.zero,
-                                        errorText: _referralError,
-                                      ),
-                                      onChanged: (v) {
-                                        if (v.trim().length >= 6) {
-                                          _validateReferralCode(v);
-                                        } else if (v.isEmpty) {
-                                          setState(() {
-                                            _referralValid = false;
-                                            _referralError = null;
-                                          });
-                                        }
-                                      },
-                                    ),
-                                  ),
-                                  if (_referralChecking)
-                                    const SizedBox(
-                                      width: 18,
-                                      height: 18,
-                                      child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          color: AppTheme.primaryBlue),
-                                    ),
-                                  if (_referralValid)
-                                    const Text(
-                                      'Applied!',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.green,
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ),
                             if (_referralValid)
                               Padding(
                                 padding: const EdgeInsets.only(top: 6, left: 4),
@@ -552,13 +577,48 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
                              ),
                             const SizedBox(height: 20),
                             // Footer Agreement Text
-                            const Text(
-                              'By tapping, you agree to our Terms of Use and Privacy Policy.\nAll your details are 100% safe & secure.',
+                            RichText(
                               textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: AppTheme.textGrey,
-                                height: 1.4,
+                              text: TextSpan(
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: AppTheme.textGrey,
+                                  height: 1.4,
+                                  fontFamily: 'Roboto', // Or whatever default family is used
+                                ),
+                                children: [
+                                  const TextSpan(text: 'By tapping, you agree to our '),
+                                  TextSpan(
+                                    text: 'Terms of Use',
+                                    style: const TextStyle(
+                                      color: AppTheme.primaryBlue,
+                                      decoration: TextDecoration.underline,
+                                    ),
+                                    recognizer: TapGestureRecognizer()
+                                      ..onTap = () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(builder: (context) => const TermsConditionScreen()),
+                                        );
+                                      },
+                                  ),
+                                  const TextSpan(text: ' and '),
+                                  TextSpan(
+                                    text: 'Privacy Policy',
+                                    style: const TextStyle(
+                                      color: AppTheme.primaryBlue,
+                                      decoration: TextDecoration.underline,
+                                    ),
+                                    recognizer: TapGestureRecognizer()
+                                      ..onTap = () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(builder: (context) => const PrivacyPolicyScreen()),
+                                        );
+                                      },
+                                  ),
+                                  const TextSpan(text: '.\nAll your details are 100% safe & secure.'),
+                                ],
                               ),
                             ),
                             const SizedBox(height: 20),

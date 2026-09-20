@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -35,17 +36,18 @@ class AutoStartHelper {
                 child: const Text('Open Settings'),
                 onPressed: () async {
                   Navigator.of(context).pop();
+                  
+                  // Request the permission (blocks until the user leaves the settings screen)
                   await Permission.systemAlertWindow.request();
                   
-                  // Start a periodic timer to check if permission is granted
-                  Timer.periodic(const Duration(milliseconds: 1000), (timer) async {
-                    var currentStatus = await Permission.systemAlertWindow.status;
-                    if (currentStatus.isGranted) {
-                      timer.cancel();
-                      // Bring app back to foreground automatically
-                      auto_start.bringAppToForeground();
-                    }
-                  });
+                  // Once the user leaves the settings screen (either by pressing back or granting it),
+                  // forcefully bring the app back to the foreground so they don't get stuck in Android Settings.
+                  try {
+                    const platform = MethodChannel('com.sajnire.app/auth');
+                    await platform.invokeMethod('bringToForeground');
+                  } catch (e) {
+                    debugPrint('Failed to bring app to foreground: $e');
+                  }
                 },
               ),
             ],

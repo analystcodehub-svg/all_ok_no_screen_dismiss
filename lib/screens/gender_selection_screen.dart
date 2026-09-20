@@ -101,7 +101,7 @@ class _GenderSelectionScreenState extends State<GenderSelectionScreen> {
                     child: _buildGenderCard(
                       label: 'Female',
                       subtext: '(Audio verification needed)',
-                      avatarAsset: 'assets/female_avatar.png',
+                      avatarAsset: 'assets/female.jpeg',
                       isSelected: _selectedGender == 'Female',
                     ),
                   ),
@@ -174,7 +174,7 @@ class _GenderSelectionScreenState extends State<GenderSelectionScreen> {
                 child: CircleAvatar(
                   radius: 56,
                   backgroundColor: AppTheme.inputBg,
-                  backgroundImage: AssetImage(avatarAsset),
+                  backgroundImage: ResizeImage(AssetImage(avatarAsset), width: 200),
                 ),
               ),
             ),
