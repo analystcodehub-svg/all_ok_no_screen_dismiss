@@ -1,4 +1,3 @@
-import "../utils/permission_helper.dart";
 import "../utils/auto_start_helper.dart";
 import "../services/foreground_task_service.dart";
 import 'dart:async';
@@ -20,7 +19,6 @@ import '../services/hybrid_chat_service.dart';
 import '../services/local_chat_database.dart';
 import '../widgets/local_avatar_widget.dart';
 import '../screens/blocked_users_screen.dart';
-import '../utils/auto_start_helper.dart';
 
 class ExpertHomeScreen extends StatefulWidget {
   final VoidCallback? onNavigateToChat;
@@ -50,6 +48,93 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
   late AnimationController _cardSlideController;
   late Animation<double> _pulseAnimation;
   late Animation<Offset> _slideAnimation;
+
+  void _showSupportSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Container(
+            padding: const EdgeInsets.all(24),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 40,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 24),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const Icon(Icons.support_agent_rounded, size: 48, color: AppColors.primaryBlue),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Customer Support',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textDark,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Need help with this withdrawal? Contact our support team.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 14, color: AppColors.textGrey),
+                  ),
+                  const SizedBox(height: 24),
+                  _buildSupportContact(Icons.chat_outlined, 'WhatsApp', '+91 8987108642', Colors.green),
+                  const SizedBox(height: 16),
+                  _buildSupportContact(Icons.email_outlined, 'Email', 'sajnireofficial@gmail.com', AppColors.primaryBlue),
+                  const SizedBox(height: 24),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildSupportContact(IconData icon, String title, String detail, Color iconColor) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.bgLight,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: iconColor),
+          const SizedBox(width: 16),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(fontSize: 12, color: AppColors.textGrey),
+              ),
+              Text(
+                detail,
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textDark),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   void initState() {
@@ -436,11 +521,13 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
         : 'there';
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.light.copyWith(
+      value: const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.dark,
+        statusBarBrightness: Brightness.light,
       ),
       child: Scaffold(
-        backgroundColor: AppColors.primaryBlue, // Status bar background
+        backgroundColor: Colors.white, // Status bar background
         body: SafeArea(
           bottom: false,
           child: Container(
@@ -1128,12 +1215,15 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Text(
-                value,
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: valueColor,
+              Flexible(
+                child: Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: valueColor,
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
               if (trailing != null) ...[
@@ -1214,9 +1304,9 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
 
     Color statusColor = const Color(0xFFF59E0B); // Pending orange
     String statusText = 'Pending';
-    if (status == 'approved' || status == 'success') {
+    if (status == 'completed' || status == 'success' || status == 'successful' || status == 'approved') {
       statusColor = Colors.green;
-      statusText = 'Successful';
+      statusText = 'Success';
     } else if (status == 'failed' || status == 'rejected') {
       statusColor = Colors.red;
       statusText = 'Failed';
@@ -1262,14 +1352,18 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text(
-                                'SajniRe Cashout (₹${amount.toStringAsFixed(0)})',
-                                style: const TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.bold,
-                                  color: AppColors.primaryBlue,
+                              Expanded(
+                                child: Text(
+                                  'Cashout (₹${amount.toStringAsFixed(0)})',
+                                  style: const TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.primaryBlue,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
+                              const SizedBox(width: 8),
                               Text(
                                 statusText,
                                 style: TextStyle(
@@ -1317,27 +1411,30 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
                       ),
                     ),
                     // Gray bottom bar
-                    Container(
-                      color: const Color(0xFFF8FAFC), // Very light grey
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.headset_mic_outlined,
-                            size: 15,
-                            color: AppColors.primaryBlue.withValues(alpha: 0.8),
-                          ),
-                          const SizedBox(width: 6),
-                          const Text(
-                            'Help',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.primaryBlue,
+                    InkWell(
+                      onTap: () => _showSupportSheet(context),
+                      child: Container(
+                        color: const Color(0xFFF8FAFC), // Very light grey
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.headset_mic_outlined,
+                              size: 15,
+                              color: AppColors.primaryBlue.withValues(alpha: 0.8),
                             ),
-                          ),
-                        ],
+                            const SizedBox(width: 6),
+                            const Text(
+                              'Help',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.primaryBlue,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ],

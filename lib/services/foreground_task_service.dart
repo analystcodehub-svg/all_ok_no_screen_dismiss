@@ -5,6 +5,10 @@ import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'package:flutter/foundation.dart';
 
 class ForegroundTaskService {
   static final ForegroundTaskService _instance = ForegroundTaskService._internal();
@@ -81,6 +85,13 @@ void onStart(ServiceInstance service) async {
   DartPluginRegistrant.ensureInitialized();
   await Firebase.initializeApp();
 
+  // Initialize Crashlytics for the background isolate
+  FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterFatalError;
+  PlatformDispatcher.instance.onError = (error, stack) {
+    FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+    return true;
+  };
+
   final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
       FlutterLocalNotificationsPlugin();
 
@@ -119,9 +130,64 @@ void onStart(ServiceInstance service) async {
               'Background Service',
               icon: 'ic_launcher',
               ongoing: true,
+              autoCancel: false,
             ),
           ),
         );
+      }
+    }
+
+    if (isConnected) {
+      // Internet restored while in background/locked state.
+      // Re-publish the expert to the online queue to ensure they receive calls.
+      try {
+        final user = FirebaseAuth.instance.currentUser;
+        if (user != null) {
+          final expertId = user.uid;
+          final doc = await FirebaseFirestore.instance.collection('experts').doc(expertId).get();
+          if (doc.exists) {
+            final data = doc.data();
+            final gender = data?['gender'] as String? ?? 'female';
+            final language = data?['language'] as String? ?? 'hindi';
+            final talkSeconds = (data?['totalTalkSeconds'] as num?)?.toInt() ?? 0;
+            final nickname = data?['nickname'] as String? ?? 'Expert';
+            final age = (data?['age'] as num?)?.toInt() ?? 22;
+            final avatarUrl = data?['profileImageUrl'] as String? ?? data?['avatarUrl'] as String?;
+            final avatarIndex = (data?['avatarIndex'] as num?)?.toInt() ?? 1;
+
+            final presenceRef = db.ref('status/$expertId');
+            final queueRef = db.ref('queues/${gender.toLowerCase()}_${language.toLowerCase()}/$expertId');
+
+            await presenceRef.update({
+              'isOnline': true,
+              'status': 'online',
+              'callStatus': 'available',
+              'lastChanged': ServerValue.timestamp,
+            });
+
+            await presenceRef.onDisconnect().update({
+              'isOnline': false,
+              'status': 'offline',
+              'callStatus': 'offline',
+              'lastChanged': ServerValue.timestamp,
+            });
+
+            await queueRef.update({
+              'timestamp': ServerValue.timestamp,
+              'totalTalkSeconds': talkSeconds,
+              'nickname': nickname,
+              'age': age,
+              'avatarIndex': avatarIndex,
+              if (avatarUrl != null && avatarUrl.isNotEmpty) 'avatarUrl': avatarUrl,
+            });
+            await queueRef.onDisconnect().remove();
+            
+            // Clear any stuck active call locks
+            await db.ref('active_calls/$expertId').remove();
+          }
+        }
+      } catch (e) {
+        debugPrint('Background reconnection error: $e');
       }
     }
   });

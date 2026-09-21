@@ -63,6 +63,7 @@ dependencies:
   vibration: ^3.2.0
   credential_manager: ^4.3.0
   uuid: ^4.6.0
+  firebase_crashlytics: ^5.4.0
 
 
 dev_dependencies:

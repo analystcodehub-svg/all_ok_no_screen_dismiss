@@ -6,7 +6,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_database/firebase_database.dart';
 import '../providers/app_state.dart';
 import '../services/call_service.dart';
-import '../widgets/local_avatar_widget.dart';
 import 'active_call_page.dart';
 import 'package:flutter_ringtone_player/flutter_ringtone_player.dart';
 
@@ -250,20 +249,20 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      // Accept (Moved to Left)
-                      _buildActionButton(
-                        label: 'Accept',
-                        icon: Icons.call,
-                        color: const Color(0xFF10B981),
-                        onTap: _acceptCall,
-                      ),
-
-                      // Decline (Moved to Right)
+                      // Decline (Left)
                       _buildActionButton(
                         label: 'Decline',
                         icon: Icons.call_end,
                         color: const Color(0xFFEF4444),
                         onTap: _declineCall,
+                      ),
+
+                      // Accept (Right)
+                      _buildActionButton(
+                        label: 'Accept',
+                        icon: Icons.call,
+                        color: const Color(0xFF10B981),
+                        onTap: _acceptCall,
                       ),
                     ],
                   ),

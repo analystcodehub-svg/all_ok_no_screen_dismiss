@@ -1,6 +1,7 @@
 plugins {
     id("com.android.application")
     id("com.google.gms.google-services")
+    id("com.google.firebase.crashlytics")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
@@ -32,10 +33,10 @@ android {
 
     signingConfigs {
         create("release") {
-            // keyAlias = keystoreProperties["keyAlias"] as String?
-            // keyPassword = keystoreProperties["keyPassword"] as String?
-            // storeFile = keystoreProperties["storeFile"]?.let { file(it as String) }
-            // storePassword = keystoreProperties["storePassword"] as String?
+            keyAlias = keystoreProperties["keyAlias"] as String?
+            keyPassword = keystoreProperties["keyPassword"] as String?
+            storeFile = keystoreProperties["storeFile"]?.let { file(it as String) }
+            storePassword = keystoreProperties["storePassword"] as String?
         }
     }
 
@@ -54,11 +55,11 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            // if (keystorePropertiesFile.exists()) {
-            //     signingConfig = signingConfigs.getByName("release")
-            // } else {
+            if (keystorePropertiesFile.exists()) {
+                signingConfig = signingConfigs.getByName("release")
+            } else {
                 signingConfig = signingConfigs.getByName("debug")
-            // }
+            }
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }

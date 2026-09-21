@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
 import 'package:flutter/foundation.dart';
@@ -349,24 +350,37 @@ class CallService {
         final callerId = data['callerId']?.toString();
         final receiverId = data['receiverId']?.toString();
         
-        // Update room status to ended and remove node
-        await roomRef.update({'status': 'ended'});
-        await roomRef.remove();
-        
-        // Unlock both parties
+        // Unlock both parties FIRST before trying to update/remove the room (which might fail due to permissions)
         if (callerId != null) {
           await unlockUserFromCall(callerId);
         }
         if (receiverId != null) {
           await unlockUserFromCall(receiverId);
         }
+        
+        // Update room status to ended and remove node
+        try {
+          await roomRef.update({'status': 'ended'});
+          await roomRef.remove();
+        } catch (e) {
+          debugPrint('Could not remove room (might be deleted or permission denied): $e');
+        }
       } else {
-        await roomRef.update({'status': 'ended'});
-        await roomRef.remove();
+        try {
+          await roomRef.update({'status': 'ended'});
+          await roomRef.remove();
+        } catch (e) {
+          debugPrint('Could not remove room: $e');
+        }
       }
     } catch (e) {
       debugPrint('Error ending call document: $e');
     } finally {
+      // CRITICAL FIX: Always guarantee that the current user is unlocked, even if the room was already deleted!
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser != null) {
+        await unlockUserFromCall(currentUser.uid);
+      }
       await disposeCall();
     }
   }

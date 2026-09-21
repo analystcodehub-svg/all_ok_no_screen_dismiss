@@ -76,15 +76,47 @@ class _RecentSessionsScreenState extends State<RecentSessionsScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Header
-            const Padding(
-              padding: EdgeInsets.only(left: 20, top: 20, bottom: 10),
-              child: Text(
-                'Recent Session',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textDark,
-                ),
+            Padding(
+              padding: const EdgeInsets.only(left: 20, right: 20, top: 20, bottom: 10),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Recent Session',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textDark,
+                    ),
+                  ),
+                  if (currentUserId.isNotEmpty)
+                    TextButton.icon(
+                      onPressed: () {
+                        showDialog(
+                          context: context,
+                          builder: (context) => AlertDialog(
+                            title: const Text('Clear History'),
+                            content: const Text('Are you sure you want to clear all your recent sessions?'),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(context),
+                                child: const Text('Cancel'),
+                              ),
+                              TextButton(
+                                onPressed: () {
+                                  Navigator.pop(context);
+                                  LocalChatDatabase.instance.clearCallLogs(currentUserId);
+                                },
+                                child: const Text('Clear', style: TextStyle(color: Colors.red)),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
+                      label: const Text('Clear', style: TextStyle(color: Colors.red)),
+                    ),
+                ],
               ),
             ),
 
@@ -147,10 +179,14 @@ class _RecentSessionsScreenState extends State<RecentSessionsScreen> {
                           if (data['timestamp'] != null) {
                             final dt = DateTime.fromMillisecondsSinceEpoch(data['timestamp']);
                             final now = DateTime.now();
+                            final timeStr = TimeOfDay.fromDateTime(dt).format(context);
+                            
                             if (dt.year == now.year && dt.month == now.month && dt.day == now.day) {
-                              timeText = TimeOfDay.fromDateTime(dt).format(context);
+                              timeText = '$timeStr • Today';
                             } else {
-                              timeText = '${dt.day}/${dt.month}';
+                              const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                              final monthStr = months[dt.month - 1];
+                              timeText = '$timeStr • ${dt.day} $monthStr';
                             }
                           }
 

@@ -133,6 +133,22 @@ class _AudioVerificationPageState extends State<AudioVerificationPage> with Sing
         }, SetOptions(merge: true));
         
         appState.setAudioVerified(true);
+
+        // Save referral info if present
+        if (appState.enteredReferralCode.isNotEmpty) {
+          try {
+            await FirebaseFirestore.instance.collection('referrals').add({
+              'referralCode': appState.enteredReferralCode,
+              'referredUserId': expertId,
+              'referredName': appState.nickname,
+              'referredPhone': appState.mobileNumber,
+              'joinedAt': FieldValue.serverTimestamp(),
+              'status': 'joined',
+            });
+          } catch (e) {
+            debugPrint('Failed to save referral: $e');
+          }
+        }
       } catch (e) {
         debugPrint('Error uploading audio or saving profile: $e');
         if (mounted) {

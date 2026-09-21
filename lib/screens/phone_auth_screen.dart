@@ -1,6 +1,6 @@
-import "package:flutter/services.dart";
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -130,6 +130,9 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
           _referralValid = true;
           _referralError = null;
         });
+        if (mounted) {
+          context.read<AppState>().setEnteredReferralCode(code.trim().toUpperCase());
+        }
       } else {
         setState(() {
           _referralValid = false;
@@ -223,8 +226,16 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent, // transparent status bar
+        statusBarIconBrightness: Brightness.dark, // dark icons for Android
+        statusBarBrightness: Brightness.light, // dark icons for iOS
+        systemNavigationBarColor: Colors.transparent,
+        systemNavigationBarIconBrightness: Brightness.dark,
+      ),
+      child: Scaffold(
+        body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
             return SingleChildScrollView(
@@ -631,6 +642,7 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
               ),
             );
           },
+        ),
         ),
       ),
     );

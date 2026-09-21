@@ -109,7 +109,11 @@ class MatchmakingService {
         
         // Start native task removed listener
         try {
-          await _platform.invokeMethod('setAppCloseHandler', {'expertId': expertId});
+          await _platform.invokeMethod('setAppCloseHandler', {
+            'expertId': expertId,
+            'gender': gender.toLowerCase(),
+            'language': language.toLowerCase()
+          });
         } catch (e) {
           debugPrint('Could not set native app close handler: $e');
         }

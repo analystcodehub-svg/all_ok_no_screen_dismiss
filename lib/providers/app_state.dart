@@ -41,6 +41,9 @@ class AppState extends ChangeNotifier {
   bool _isAudioVerified = false;
   bool get isAudioVerified => _isAudioVerified;
 
+  String _enteredReferralCode = '';
+  String get enteredReferralCode => _enteredReferralCode;
+
   // Female Expert Dashboard state
   bool _isOnline = false;
   bool get isOnline => _isOnline;
@@ -111,6 +114,11 @@ class AppState extends ChangeNotifier {
 
   void setAudioVerified(bool verified) {
     _isAudioVerified = verified;
+    notifyListeners();
+  }
+
+  void setEnteredReferralCode(String code) {
+    _enteredReferralCode = code;
     notifyListeners();
   }
 

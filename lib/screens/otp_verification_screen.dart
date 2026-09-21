@@ -155,7 +155,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
           SnackBar(content: Text(message)),
         );
       }
-    } catch (e, stackTrace) {
+    } catch (e) {
       debugPrint("OTP Verification Error: \$e");
       debugPrint("Stack Trace: \$stackTrace");
       if (mounted) {
@@ -177,13 +177,13 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: Colors.black,
+        backgroundColor: Colors.transparent,
         elevation: 0,
         toolbarHeight: 0,
         systemOverlayStyle: const SystemUiOverlayStyle(
-          statusBarColor: Colors.black,
-          statusBarIconBrightness: Brightness.light,
-          statusBarBrightness: Brightness.dark,
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: Brightness.dark,
+          statusBarBrightness: Brightness.light,
         ),
       ),
       body: Stack(
@@ -197,8 +197,8 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
                   colors: [
-                    const Color(0xFF4C75F2).withOpacity(0.15),
-                    Colors.white.withOpacity(0.0),
+                    const Color(0xFF4C75F2).withValues(alpha: 0.15),
+                    Colors.white.withValues(alpha: 0.0),
                   ],
                   stops: const [0.0, 1.0],
                 ),

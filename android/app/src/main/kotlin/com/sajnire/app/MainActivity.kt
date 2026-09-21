@@ -89,8 +89,12 @@ class MainActivity : FlutterActivity() {
                 result.success(null)
             } else if (call.method == "setAppCloseHandler") {
                 val expertId = call.argument<String>("expertId")
+                val gender = call.argument<String>("gender")
+                val language = call.argument<String>("language")
                 val serviceIntent = Intent(context, AppCloseService::class.java)
                 serviceIntent.putExtra("expertId", expertId)
+                serviceIntent.putExtra("gender", gender)
+                serviceIntent.putExtra("language", language)
                 context.startService(serviceIntent)
                 result.success(null)
             } else if (call.method == "clearAppCloseHandler") {

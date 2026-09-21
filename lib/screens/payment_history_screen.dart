@@ -115,7 +115,7 @@ class PaymentHistoryScreen extends StatelessWidget {
     String statusText = 'Pending';
     if (status == 'success') {
       statusColor = Colors.green;
-      statusText = 'Successful';
+      statusText = 'Success';
     } else if (status == 'failed') {
       statusColor = Colors.red;
       statusText = 'Failed';

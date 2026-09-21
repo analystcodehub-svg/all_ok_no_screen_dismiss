@@ -1,8 +1,10 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'firebase_options.dart';
 import 'providers/app_state.dart';
 import 'theme/app_theme.dart';
@@ -38,8 +40,9 @@ void main() async {
     SystemUiMode.manual,
     overlays: [SystemUiOverlay.top, SystemUiOverlay.bottom],
   );
-  SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle.light.copyWith(
+  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.black, // Black background
+    systemNavigationBarColor: Colors.transparent, // Default system nav bar
   ));
 
   // ── 1. Initialize Firebase ──────────────────────────────────────────────
@@ -50,6 +53,16 @@ void main() async {
         options: DefaultFirebaseOptions.currentPlatform,
       );
     }
+    
+    // Pass all uncaught "fatal" errors from the framework to Crashlytics
+    FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterFatalError;
+    
+    // Pass all uncaught asynchronous errors that aren't handled by the Flutter framework to Crashlytics
+    PlatformDispatcher.instance.onError = (error, stack) {
+      FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+      return true;
+    };
+
     firebaseInitialized = true;
     debugPrint('Firebase initialized successfully.');
   } catch (e) {
@@ -152,6 +165,8 @@ class _SajniReAppState extends State<SajniReApp> with WidgetsBindingObserver {
           final args = ModalRoute.of(context)!.settings.arguments
               as Map<String, dynamic>;
           
+          final appState = Provider.of<AppState>(context, listen: false);
+          
           // Resolve callerId properly from arguments if available, fallback to name
           final passedCallerId = args['callerId'] as String?;
           final resolvedCallerId = (passedCallerId != null && passedCallerId.isNotEmpty) 
@@ -160,7 +175,7 @@ class _SajniReAppState extends State<SajniReApp> with WidgetsBindingObserver {
 
           return ActiveCallPage(
             callRoomId: args['callRoomId'] as String,
-            receiverId: '',      // Will be resolved inside ActiveCallPage
+            receiverId: appState.uid,
             callerId:   resolvedCallerId,
             nickname:   args['callerName'] as String,
             pricePerMin: 3.0,

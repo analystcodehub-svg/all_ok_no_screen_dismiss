@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -17,12 +18,69 @@ import 'wallet_recharge_screen.dart';
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
 
+  void _showEditNicknameDialog(BuildContext context, AppState appState) {
+    final TextEditingController controller = TextEditingController(text: appState.nickname);
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Edit Name'),
+          content: TextField(
+            controller: controller,
+            textCapitalization: TextCapitalization.words,
+            decoration: const InputDecoration(
+              labelText: 'New Name',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryBlue),
+              onPressed: () async {
+                final newName = controller.text.trim();
+                if (newName.isNotEmpty) {
+                  try {
+                    final uid = FirebaseAuth.instance.currentUser?.uid;
+                    if (uid != null) {
+                      final collection = appState.selectedGender == 'Female' ? 'experts' : 'users';
+                      await FirebaseFirestore.instance.collection(collection).doc(uid).update({
+                        'nickname': newName,
+                      });
+                      appState.setNickname(newName);
+                    }
+                  } catch (e) {
+                    debugPrint('Error updating name: $e');
+                  }
+                  if (context.mounted) {
+                    Navigator.pop(context);
+                  }
+                }
+              },
+              child: const Text('Save', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.bgLight,
-      body: Consumer<AppState>(
-        builder: (context, appState, child) {
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Colors.white,
+        statusBarIconBrightness: Brightness.dark,
+        statusBarBrightness: Brightness.light,
+      ),
+      child: Scaffold(
+        backgroundColor: AppColors.bgLight,
+        body: SafeArea(
+          child: Consumer<AppState>(
+            builder: (context, appState, child) {
           final nickname = appState.nickname.isNotEmpty ? appState.nickname : 'User';
           final uid = appState.selectedGender == 'Female' ? appState.uid : appState.mobileNumber;
           final role = appState.selectedGender == 'Female' ? 'expert' : 'user';
@@ -64,7 +122,7 @@ class ProfileScreen extends StatelessWidget {
                               const SizedBox(width: 8),
                               InkWell(
                                 onTap: () {
-                                  // Note: Implement Edit Profile
+                                  _showEditNicknameDialog(context, appState);
                                 },
                                 child: const Icon(
                                   Icons.edit,
@@ -223,7 +281,9 @@ class ProfileScreen extends StatelessWidget {
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(color: AppColors.primaryBlue.withValues(alpha: 0.2)),
                           ),
-                          child: const ExpansionTile(
+                          child: const Material(
+                            type: MaterialType.transparency,
+                            child: ExpansionTile(
                             tilePadding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                             childrenPadding: EdgeInsets.only(left: 16, right: 16, bottom: 16),
                             title: Text(
@@ -239,9 +299,9 @@ class ProfileScreen extends StatelessWidget {
                             children: [
                               Row(
                                 children: [
-                                  Icon(Icons.phone, size: 18, color: AppColors.primaryBlue),
+                                  Icon(Icons.email_outlined, size: 18, color: AppColors.primaryBlue),
                                   SizedBox(width: 8),
-                                  Text('+91 8987108642', style: TextStyle(fontSize: 14, color: AppColors.textDark)),
+                                  Text('sajnireofficial@gmail.com', style: TextStyle(fontSize: 14, color: AppColors.textDark)),
                                 ],
                               ),
                               SizedBox(height: 12),
@@ -262,6 +322,7 @@ class ProfileScreen extends StatelessWidget {
                               ),
                             ],
                           ),
+                          ),
                         ),
                       ),
                       const SizedBox(height: 30),
@@ -272,10 +333,11 @@ class ProfileScreen extends StatelessWidget {
             ),
           );
         },
+        ),
+        ),
       ),
     );
   }
-
   void _showDeleteAccountDialog(BuildContext context) {
     showDialog(
       context: context,

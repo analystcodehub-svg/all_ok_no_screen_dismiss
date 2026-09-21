@@ -6,7 +6,7 @@ import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
 
 class BlockedUsersScreen extends StatefulWidget {
-  const BlockedUsersScreen({Key? key}) : super(key: key);
+  const BlockedUsersScreen({super.key});
 
   @override
   State<BlockedUsersScreen> createState() => _BlockedUsersScreenState();
@@ -97,7 +97,7 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
                       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       child: ListTile(
                         leading: CircleAvatar(
-                          backgroundColor: Colors.red.withOpacity(0.1),
+                          backgroundColor: Colors.red.withValues(alpha: 0.1),
                           child: const Icon(Icons.person_off, color: Colors.red),
                         ),
                         title: Text(user['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
@@ -114,6 +114,80 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
                     );
                   },
                 ),
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 10,
+              offset: const Offset(0, -5),
+            ),
+          ],
+        ),
+        child: BottomNavigationBar(
+          currentIndex: 0, // Default to home since they came from there
+          onTap: (index) {
+            Navigator.pop(context);
+          },
+          type: BottomNavigationBarType.fixed,
+          backgroundColor: Colors.white,
+          selectedItemColor: AppTheme.primaryBlue,
+          unselectedItemColor: Colors.grey.shade500,
+          selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold),
+          unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal),
+          items: [
+            const BottomNavigationBarItem(
+              icon: Icon(Icons.home_outlined),
+              activeIcon: Icon(Icons.home),
+              label: 'Home',
+            ),
+            BottomNavigationBarItem(
+              icon: _buildIconWithBadge(Icons.chat_bubble_outline, '1'),
+              activeIcon: _buildIconWithBadge(Icons.chat_bubble, '1', isActive: true),
+              label: 'Chat',
+            ),
+            BottomNavigationBarItem(
+              icon: _buildIconWithBadge(Icons.history, '1'),
+              activeIcon: _buildIconWithBadge(Icons.history, '1', isActive: true),
+              label: 'Recent',
+            ),
+            const BottomNavigationBarItem(
+              icon: Icon(Icons.person_outline),
+              activeIcon: Icon(Icons.person),
+              label: 'Profile',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildIconWithBadge(IconData icon, String count, {bool isActive = false}) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Icon(icon, size: 26),
+        Positioned(
+          top: -4,
+          right: -4,
+          child: Container(
+            padding: const EdgeInsets.all(4),
+            decoration: const BoxDecoration(
+              color: Colors.red,
+              shape: BoxShape.circle,
+            ),
+            child: Text(
+              count,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

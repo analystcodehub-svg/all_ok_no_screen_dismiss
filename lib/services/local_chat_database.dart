@@ -268,6 +268,16 @@ class LocalChatDatabase {
     );
   }
 
+  Future<void> clearCallLogs(String myId) async {
+    final db = await instance.database;
+    await db.delete(
+      'call_logs',
+      where: 'callerId = ? OR receiverId = ?',
+      whereArgs: [myId, myId],
+    );
+    _updateController.add(null);
+  }
+
   // Sync last 50 call logs from Firestore (Only once per install/login)
   Future<void> syncCallLogsFromFirestore(String myId) async {
     try {

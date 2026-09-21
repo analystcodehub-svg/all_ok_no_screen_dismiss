@@ -6,6 +6,7 @@
 
 import 'dart:convert';
 import 'dart:io';
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
@@ -17,10 +18,10 @@ import 'package:flutter_callkit_incoming/entities/android_params.dart';
 import 'package:flutter_callkit_incoming/entities/ios_params.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_ringtone_player/flutter_ringtone_player.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_callkit_incoming/entities/call_event.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_database/firebase_database.dart';
 import '../firebase_options.dart';
 import 'call_service.dart';
 import 'block_service.dart';
@@ -138,26 +139,52 @@ Future<void> showChatNotification(Map<String, dynamic> data) async {
 // ─── CALLKIT HELPER (top-level, callable from background isolate) ──────────
 
 Future<void> _showCallkitIncoming(Map<String, dynamic> data) async {
-  final uuid         = data['callUuid']    ?? 'uuid-${DateTime.now().millisecondsSinceEpoch}';
+  debugPrint('[CallKit] _showCallkitIncoming triggered with data: $data');
+  final uuid         = data['callRoomId']  ?? 'uuid-${DateTime.now().millisecondsSinceEpoch}';
   final callerName   = data['callerName']  ?? 'Unknown Caller';
   final callRoomId   = data['callRoomId']  ?? '';
   final callerId     = data['callerId']    ?? '';
 
-  // 1. Check if caller is blocked anywhere locally before ringing
+  // 1. Check if caller is blocked locally before ringing
   if (callerId.isNotEmpty) {
-    bool isBlocked = await BlockService.instance.isUserBlockedAnywhereAsync(callerId);
-    if (isBlocked) {
-      debugPrint('[CallKit] Caller $callerId is blocked locally. Suppressing call.');
-      return;
+    debugPrint('[CallKit] Checking if blocked: $callerId');
+    try {
+      bool isBlocked = await BlockService.instance.isUserBlockedAnywhereAsync(callerId);
+      if (isBlocked) {
+        debugPrint('[CallKit] Caller $callerId is blocked locally. Suppressing call.');
+        return;
+      }
+    } catch(e) {
+      debugPrint('[CallKit] Error checking block status: $e');
     }
   }
 
+  // 2. Prevent "Ghost Ringing" without delaying the UI!
+  // We immediately show the CallKit UI, but we also attach a listener.
+  // If the RTDB connects and tells us the call is already ended/deleted, we kill the CallKit UI instantly.
+  StreamSubscription? ghostCheckSub;
+  if (callRoomId.isNotEmpty) {
+    ghostCheckSub = FirebaseDatabase.instance.ref('calls/$callRoomId').onValue.listen((event) {
+      if (!event.snapshot.exists || (event.snapshot.value as Map?)?['status'] == 'ended') {
+        debugPrint('[CallKit] Ghost call detected (ended/deleted). Auto-canceling CallKit.');
+        FlutterCallkitIncoming.endCall(uuid);
+        FlutterRingtonePlayer().stop();
+        ghostCheckSub?.cancel();
+      }
+    });
+    // Auto cancel the subscription after 20 seconds to prevent memory leaks
+    Future.delayed(const Duration(seconds: 20), () {
+      ghostCheckSub?.cancel();
+    });
+  }
+
+  debugPrint('[CallKit] Proceeding to ring...');
   NotificationService.lastCallerName = callerName;
   final prefs = await SharedPreferences.getInstance();
   await prefs.setString('callerName_$callRoomId', callerName);
   await prefs.setString('callerId_$callRoomId', callerId);
 
-  // Explicitly play the ringtone using flutter_ringtone_player to bypass OS restrictions
+  // Explicitly play the ringtone using flutter_ringtone_player
   FlutterRingtonePlayer().play(
     android: AndroidSounds.ringtone,
     ios: IosSounds.glass,
@@ -166,25 +193,13 @@ Future<void> _showCallkitIncoming(Map<String, dynamic> data) async {
     asAlarm: true,
   );
 
-  // Stop ringtone when the user interacts or it times out
-  FlutterCallkitIncoming.onEvent.listen((event) {
-    if (event is CallEventActionCallAccept ||
-        event is CallEventActionCallDecline ||
-        event is CallEventActionCallTimeout ||
-        event is CallEventActionCallEnded) {
-      FlutterRingtonePlayer().stop();
-    }
-  });
-
-
   final params = CallKitParams(
     id: uuid,
     nameCaller: callerName,
     appName: 'SajniRe',
-    handle: 'SajniRe Audio Call',
-    type: 0,          // 0 = audio call
-    duration: 15000,  // auto-dismiss and stop ringing after 15s
-    // Pass call info through extra so we can navigate on Accept
+    handle: 'calling ....',
+    type: 0,          
+    duration: 15000,  // auto-dismiss after 15s
     extra: <String, dynamic>{
       'callRoomId': callRoomId,
       'callerName': callerName,
@@ -193,8 +208,8 @@ Future<void> _showCallkitIncoming(Map<String, dynamic> data) async {
     android: const AndroidParams(
       isCustomNotification: true,
       isShowLogo: false,
-      isShowCallID: false,
-      ringtonePath: '', // Handled manually by flutter_ringtone_player
+      isShowCallID: true,
+      ringtonePath: '', // Handled manually
       backgroundColor: '#0A0A0A',
       actionColor: '#10B981',
       textColor: '#ffffff',
@@ -221,6 +236,49 @@ Future<void> _showCallkitIncoming(Map<String, dynamic> data) async {
   );
 
   await FlutterCallkitIncoming.showCallkitIncoming(params);
+
+  // Keep background isolate alive until call ends or times out
+  final completer = Completer<void>();
+
+  late StreamSubscription<CallEvent?> callkitEventSub;
+  callkitEventSub = FlutterCallkitIncoming.onEvent.listen((event) {
+    if (event is CallEventActionCallAccept ||
+        event is CallEventActionCallDecline ||
+        event is CallEventActionCallTimeout ||
+        event is CallEventActionCallEnded) {
+      FlutterRingtonePlayer().stop();
+      if (!completer.isCompleted) completer.complete();
+    }
+  });
+
+  StreamSubscription? rtdbSub;
+  if (callRoomId.isNotEmpty) {
+    rtdbSub = FirebaseDatabase.instance.ref('calls/$callRoomId').onValue.listen((event) {
+      if (event.snapshot.value == null) {
+        FlutterRingtonePlayer().stop();
+        FlutterCallkitIncoming.endAllCalls();
+        if (!completer.isCompleted) completer.complete();
+      } else {
+        final data = Map<String, dynamic>.from(event.snapshot.value as Map);
+        if (data['status'] == 'ended' || data['status'] == 'rejected_blocked') {
+          FlutterRingtonePlayer().stop();
+          FlutterCallkitIncoming.endAllCalls();
+          if (!completer.isCompleted) completer.complete();
+        }
+      }
+    });
+  }
+
+  // Failsafe timer: maximum 16 seconds
+  Timer(const Duration(seconds: 16), () {
+    FlutterRingtonePlayer().stop();
+    if (!completer.isCompleted) completer.complete();
+  });
+
+  await completer.future;
+  
+  callkitEventSub.cancel();
+  rtdbSub?.cancel();
 }
 
 // ─── NOTIFICATION SERVICE CLASS ───────────────────────────────────────────

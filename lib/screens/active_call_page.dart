@@ -742,7 +742,7 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
                               tween: Tween(begin: 0.4, end: 1.0),
                               duration: const Duration(milliseconds: 900),
                               curve: Curves.easeInOut,
-                              builder: (_, val, __) {
+                              builder: (_, val, _) {
                                 return Row(
                                   children: List.generate(3, (i) {
                                     return Container(
