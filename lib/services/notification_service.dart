@@ -529,7 +529,7 @@ class NotificationService {
       if (event is CallEventActionCallAccept) {
         FlutterRingtonePlayer().stop();
         // The UUID we passed as CallKitParams.id equals the Firestore callRoomId
-        final callRoomId = event.id;
+        final callRoomId = event.callKitParams.id;
         debugPrint('[CallKit] Accepted: $callRoomId');
 
         // Navigate to active call screen
@@ -557,7 +557,7 @@ class NotificationService {
         pushRoute();
       } else if (event is CallEventActionCallDecline) {
         FlutterRingtonePlayer().stop();
-        final callRoomId = event.id;
+        final callRoomId = event.callKitParams.id;
         debugPrint('[CallKit] Declined: $callRoomId');
 
         // End call properly via CallService (this also unlocks both users in RTDB)

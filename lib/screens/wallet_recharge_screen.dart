@@ -40,8 +40,9 @@ class WalletRechargeScreen extends StatelessWidget {
         ],
       ),
       body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -67,9 +68,9 @@ class WalletRechargeScreen extends StatelessWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.monetization_on_rounded, color: Color(0xFFF59E0B), size: 36),
-                        const SizedBox(width: 12),
-                        Text('$coinBalance', style: const TextStyle(fontSize: 40, fontWeight: FontWeight.bold, color: Colors.white)),
+                        const Icon(Icons.currency_rupee, color: Color(0xFFF59E0B), size: 36),
+                        const SizedBox(width: 8),
+                        Text((coinBalance / 10).toStringAsFixed(1), style: const TextStyle(fontSize: 40, fontWeight: FontWeight.bold, color: Colors.white)),
                       ],
                     ),
                   ],
@@ -103,6 +104,7 @@ class WalletRechargeScreen extends StatelessWidget {
               ),
             ],
           ),
+        ),
         ),
       ),
     );

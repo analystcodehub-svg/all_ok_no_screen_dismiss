@@ -13,7 +13,6 @@ import '../services/call_service.dart';
 import '../services/matchmaking_service.dart';
 import 'upgrade_program_screen.dart';
 import 'withdraw_screen.dart';
-import 'incoming_call_screen.dart';
 import '../services/notification_service.dart';
 import '../services/hybrid_chat_service.dart';
 import '../services/local_chat_database.dart';
@@ -41,7 +40,6 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
   StreamSubscription? _incomingCallSubscription;
   StreamSubscription? _chatDbSubscription;
   StreamSubscription<DocumentSnapshot>? _expertStatsSubscription;
-  int _unreadMessageCount = 0;
 
   // Animations
   late AnimationController _pulseController;
@@ -181,7 +179,8 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
       }
       _fetchExpertStats();
       if (!mounted) return;
-      final appState = context.read<AppState>();
+      if (!mounted) return;
+    final appState = context.read<AppState>();
       setState(() => _isAudioOn = appState.isOnline);
       final String expertId = appState.uid;
       if (appState.isOnline) {
@@ -214,7 +213,6 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
     final count = await LocalChatDatabase.instance.getTotalUnreadCount(uid);
     if (mounted) {
       setState(() {
-        _unreadMessageCount = count;
       });
     }
   }
@@ -231,6 +229,7 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
   }
 
   Future<void> _fetchExpertStats() async {
+    if (!mounted) return;
     if (!mounted) return;
     final appState = context.read<AppState>();
     final expertId = appState.uid;
@@ -309,6 +308,7 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
       }
     }
 
+    if (!mounted) return;
     final appState = context.read<AppState>();
     appState.setOnlineStatus(value);
     setState(() => _isAudioOn = value);
@@ -363,24 +363,6 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
     );
   }
 
-  void _showIncomingCallDialog(String roomId, String callerId) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => IncomingCallScreen(
-          callRoomId: roomId,
-          callerId: callerId,
-          onCallEnded: () {
-            if (mounted) {
-              Future.delayed(const Duration(milliseconds: 1500), () {
-                if (mounted) _fetchExpertStats();
-              });
-            }
-          },
-        ),
-      ),
-    );
-  }
 
   /// Check KYC status in Firestore, then route accordingly
   Future<void> _showWithdrawDialog() async {

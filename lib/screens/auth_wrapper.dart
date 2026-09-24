@@ -62,6 +62,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
             .get();
 
         if (mounted) {
+          if (!mounted) return;
           if (userDoc.exists) {
             // Profile exists in users collection (Male Caller)
             final data = userDoc.data()!;
@@ -90,6 +91,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
                 .doc(user.uid)
                 .get();
 
+            if (!mounted) return;
             if (expertDoc.exists) {
               final data = expertDoc.data()!;
               
@@ -108,6 +110,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
                 _isLoading = false;
               });
             } else {
+              if (!mounted) return;
               // Logged in but no profile (maybe they closed the app during onboarding)
               final appState = context.read<AppState>();
               if (mobileNumber.isNotEmpty) {

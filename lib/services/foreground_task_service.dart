@@ -4,10 +4,11 @@ import 'dart:ui';
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+
 import 'package:flutter/foundation.dart';
 
 class ForegroundTaskService {
@@ -84,14 +85,11 @@ Future<bool> onIosBackground(ServiceInstance service) async {
 void onStart(ServiceInstance service) async {
   DartPluginRegistrant.ensureInitialized();
   await Firebase.initializeApp();
-
-  // Initialize Crashlytics for the background isolate
   FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterFatalError;
   PlatformDispatcher.instance.onError = (error, stack) {
     FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
     return true;
   };
-
   final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
       FlutterLocalNotificationsPlugin();
 
@@ -128,7 +126,7 @@ void onStart(ServiceInstance service) async {
             android: AndroidNotificationDetails(
               ForegroundTaskService.notificationChannelId,
               'Background Service',
-              icon: 'ic_launcher',
+              icon: '@mipmap/ic_launcher',
               ongoing: true,
               autoCancel: false,
             ),

@@ -48,21 +48,7 @@ class _MaleOnboardingParentState extends State<MaleOnboardingParent> {
           'hasUsedFreeCall': appState.hasUsedFreeCall,
         }, SetOptions(merge: true));
 
-        // Save referral info if present
-        if (appState.enteredReferralCode.isNotEmpty) {
-          try {
-            await FirebaseFirestore.instance.collection('referrals').add({
-              'referralCode': appState.enteredReferralCode,
-              'referredUserId': appState.uid,
-              'referredName': nickname,
-              'referredPhone': mobile,
-              'joinedAt': FieldValue.serverTimestamp(),
-              'status': 'joined',
-            });
-          } catch (e) {
-            debugPrint('Failed to save referral: $e');
-          }
-        }
+
 
         if (mounted) {
           Navigator.pushAndRemoveUntil(
@@ -87,16 +73,6 @@ class _MaleOnboardingParentState extends State<MaleOnboardingParent> {
     }
   }
 
-  void _prevPage() {
-    if (_currentPage > 0) {
-      _pageController.previousPage(
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
-      );
-    } else {
-      Navigator.pop(context);
-    }
-  }
 
   @override
   void dispose() {

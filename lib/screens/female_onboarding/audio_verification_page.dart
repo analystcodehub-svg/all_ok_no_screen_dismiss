@@ -68,7 +68,7 @@ class _AudioVerificationPageState extends State<AudioVerificationPage> with Sing
           }
         });
       } else {
-        if (context.mounted) {
+        if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Microphone permission denied.')),
           );

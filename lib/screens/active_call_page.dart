@@ -197,7 +197,7 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
 
       debugPrint('[_resolveRemoteData] Initial - expert: $actualExpertId, caller: $actualCallerId');
 
-      if (actualExpertId.isEmpty || actualCallerId.isEmpty || actualCallerId.contains(' ') || actualCallerId == 'Unknown Caller') {
+      if (actualExpertId.isEmpty || actualCallerId.isEmpty || actualCallerId.length < 20 || actualCallerId.contains(' ') || actualCallerId == 'Unknown Caller') {
         final FirebaseDatabase database = FirebaseDatabase.instanceFor(
           app: FirebaseDatabase.instance.app,
           databaseURL: 'https://zegochat-c44b0.asia-southeast1.firebasedatabase.app',

@@ -87,7 +87,6 @@ class PaymentHistoryScreen extends StatelessWidget {
   Widget _buildTransactionCard(Map<String, dynamic> data, String docId, BuildContext context) {
     final status = data['status'] ?? 'pending';
     final amount = (data['amount'] as num?)?.toDouble() ?? 0.0;
-    final coinsCredited = (data['coinsCredited'] as num?)?.toInt() ?? 0;
     final gateway = data['gateway'] ?? 'Unknown';
     final timestamp = data['timestamp'] as Timestamp?;
 

@@ -6,7 +6,6 @@ import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../providers/app_state.dart';
-import '../theme/app_theme.dart';
 import 'gender_selection_screen.dart';
 import 'main_navigation.dart';
 import 'male_dashboard_screen.dart';
@@ -59,9 +58,11 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
   void _verifyOtp() async {
     final otp = _otpController.text.trim();
     if (otp.length != 6) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please enter a valid 6-digit OTP')),
       );
+      }
       return;
     }
 
@@ -94,6 +95,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
             .get();
 
         if (mounted) {
+          if (!mounted) return;
           if (userDoc.exists) {
             // Profile exists in users collection (Male Caller)
             final data = userDoc.data() ?? {};
@@ -117,6 +119,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                 .doc(uid)
                 .get();
 
+            if (!mounted) return;
             if (expertDoc.exists) {
               final data = expertDoc.data() ?? {};
 
@@ -134,6 +137,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                 (route) => false,
               );
             } else {
+              if (!mounted) return;
               // New user, navigate to Gender Selection to build profile
               Navigator.pushReplacement(
                 context,
@@ -151,17 +155,21 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
         } else if (e.code == 'session-expired') {
           message = 'The OTP has expired. Please request a new one.';
         }
-        ScaffoldMessenger.of(context).showSnackBar(
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(message)),
         );
+        }
       }
     } catch (e) {
       debugPrint("OTP Verification Error: \$e");
       debugPrint("Stack Trace: \$stackTrace");
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('An error occurred: \$e')),
         );
+        }
       }
     } finally {
       if (mounted) {
@@ -340,21 +348,27 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                             color: Color(0xFF4C75F2),
                           ),
                           recognizer: TapGestureRecognizer()..onTap = () async {
-                            ScaffoldMessenger.of(context).showSnackBar(
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(content: Text('Resending OTP...')),
                             );
+                            }
                             await FirebaseAuth.instance.verifyPhoneNumber(
                               phoneNumber: '+91${widget.mobileNumber}',
                               verificationCompleted: (PhoneAuthCredential credential) {},
                               verificationFailed: (FirebaseAuthException e) {
-                                ScaffoldMessenger.of(context).showSnackBar(
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(content: Text('Failed to resend: ${e.message}')),
                                 );
+                                }
                               },
                               codeSent: (String verificationId, int? resendToken) {
-                                ScaffoldMessenger.of(context).showSnackBar(
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(content: Text('OTP sent successfully!')),
                                 );
+                                }
                               },
                               codeAutoRetrievalTimeout: (String verificationId) {},
                             );

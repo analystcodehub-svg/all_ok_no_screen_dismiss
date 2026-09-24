@@ -1,0 +1,199 @@
+09-24 20:51:27.581  1125  4473 E LockSettingsStorage: Cannot read file java.io.FileNotFoundException: /data/system_de/0/spblob/af6dbf5bc431db64.weaver: open failed: ENOENT (No such file or directory)
+09-24 20:51:28.475  1125  1125 V FingerprintService: handleError(client=com.android.systemui, error = 5)
+09-24 20:51:48.444  1125  1248 E MtkConnectivityService: Exception adding interface: java.lang.IllegalStateException: android.os.ServiceSpecificException: Machine is not on the network (code 64)
+09-24 20:51:48.811  1125  1248 E MtkConnectivityService: Exception in addRoute for non-gateway: java.lang.IllegalStateException: android.os.ServiceSpecificException: Machine is not on the network (code 64)
+09-24 20:51:48.814  1125  1248 E MtkConnectivityService: Exception in addRoute for gateway: java.lang.IllegalStateException: android.os.ServiceSpecificException: Machine is not on the network (code 64)
+09-24 20:51:48.829  1125  1248 E DnsManager: Error setting DNS configuration: android.os.ServiceSpecificException: Machine is not on the network (code 64)
+09-24 20:51:48.889  1125  1248 E DnsManager: Error setting DNS configuration: android.os.ServiceSpecificException: Machine is not on the network (code 64)
+09-24 20:51:49.585  1125  1248 E MtkConnectivityService: RemoteException caught trying to send a callback msg for NetworkRequest [ TRACK_DEFAULT id=60, [ Capabilities: INTERNET&NOT_RESTRICTED&TRUSTED Uid: 10125] ]
+09-24 20:51:49.725  1125  1248 E MtkConnectivityService: RemoteException caught trying to send a callback msg for NetworkRequest [ TRACK_DEFAULT id=60, [ Capabilities: INTERNET&NOT_RESTRICTED&TRUSTED Uid: 10125] ]
+09-24 20:51:49.726  1125  1248 E MtkConnectivityService: RemoteException caught trying to send a callback msg for NetworkRequest [ LISTEN id=61, [ Capabilities: INTERNET&NOT_RESTRICTED&TRUSTED Uid: 10125] ]
+09-24 20:51:49.873  1125  1248 E MtkConnectivityService: RemoteException caught trying to send a callback msg for NetworkRequest [ TRACK_DEFAULT id=60, [ Capabilities: INTERNET&NOT_RESTRICTED&TRUSTED Uid: 10125] ]
+09-24 20:51:49.874  1125  1248 E MtkConnectivityService: RemoteException caught trying to send a callback msg for NetworkRequest [ LISTEN id=61, [ Capabilities: INTERNET&NOT_RESTRICTED&TRUSTED Uid: 10125] ]
+09-24 20:51:50.100  1125  1125 D JobScheduler: Error executing JobStatus{55c1a8c #u0a139/-472828975 com.ansh.powerbuttonactions/com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService u=0 s=10139 TIME=-37s907ms:none NET READY}
+09-24 20:51:52.195  1125  1125 D JobScheduler: Error executing JobStatus{55c1a8c #u0a139/-472828975 com.ansh.powerbuttonactions/com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService u=0 s=10139 TIME=-40s29ms:none NET READY}
+09-24 20:51:53.848  1125  1125 D JobScheduler: Error executing JobStatus{55c1a8c #u0a139/-472828975 com.ansh.powerbuttonactions/com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService u=0 s=10139 TIME=-41s683ms:none NET READY}
+09-24 20:51:55.649  1125  1125 D JobScheduler: Error executing JobStatus{55c1a8c #u0a139/-472828975 com.ansh.powerbuttonactions/com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService u=0 s=10139 TIME=-43s484ms:none NET READY}
+09-24 20:51:55.847  1125  1125 D JobScheduler: Error executing JobStatus{55c1a8c #u0a139/-472828975 com.ansh.powerbuttonactions/com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService u=0 s=10139 TIME=-43s682ms:none NET READY}
+09-24 20:51:56.029  1125  1125 D JobScheduler: Error executing JobStatus{55c1a8c #u0a139/-472828975 com.ansh.powerbuttonactions/com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService u=0 s=10139 TIME=-43s864ms:none NET READY}
+09-24 20:51:56.038  1125  1125 D JobScheduler: Error executing JobStatus{55c1a8c #u0a139/-472828975 com.ansh.powerbuttonactions/com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService u=0 s=10139 TIME=-43s873ms:none NET READY}
+09-24 20:51:56.459  1125  1125 D JobScheduler: Error executing JobStatus{55c1a8c #u0a139/-472828975 com.ansh.powerbuttonactions/com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService u=0 s=10139 TIME=-44s293ms:none NET READY}
+09-24 20:51:56.522  1125  1125 D JobScheduler: Error executing JobStatus{55c1a8c #u0a139/-472828975 com.ansh.powerbuttonactions/com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService u=0 s=10139 TIME=-44s357ms:none NET READY}
+09-24 20:51:56.610  1125  1125 D JobScheduler: Error executing JobStatus{55c1a8c #u0a139/-472828975 com.ansh.powerbuttonactions/com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService u=0 s=10139 TIME=-44s444ms:none NET READY}
+09-24 20:51:56.640  1125  1125 D JobScheduler: Error executing JobStatus{55c1a8c #u0a139/-472828975 com.ansh.powerbuttonactions/com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService u=0 s=10139 TIME=-44s475ms:none NET READY}
+09-24 20:51:56.688  1125  1125 D JobScheduler: Error executing JobStatus{55c1a8c #u0a139/-472828975 com.ansh.powerbuttonactions/com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService u=0 s=10139 TIME=-44s523ms:none NET READY}
+09-24 20:51:56.773  1125  1125 D JobScheduler: Error executing JobStatus{55c1a8c #u0a139/-472828975 com.ansh.powerbuttonactions/com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService u=0 s=10139 TIME=-44s608ms:none NET READY}
+09-24 20:51:56.791  1125  1125 D JobScheduler: Error executing JobStatus{55c1a8c #u0a139/-472828975 com.ansh.powerbuttonactions/com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService u=0 s=10139 TIME=-44s626ms:none NET READY}
+09-24 20:51:56.853  1125  1125 D JobScheduler: Error executing JobStatus{55c1a8c #u0a139/-472828975 com.ansh.powerbuttonactions/com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService u=0 s=10139 TIME=-44s688ms:none NET READY}
+09-24 20:51:56.906  1125  1125 D JobScheduler: Error executing JobStatus{55c1a8c #u0a139/-472828975 com.ansh.powerbuttonactions/com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService u=0 s=10139 TIME=-44s740ms:none NET READY}
+09-24 20:51:56.958  1125  1125 D JobScheduler: Error executing JobStatus{55c1a8c #u0a139/-472828975 com.ansh.powerbuttonactions/com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService u=0 s=10139 TIME=-44s792ms:none NET READY}
+09-24 20:51:57.294  1125  1125 D JobScheduler: Error executing JobStatus{55c1a8c #u0a139/-472828975 com.ansh.powerbuttonactions/com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService u=0 s=10139 TIME=-45s128ms:none NET READY}
+09-24 20:51:57.342  1125  1125 D JobScheduler: Error executing JobStatus{55c1a8c #u0a139/-472828975 com.ansh.powerbuttonactions/com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService u=0 s=10139 TIME=-45s177ms:none NET READY}
+09-24 20:51:57.366  1125  1125 D JobScheduler: Error executing JobStatus{55c1a8c #u0a139/-472828975 com.ansh.powerbuttonactions/com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService u=0 s=10139 TIME=-45s201ms:none NET READY}
+09-24 20:51:58.245  1125  1125 D JobScheduler: Error executing JobStatus{55c1a8c #u0a139/-472828975 com.ansh.powerbuttonactions/com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService u=0 s=10139 TIME=-46s80ms:none NET READY}
+09-24 20:52:00.534  1125  1125 D JobScheduler: Error executing JobStatus{55c1a8c #u0a139/-472828975 com.ansh.powerbuttonactions/com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService u=0 s=10139 TIME=-48s368ms:none NET READY}
+09-24 20:52:00.560  1125  1125 D JobScheduler: Error executing JobStatus{55c1a8c #u0a139/-472828975 com.ansh.powerbuttonactions/com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService u=0 s=10139 TIME=-48s395ms:none NET READY}
+09-24 20:52:01.590  1125  1125 D JobScheduler: Error executing JobStatus{55c1a8c #u0a139/-472828975 com.ansh.powerbuttonactions/com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService u=0 s=10139 TIME=-49s425ms:none NET READY}
+09-24 20:52:24.543  1125  1125 D JobScheduler: Error executing JobStatus{55c1a8c #u0a139/-472828975 com.ansh.powerbuttonactions/com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService u=0 s=10139 TIME=-1m12s377ms:none NET READY}
+09-24 20:52:25.449  1125  1125 D JobScheduler: Error executing JobStatus{55c1a8c #u0a139/-472828975 com.ansh.powerbuttonactions/com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService u=0 s=10139 TIME=-1m13s283ms:none NET READY}
+09-24 20:52:27.419  1125  1125 D JobScheduler: Error executing JobStatus{55c1a8c #u0a139/-472828975 com.ansh.powerbuttonactions/com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService u=0 s=10139 TIME=-1m15s253ms:none NET READY}
+09-24 20:52:42.541  1125  2005 E AdbDebuggingManager: Caught an exception opening the socket: java.io.IOException: Connection refused
+09-24 20:52:44.846  1125  1125 D JobScheduler: Error executing JobStatus{55c1a8c #u0a139/-472828975 com.ansh.powerbuttonactions/com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService u=0 s=10139 TIME=-1m32s681ms:none NET READY}
+09-24 20:52:51.655  1125  1125 D JobScheduler: Error executing JobStatus{55c1a8c #u0a139/-472828975 com.ansh.powerbuttonactions/com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService u=0 s=10139 TIME=-1m39s489ms:none NET READY}
+09-24 20:52:53.141  1125  1125 D JobScheduler: Error executing JobStatus{55c1a8c #u0a139/-472828975 com.ansh.powerbuttonactions/com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService u=0 s=10139 TIME=-1m40s976ms:none NET READY}
+09-24 20:52:55.149  1125  1125 D JobScheduler: Error executing JobStatus{55c1a8c #u0a139/-472828975 com.ansh.powerbuttonactions/com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService u=0 s=10139 TIME=-1m42s983ms:none NET READY}
+09-24 20:53:00.372  1125  1125 D JobScheduler: Error executing JobStatus{55c1a8c #u0a139/-472828975 com.ansh.powerbuttonactions/com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService u=0 s=10139 TIME=-1m48s207ms:none NET READY}
+09-24 20:53:44.569  1125  1125 D JobScheduler: Error executing JobStatus{55c1a8c #u0a139/-472828975 com.ansh.powerbuttonactions/com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService u=0 s=10139 TIME=-2m32s404ms:none NET READY}
+09-24 20:53:44.653  1125  1125 D JobScheduler: Error executing JobStatus{55c1a8c #u0a139/-472828975 com.ansh.powerbuttonactions/com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService u=0 s=10139 TIME=-2m32s488ms:none NET READY}
+09-24 21:00:04.153  1125  1125 D JobScheduler: Error executing JobStatus{55c1a8c #u0a139/-472828975 com.ansh.powerbuttonactions/com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService u=0 s=10139 TIME=-8m51s987ms:none NET READY}
+09-24 21:00:04.219  1125  1125 D JobScheduler: Error executing JobStatus{55c1a8c #u0a139/-472828975 com.ansh.powerbuttonactions/com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService u=0 s=10139 TIME=-8m52s53ms:none NET READY}
+09-24 21:01:49.087  1125  1125 D JobScheduler: Error executing JobStatus{55c1a8c #u0a139/-472828975 com.ansh.powerbuttonactions/com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService u=0 s=10139 TIME=-10m36s921ms:none NET READY}
+09-24 21:01:49.093  1125  1125 D JobScheduler: Error executing JobStatus{55c1a8c #u0a139/-472828975 com.ansh.powerbuttonactions/com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService u=0 s=10139 TIME=-10m36s928ms:none NET READY}
+09-24 21:01:51.717  1125  1125 D JobScheduler: Error executing JobStatus{55c1a8c #u0a139/-472828975 com.ansh.powerbuttonactions/com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService u=0 s=10139 TIME=-10m39s552ms:none NET READY}
+09-24 21:01:51.801  1125  1125 D JobScheduler: Error executing JobStatus{55c1a8c #u0a139/-472828975 com.ansh.powerbuttonactions/com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService u=0 s=10139 TIME=-10m39s636ms:none NET READY}
+09-24 21:01:52.493  1125  1125 D JobScheduler: Error executing JobStatus{55c1a8c #u0a139/-472828975 com.ansh.powerbuttonactions/com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService u=0 s=10139 TIME=-10m40s328ms:none NET READY}
+09-24 21:01:52.950  1125  1125 D JobScheduler: Error executing JobStatus{55c1a8c #u0a139/-472828975 com.ansh.powerbuttonactions/com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService u=0 s=10139 TIME=-10m40s784ms:none NET READY}
+09-24 21:01:54.473  1125  1125 D JobScheduler: Error executing JobStatus{55c1a8c #u0a139/-472828975 com.ansh.powerbuttonactions/com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService u=0 s=10139 TIME=-10m42s307ms:none NET READY}
+09-24 21:02:01.127  1125  2865 I Telecom-PhoneAccountRegistrar: New phone account registered: [[ ] PhoneAccount: ComponentInfo{com.sajnire.app/com.hiennv.flutter_callkit_incoming.CallkitConnectionService}, ***, UserHandle{0} Capabilities: SelfManaged  Audio Routes: BESW Schemes: tel  Extras: null GroupId: ***]: TSI.rPA@AGY
+09-24 21:02:01.135  1125  2865 I Telecom-CallsManager: Sending phone-account ComponentInfo{com.sajnire.app/com.hiennv.flutter_callkit_incoming.CallkitConnectionService}, ***, UserHandle{0} registered intent as user: TSI.rPA@AGY
+09-24 21:03:18.902  1125  2268 I Telecom-PhoneAccountRegistrar: Modify account: [ComponentInfo{com.sajnire.app/com.hiennv.flutter_callkit_incoming.CallkitConnectionService}, ***, UserHandle{0}(lbl: Callkit Incoming In-App Call -> SajniRe)]: TSI.rPA@AGc
+09-24 21:03:18.912  1125  2268 I Telecom-CallsManager: handlePhoneAccountChanged: phoneAccount=[[X] PhoneAccount: ComponentInfo{com.sajnire.app/com.hiennv.flutter_callkit_incoming.CallkitConnectionService}, ***, UserHandle{0} Capabilities: SelfManaged  Audio Routes: BESW Schemes: tel  Extras: null GroupId: ***]: TSI.rPA@AGc
+09-24 21:11:16.486  1125  4675 W ActivityManager: Scheduling restart of crashed service com.sajnire.app/id.flutter.flutter_background_service.BackgroundService in 1000ms
+09-24 21:21:36.730  2410  2410 I AdvertisingIdClient: getting error as 17: API: ClientTelemetry.API is not available on this device. Connection failed with: ConnectionResult{statusCode=API_DISABLED_FOR_CONNECTION, resolution=null, message=null, clientMethodKey=null}
+09-24 21:21:37.222  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:21:40.237  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:21:41.224  1753  7642 W PhBaseOp: Phenotype API error. Event: # hnwh@8624e673, EventCode: COMMIT_CONFIG [CONTEXT service_id=51 ]
+09-24 21:21:41.227  1753  7642 W AsyncOperation: OperationException[Status{statusCode=Stale snapshot for com.google.android.gms.device_performance#com.google.android.youtube(new configuration available), resolution=null}]
+09-24 21:21:43.259  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:21:46.271  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:21:49.286  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:21:52.310  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:21:55.325  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:21:58.339  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:22:00.113   872  7758 E VDO_LOG : [tid: 7758][ERROR] H264_EncodeFrame Is Key check fail!!
+09-24 21:22:01.364  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:22:04.380  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:22:10.412  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:22:13.428  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:22:16.443  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:22:19.455  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:22:22.470  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:22:28.502  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:22:31.517  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:22:33.463   872  7758 E VDO_LOG : [tid: 7758][ERROR] H264_EncodeFrame Is Key check fail!!
+09-24 21:22:34.535  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:22:37.549  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:22:40.566  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:22:43.581  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:22:46.597  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:22:49.614  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:22:52.629  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:22:55.645  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:22:58.660  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:23:00.098   872  7758 E VDO_LOG : [tid: 7758][ERROR] H264_EncodeFrame Is Key check fail!!
+09-24 21:23:01.675  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:23:04.691  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:23:04.827   872  7758 E VDO_LOG : [tid: 7758][ERROR] H264_EncodeFrame Is Key check fail!!
+09-24 21:23:07.710  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:23:10.727  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:23:13.743  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:23:16.757  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:23:16.863   872  7758 E VDO_LOG : [tid: 7758][ERROR] H264_EncodeFrame Is Key check fail!!
+09-24 21:23:19.775  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:23:19.900   872  7758 E VDO_LOG : [tid: 7758][ERROR] H264_EncodeFrame Is Key check fail!!
+09-24 21:23:22.794  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:23:28.826  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:23:28.950   872  7758 E VDO_LOG : [tid: 7758][ERROR] H264_EncodeFrame Is Key check fail!!
+09-24 21:23:31.843  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:23:31.954   872  7758 E VDO_LOG : [tid: 7758][ERROR] H264_EncodeFrame Is Key check fail!!
+09-24 21:23:34.859  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:23:37.883  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:23:38.031   872  7758 E VDO_LOG : [tid: 7758][ERROR] H264_EncodeFrame Is Key check fail!!
+09-24 21:23:40.901  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:23:43.919  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:23:44.040   872  7758 E VDO_LOG : [tid: 7758][ERROR] H264_EncodeFrame Is Key check fail!!
+09-24 21:23:46.937  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:23:49.958  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:23:52.975  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:23:55.990  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:23:56.093   872  7758 E VDO_LOG : [tid: 7758][ERROR] H264_EncodeFrame Is Key check fail!!
+09-24 21:23:59.009  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:24:00.101   872  7758 E VDO_LOG : [tid: 7758][ERROR] H264_EncodeFrame Is Key check fail!!
+09-24 21:24:02.025  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:24:11.074  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:24:14.090  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:24:20.122  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:24:23.137  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:24:26.153  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:24:29.168  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:24:32.183  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:24:33.451   872  7758 E VDO_LOG : [tid: 7758][ERROR] H264_EncodeFrame Is Key check fail!!
+09-24 21:24:35.209  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:24:38.225  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:24:39.084   872  7758 E VDO_LOG : [tid: 7758][ERROR] H264_EncodeFrame Is Key check fail!!
+09-24 21:24:41.242  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:24:44.255  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:24:50.288  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:24:53.303  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:24:56.318  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:24:56.441   872  7758 E VDO_LOG : [tid: 7758][ERROR] H264_EncodeFrame Is Key check fail!!
+09-24 21:24:59.339  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:25:00.089   872  7758 E VDO_LOG : [tid: 7758][ERROR] H264_EncodeFrame Is Key check fail!!
+09-24 21:25:02.358  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:25:05.078   872  7758 E VDO_LOG : [tid: 7758][ERROR] H264_EncodeFrame Is Key check fail!!
+09-24 21:25:05.373  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:25:08.388  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:25:11.404  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:25:11.515   872  7758 E VDO_LOG : [tid: 7758][ERROR] H264_EncodeFrame Is Key check fail!!
+09-24 21:25:14.424  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:25:17.441  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:25:17.523   872  7758 E VDO_LOG : [tid: 7758][ERROR] H264_EncodeFrame Is Key check fail!!
+09-24 21:25:19.531   872  7758 E VDO_LOG : [tid: 7758][ERROR] H264_EncodeFrame Is Key check fail!!
+09-24 21:25:20.458  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:25:23.475  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:25:23.601   872  7758 E VDO_LOG : [tid: 7758][ERROR] H264_EncodeFrame Is Key check fail!!
+09-24 21:25:26.501  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:25:29.517  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:25:32.539  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:25:35.555  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:25:38.571  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:25:41.587  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:25:44.602  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:25:47.618  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:25:50.634  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:25:53.650  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:25:56.666  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:25:56.805   872  7758 E VDO_LOG : [tid: 7758][ERROR] H264_EncodeFrame Is Key check fail!!
+09-24 21:25:59.684  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:26:00.106   872  7758 E VDO_LOG : [tid: 7758][ERROR] H264_EncodeFrame Is Key check fail!!
+09-24 21:26:02.701  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:26:05.718  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:26:08.732  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:26:11.746  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:26:14.760  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:26:17.777  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:26:20.796  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:26:21.924  8225  8771 I System.out: [socket] e:java.lang.ClassNotFoundException: com.mediatek.cta.CtaUtils
+09-24 21:26:21.928  8225  8772 I System.out: [socket] e:java.lang.ClassNotFoundException: com.mediatek.cta.CtaUtils
+09-24 21:26:22.276  8225  8771 I System.out: [socket] e:java.lang.ClassNotFoundException: com.mediatek.cta.CtaUtils
+09-24 21:26:22.278  8225  8774 I System.out: [socket] e:java.lang.ClassNotFoundException: com.mediatek.cta.CtaUtils
+09-24 21:26:23.809  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:26:26.823  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:26:29.844  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:26:32.859  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:26:35.875  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:26:38.890  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:26:41.906  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:26:44.925  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:26:47.940  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:26:50.952  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:26:53.969  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:26:56.983  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:26:59.996  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:27:00.124   872  7758 E VDO_LOG : [tid: 7758][ERROR] H264_EncodeFrame Is Key check fail!!
+09-24 21:27:03.019  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:27:05.116   872  7758 E VDO_LOG : [tid: 7758][ERROR] H264_EncodeFrame Is Key check fail!!
+09-24 21:27:06.035  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:27:09.055  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }
+09-24 21:27:09.423   872  7758 E VDO_LOG : [tid: 7758][ERROR] H264_EncodeFrame Is Key check fail!!
+09-24 21:27:12.069  1125  1245 E WifiVendorHal: getWifiLinkLayerStats_1_3_Internal(l.927) failed {.code = ERROR_NOT_SUPPORTED, .description = }

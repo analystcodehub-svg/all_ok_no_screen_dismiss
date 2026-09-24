@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+
 import 'firebase_options.dart';
 import 'providers/app_state.dart';
 import 'theme/app_theme.dart';
@@ -15,7 +16,6 @@ import 'services/foreground_task_service.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'screens/maintenance_screen.dart';
 import 'screens/hybrid_chat_screen.dart';
-import 'dart:ui';
 import 'dart:isolate';
 
 /// Global navigator key — used by NotificationService to navigate
@@ -56,13 +56,11 @@ void main() async {
     
     // Pass all uncaught "fatal" errors from the framework to Crashlytics
     FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterFatalError;
-    
     // Pass all uncaught asynchronous errors that aren't handled by the Flutter framework to Crashlytics
     PlatformDispatcher.instance.onError = (error, stack) {
       FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
       return true;
     };
-
     firebaseInitialized = true;
     debugPrint('Firebase initialized successfully.');
   } catch (e) {

@@ -119,7 +119,7 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> with SingleTicker
           ) ?? false;
           
           if (!unblocked) {
-            Navigator.pop(context);
+            if (mounted) Navigator.pop(context);
             return;
           }
           _statusMessage.value = 'Checking availability for ${widget.requestedExpert!.nickname}...';
@@ -161,7 +161,7 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> with SingleTicker
         if (!_isDisposed && mounted) {
           await Future.delayed(const Duration(seconds: 2));
           if (mounted) {
-            Navigator.pop(context);
+            if (mounted) Navigator.pop(context);
           }
         }
         return;
@@ -172,7 +172,7 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> with SingleTicker
       _statusMessage.value = 'No experts available right now. Please try again.';
       if (!_isDisposed && mounted) {
         await Future.delayed(const Duration(seconds: 2));
-        if (mounted) Navigator.pop(context);
+        if (mounted) if (mounted) Navigator.pop(context);
       }
       return;
     }
@@ -295,7 +295,7 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> with SingleTicker
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Expert is busy, please try later.')),
           );
-          Navigator.pop(context);
+          if (mounted) Navigator.pop(context);
         }
       }
 
@@ -305,14 +305,14 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> with SingleTicker
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(e.toString().replaceAll('Exception: ', ''))),
         );
-        Navigator.pop(context);
+        if (mounted) Navigator.pop(context);
       }
     }
   }
 
   void _cancelSearch() {
     _isSearchCancelled = true;
-    Navigator.pop(context);
+    if (mounted) Navigator.pop(context);
   }
 
   @override

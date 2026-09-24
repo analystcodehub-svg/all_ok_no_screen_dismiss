@@ -5,7 +5,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
 import 'phone_auth_screen.dart';
-import 'incoming_call_screen.dart';
 import '../services/call_service.dart';
 import '../services/matchmaking_service.dart';
 import '../services/local_chat_database.dart';
@@ -27,7 +26,7 @@ class _FemaleExpertDashboardState extends State<FemaleExpertDashboard> with Widg
   final CallService _callService = CallService();
   late final MatchmakingService _matchingService;
   StreamSubscription? _incomingCallSubscription;
-  bool _isInCall = false; // guard against re-starting listener during active call
+  final bool _isInCall = false; // guard against re-starting listener during active call
 
   @override
   void initState() {
@@ -142,25 +141,6 @@ class _FemaleExpertDashboardState extends State<FemaleExpertDashboard> with Widg
     }
   }
 
-  void _showIncomingCallDialog(String roomId, String callerId) {
-    if (_isInCall) return; // prevent double-showing
-    _isInCall = true;
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => IncomingCallScreen(
-          callRoomId: roomId,
-          callerId: callerId,
-        ),
-      ),
-    ).then((_) {
-      _isInCall = false;
-      if (mounted) {
-        final appState = context.read<AppState>();
-        _loadEarningsFromFirestore(appState);
-      }
-    });
-  }
 
 
   void _logout() {
