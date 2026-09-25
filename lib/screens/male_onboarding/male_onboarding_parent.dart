@@ -38,15 +38,28 @@ class _MaleOnboardingParentState extends State<MaleOnboardingParent> {
       final nickname = appState.nickname.isNotEmpty ? appState.nickname : "User";
 
       try {
-        await FirebaseFirestore.instance.collection('users').doc(appState.uid).set({
+        final docRef = FirebaseFirestore.instance.collection('users').doc(appState.uid);
+        final docSnap = await docRef.get();
+        
+        // 100 coins = Rs 10 welcome bonus
+        int finalBalance = 100; 
+        if (docSnap.exists && docSnap.data() != null && docSnap.data()!.containsKey('coinBalance')) {
+           finalBalance = (docSnap.data()!['coinBalance'] as num?)?.toInt() ?? 0;
+        }
+
+        await docRef.set({
           'mobileNumber': mobile,
           'nickname': nickname,
           'gender': 'male',
           'primaryLanguage': appState.primaryLanguage,
           'avatarIndex': appState.avatarIndex,
-          'coinBalance': appState.coinBalance,
+          'coinBalance': finalBalance,
           'hasUsedFreeCall': appState.hasUsedFreeCall,
         }, SetOptions(merge: true));
+        
+        if (mounted) {
+           appState.setCoinBalance(finalBalance);
+        }
 
 
 
