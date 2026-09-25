@@ -293,7 +293,7 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
         // Welcome Bonus Logic
         final bool welcomeBonusReceived = data['welcomeBonusReceived'] as bool? ?? false;
         if (!welcomeBonusReceived) {
-          coinBalance += 200;
+          coinBalance += 100;
           await FirebaseFirestore.instance.collection('users').doc(myUid).update({
             'coinBalance': coinBalance,
             'welcomeBonusReceived': true,
@@ -317,14 +317,14 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
       } else {
         await FirebaseFirestore.instance.collection('users').doc(myUid).set({
           'uid': myUid,
-          'coinBalance': 200,
+          'coinBalance': 100,
           'welcomeBonusReceived': true,
           'hasUsedFreeCall': false,
           'createdAt': FieldValue.serverTimestamp(),
           'freeMessagesUsed': 0,
           'gender': 'male',
         }, SetOptions(merge: true));
-        appState.setCoinBalance(200);
+        appState.setCoinBalance(100);
         appState.setHasUsedFreeCall(false);
         appState.setFreeMessagesUsed(0);
         
