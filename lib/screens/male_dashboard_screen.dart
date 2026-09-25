@@ -185,12 +185,12 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
                 ),
                 const SizedBox(height: 24),
                 const Text(
-                  '₹20 Welcome Bonus!',
+                  '₹10 Welcome Bonus!',
                   style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
                 ),
                 const SizedBox(height: 12),
                 const Text(
-                  'You have received ₹20 (200 Coins) as a welcome gift. You can use these coins to start making calls right away!',
+                  'You have received ₹10 (100 Coins) as a welcome gift. You can use these coins to start making calls right away!',
                   textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 15, color: Color(0xFF64748B), height: 1.5),
                 ),
