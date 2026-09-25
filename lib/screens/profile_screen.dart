@@ -299,9 +299,9 @@ class ProfileScreen extends StatelessWidget {
                             children: [
                               Row(
                                 children: [
-                                  Icon(Icons.email_outlined, size: 18, color: AppColors.primaryBlue),
+                                  Icon(Icons.phone_outlined, size: 18, color: AppColors.primaryBlue),
                                   SizedBox(width: 8),
-                                  Text('sajnireofficial@gmail.com', style: TextStyle(fontSize: 14, color: AppColors.textDark)),
+                                  Text('Phone No- +91 8987108642', style: TextStyle(fontSize: 14, color: AppColors.textDark)),
                                 ],
                               ),
                               SizedBox(height: 12),
