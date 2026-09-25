@@ -205,7 +205,12 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return WillPopScope(
+      onWillPop: () async {
+        _declineCall();
+        return false;
+      },
+      child: Scaffold(
       backgroundColor: Colors.black,
       body: Stack(
         children: [
@@ -272,6 +277,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
           ),
         ],
       ),
+    ),
     );
   }
 

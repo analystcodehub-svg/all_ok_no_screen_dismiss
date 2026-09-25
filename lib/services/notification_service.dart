@@ -52,7 +52,7 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
       await _showCallkitIncoming(data);
     } else if (type == 'message') {
       final plugin = FlutterLocalNotificationsPlugin();
-      const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+      const androidSettings = AndroidInitializationSettings('@drawable/ic_notification');
       const iosSettings = DarwinInitializationSettings();
       await plugin.initialize(
         settings: const InitializationSettings(android: androidSettings, iOS: iosSettings),
@@ -342,7 +342,7 @@ class NotificationService {
   Future<void> _initLocalNotifications() async {
     await _localNotifications.initialize(
       settings: const InitializationSettings(
-        android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+        android: AndroidInitializationSettings('@drawable/ic_notification'),
         iOS: DarwinInitializationSettings(),
       ),
       onDidReceiveNotificationResponse: (details) {

@@ -137,6 +137,9 @@ class CallService {
       // 5. Create call document in RTDB
       final DatabaseReference roomRef = _database.ref('calls').push();
       final String roomId = roomRef.key!;
+      
+      // Ensure the room is deleted if the caller disconnects abruptly
+      await roomRef.onDisconnect().remove();
 
       // 6. Handle local ICE candidates and upload them
       _peerConnection!.onIceCandidate = (RTCIceCandidate candidate) {
@@ -361,6 +364,7 @@ class CallService {
         // Update room status to ended and remove node
         try {
           await roomRef.update({'status': 'ended'});
+          await roomRef.onDisconnect().cancel();
           await roomRef.remove();
         } catch (e) {
           debugPrint('Could not remove room (might be deleted or permission denied): $e');
@@ -368,6 +372,7 @@ class CallService {
       } else {
         try {
           await roomRef.update({'status': 'ended'});
+          await roomRef.onDisconnect().cancel();
           await roomRef.remove();
         } catch (e) {
           debugPrint('Could not remove room: $e');
