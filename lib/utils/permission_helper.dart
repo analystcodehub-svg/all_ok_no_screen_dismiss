@@ -5,16 +5,11 @@ class PermissionHelper {
   static Future<void> checkAndRequestNotificationPermission(BuildContext context) async {
     final status = await Permission.notification.status;
     
-    // Only show if not granted
     if (!status.isGranted) {
-      if (!context.mounted) return;
-      
-      showModalBottomSheet(
-        context: context,
-        isScrollControlled: true,
-        backgroundColor: Colors.transparent,
-        builder: (ctx) => _buildPermissionBottomSheet(ctx),
-      );
+      final newStatus = await Permission.notification.request();
+      if (newStatus.isPermanentlyDenied) {
+        // openAppSettings();
+      }
     }
   }
 
