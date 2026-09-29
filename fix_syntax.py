@@ -1,50 +1,48 @@
-import re
+import sys
 
-with open('lib/screens/male_dashboard_screen.dart', 'r') as f:
-    content = f.read()
+def fix_file(filepath):
+    with open(filepath, 'r') as f:
+        content = f.read()
 
-bad_block = """      } else {
-        await FirebaseFirestore.instance.collection('users').doc(myUid).set({
-          'uid': myUid,
-          'coinBalance': 20, // Give 20 on creation too
-          'welcomeBonusReceived': true,
-          'hasUsedFreeCall': false,
-          'createdAt': FieldValue.serverTimestamp(),
-        });
-        appState.setCoinBalance(20);
-        
-        if (mounted) {
-          _showWelcomeBonusPopup();
-        }
-      }
-          'freeMessagesUsed': 0,
-          'gender': 'male',
-        }, SetOptions(merge: true));
-        appState.setCoinBalance(0);
-        appState.setHasUsedFreeCall(false);
-        appState.setFreeMessagesUsed(0);
-      }"""
+    # Find the end of the build method (the last `);` before the next method)
+    # The pattern in both files is likely:
+    #       ),
+    #     ),
+    #   );
+    # }
+    
+    # Actually, a simpler way is to just replace:
+    old_str = """      ),
+    );
+  }"""
+    
+    new_str = """      ),
+    );
+    );
+  }"""
+    
+    # Check if that exactly matches.
+    if old_str in content:
+        content = content.replace(old_str, new_str)
+        print(f"Fixed {filepath} using standard pattern.")
+    else:
+        # Try a more lenient pattern
+        print(f"Warning: standard pattern not found in {filepath}. Trying another...")
+        old_str_2 = """        ),
+      ),
+    );
+  }"""
+        new_str_2 = """        ),
+      ),
+    );
+    );
+  }"""
+        if old_str_2 in content:
+            content = content.replace(old_str_2, new_str_2)
+            print(f"Fixed {filepath} using pattern 2.")
+            
+    with open(filepath, 'w') as f:
+        f.write(content)
 
-good_block = """      } else {
-        await FirebaseFirestore.instance.collection('users').doc(myUid).set({
-          'uid': myUid,
-          'coinBalance': 20,
-          'welcomeBonusReceived': true,
-          'hasUsedFreeCall': false,
-          'createdAt': FieldValue.serverTimestamp(),
-          'freeMessagesUsed': 0,
-          'gender': 'male',
-        }, SetOptions(merge: true));
-        appState.setCoinBalance(20);
-        appState.setHasUsedFreeCall(false);
-        appState.setFreeMessagesUsed(0);
-        
-        if (mounted) {
-          _showWelcomeBonusPopup();
-        }
-      }"""
-
-content = content.replace(bad_block, good_block)
-
-with open('lib/screens/male_dashboard_screen.dart', 'w') as f:
-    f.write(content)
+fix_file("lib/screens/active_call_page.dart")
+fix_file("lib/screens/incoming_call_screen.dart")
