@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
 import 'phone_auth_screen.dart';
@@ -12,6 +11,8 @@ import '../widgets/local_avatar_widget.dart';
 import '../screens/blocked_users_screen.dart';
 import '../utils/auto_start_helper.dart';
 import '../services/foreground_task_service.dart';
+import '../services/user_database_service.dart';
+import '../services/hybrid_chat_service.dart';
 
 
 class FemaleExpertDashboard extends StatefulWidget {
@@ -51,21 +52,20 @@ class _FemaleExpertDashboardState extends State<FemaleExpertDashboard> with Widg
       if (appState.isOnline) {
         _startIncomingCallListener(appState.uid);
       }
+      if (appState.uid.isNotEmpty) {
+        HybridChatService.instance.initListeners(appState.uid);
+      }
     });
   }
 
   Future<void> _loadEarningsFromFirestore(AppState appState) async {
     try {
-      final mobile = appState.mobileNumber;
-      if (mobile.isEmpty) return;
-      final doc = await FirebaseFirestore.instance
-          .collection('experts')
-          .doc(mobile)
-          .get();
-      if (doc.exists) {
-        final data = doc.data()!;
+      final expertId = appState.uid.isNotEmpty ? appState.uid : appState.mobileNumber;
+      if (expertId.isEmpty) return;
+      final data = await UserDatabaseService.instance.getExpert(expertId);
+      if (data != null) {
         final earnings = (data['totalEarnings'] as num?)?.toDouble() ?? 0.0;
-        appState.addEarnings(earnings - appState.totalEarnings); // sync to Firestore value
+        appState.addEarnings(earnings - appState.totalEarnings);
       }
     } catch (e) {
       debugPrint('Error loading earnings: $e');
@@ -97,8 +97,7 @@ class _FemaleExpertDashboardState extends State<FemaleExpertDashboard> with Widg
     _incomingCallSubscription = _callService.listenForIncomingCalls(
       expertId: expertId,
       onCallReceived: (roomId, callerId) {
-        // Native CallKit will be triggered by FCM instead.
-        // We leave this listener active so CallService can handle auto-rejects for blocked users.
+        // Native CallKit (shown via FCM) handles the incoming call UI directly
       },
     );
   }

@@ -24,8 +24,8 @@ class HybridChatService {
   void initListeners(String myUid) {
     if (myUid.isEmpty) return; // Do not listen to root nodes
 
-    // If already initialized for this UID, return
-    if (_messagesSub != null && _initializedUid == myUid) return;
+    // If already initialized for this UID with active subs, return
+    if (_messagesSub != null && _acksSub != null && _initializedUid == myUid) return;
     
     // If initialized for a different UID, cancel old listeners
     dispose();
@@ -59,22 +59,24 @@ class HybridChatService {
       'senderId': senderUid,
       'text': text,
       'timestamp': timestamp,
-      'status': 1, // 1: Sent
     };
 
-    // 1. Save locally
-    await LocalChatDatabase.instance.saveMessageLocally(message);
+    // 1. Save locally (status 1: Sent - Single Grey Tick)
+    await LocalChatDatabase.instance.saveMessageLocally({
+      ...message,
+      'status': 1,
+    });
 
-    // 2. Push to transit
+    // 2. Push to transit (pure message data, deleted immediately upon arrival)
     await _database.ref('transit/messages/$receiverUid/$msgId').set(message);
   }
 
   /// Manually mark an existing unread message as read (when user opens chat)
   Future<void> markAsRead(String msgId, String senderUid, String myUid) async {
-    // 1. Update local status to 3
+    // 1. Update local SQLite status to 3 (Read)
     await LocalChatDatabase.instance.updateMessageStatus(msgId, 3);
-    
-    // 2. Push Read ACK to sender
+
+    // 2. Push Read ACK (status 3 = Double Blue Tick) back to sender
     await _pushAck(
       receiverUid: senderUid,
       msgId: msgId,
@@ -82,11 +84,19 @@ class HybridChatService {
     );
   }
 
-  Future<void> _pushAck({required String receiverUid, required String msgId, required int status}) async {
-    await _database.ref('transit/acks/$receiverUid/$msgId').set({
-      'status': status,
-      'timestamp': ServerValue.timestamp,
-    });
+  Future<void> _pushAck({
+    required String receiverUid,
+    required String msgId,
+    required int status,
+  }) async {
+    try {
+      await _database.ref('transit/acks/$receiverUid/$msgId').set({
+        'status': status,
+        'timestamp': ServerValue.timestamp,
+      });
+    } catch (e) {
+      debugPrint('Error pushing ACK: $e');
+    }
   }
 
   void _listenToIncomingMessages(String myUid) {
@@ -94,12 +104,12 @@ class HybridChatService {
       if (event.snapshot.value == null) return;
 
       final data = Map<String, dynamic>.from(event.snapshot.value as Map);
-      final msgId = data['msgId'] as String;
+      final msgId = data['msgId'] as String? ?? event.snapshot.key!;
       final roomId = data['roomId'] as String;
       final senderId = data['senderId'] as String;
 
       // Ensure we immediately delete from RTDB to maintain zero storage cost
-      await event.snapshot.ref.remove();
+      await event.snapshot.ref.remove().catchError((_) {});
 
       // Check if this sender is blocked
       if (BlockService.instance.isBlocked(senderId)) {
@@ -108,17 +118,20 @@ class HybridChatService {
       }
 
       // Determine status based on active screen
-      int localStatus = 2; // Default to delivered
-      if (activeChatRoomId == roomId) {
-        localStatus = 3; // Read immediately
-        await _pushAck(receiverUid: senderId, msgId: msgId, status: 3);
-      } else {
-        await _pushAck(receiverUid: senderId, msgId: msgId, status: 2);
-      }
+      // If currently inside this chat room -> 3 (Read / Blue tick)
+      // If not currently in this chat room -> 2 (Delivered / Double grey tick)
+      int localStatus = (activeChatRoomId == roomId) ? 3 : 2;
 
-      // Save to local SQLite
+      // 1. Save to local SQLite
       data['status'] = localStatus;
       await LocalChatDatabase.instance.saveMessageLocally(data);
+
+      // 2. Send acknowledgment back to sender!
+      await _pushAck(
+        receiverUid: senderId,
+        msgId: msgId,
+        status: localStatus,
+      );
     }, onError: (e) {
       debugPrint('Error listening to incoming messages: $e');
     });
@@ -130,12 +143,12 @@ class HybridChatService {
 
       final data = Map<String, dynamic>.from(event.snapshot.value as Map);
       final msgId = event.snapshot.key!;
-      final newStatus = (data['status'] as num).toInt();
+      final newStatus = (data['status'] as num?)?.toInt() ?? 2;
 
-      // Ensure immediate deletion
-      await event.snapshot.ref.remove();
+      // Ensure immediate deletion from RTDB
+      await event.snapshot.ref.remove().catchError((_) {});
 
-      // Update local message status (e.g. from 1 to 2, or 2 to 3)
+      // Update local message status (1 -> 2, or 2 -> 3)
       await LocalChatDatabase.instance.updateMessageStatus(msgId, newStatus);
     }, onError: (e) {
       debugPrint('Error listening to incoming ACKs: $e');

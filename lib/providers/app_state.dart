@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../services/user_database_service.dart';
+import 'package:firebase_database/firebase_database.dart';
 
 class AppState extends ChangeNotifier {
   // Authentication state
@@ -12,7 +13,10 @@ class AppState extends ChangeNotifier {
   String _selectedGender = ''; // 'Male' or 'Female' or ''
   String get selectedGender => _selectedGender;
 
-  // Auto-retrieved SMS code (for visible filling)
+  // Auto-retrieved SMS credential & code (for visible filling without automatic login)
+  PhoneAuthCredential? _autoRetrievedCredential;
+  PhoneAuthCredential? get autoRetrievedCredential => _autoRetrievedCredential;
+
   String? _autoRetrievedSmsCode;
   String? get autoRetrievedSmsCode => _autoRetrievedSmsCode;
 
@@ -70,6 +74,11 @@ class AppState extends ChangeNotifier {
   void setSelectedGender(String gender) {
     _selectedGender = gender;
     SharedPreferences.getInstance().then((prefs) => prefs.setString('userRole', gender.toLowerCase()));
+    notifyListeners();
+  }
+
+  void setAutoRetrievedCredential(PhoneAuthCredential? credential) {
+    _autoRetrievedCredential = credential;
     notifyListeners();
   }
 
@@ -207,22 +216,23 @@ class AppState extends ChangeNotifier {
     final myUid = prefs.getString('pendingChatUid') ?? '';
     if (myUid.isEmpty) return;
 
-    final Map<String, dynamic> updates = {};
-    if (freeMsgsToSync > 0) {
-      updates['freeMessagesUsed'] = FieldValue.increment(freeMsgsToSync);
-    }
-    if (coinsToDeduct > 0) {
-      updates['coinBalance'] = FieldValue.increment(-coinsToDeduct);
-    }
-
     await prefs.remove('pendingChatCoins');
     await prefs.remove('pendingChatFreeMsgs');
     await prefs.remove('pendingChatUid');
 
-    if (updates.isNotEmpty) {
-      FirebaseFirestore.instance.collection('users').doc(myUid).update(updates).catchError((e) {
-        debugPrint('Failed to sync chat deductions: $e');
-      });
+    if (coinsToDeduct > 0) {
+      await UserDatabaseService.instance.deductUserCoins(myUid, coinsToDeduct);
+    }
+    if (freeMsgsToSync > 0) {
+      try {
+        final ref = UserDatabaseService.instance.usersRef.child(myUid).child('freeMessagesUsed');
+        await ref.runTransaction((cur) {
+          final val = (cur as num?)?.toInt() ?? 0;
+          return Transaction.success(val + freeMsgsToSync);
+        });
+      } catch (e) {
+        debugPrint('Failed to sync freeMessagesUsed in new RTDB: $e');
+      }
     }
   }
 
@@ -241,6 +251,7 @@ class AppState extends ChangeNotifier {
     _hasUsedFreeCall = false;
     _freeMessagesUsed = 0;
     _autoRetrievedSmsCode = null;
+    _autoRetrievedCredential = null;
     notifyListeners();
   }
 }

@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../theme/app_colors.dart';
 import '../providers/app_state.dart';
 import '../services/local_chat_database.dart';
 import '../widgets/local_avatar_widget.dart';
 import 'hybrid_chat_screen.dart';
+import '../services/user_database_service.dart';
 
 class ChatListScreen extends StatefulWidget {
   const ChatListScreen({super.key});
@@ -45,11 +45,9 @@ class _ChatListScreenState extends State<ChatListScreen> {
           data['avatarUrl'] = cachedProfile['avatarUrl'];
           data['avatarIndex'] = cachedProfile['avatarIndex'] ?? 1;
         } else {
-          // Try experts collection first
-          final expertDoc = await FirebaseFirestore.instance.collection('experts').doc(otherUser).get();
-          if (expertDoc.exists && expertDoc.data() != null) {
-            final expertData = expertDoc.data()!;
-            
+          // Try experts first
+          final expertData = await UserDatabaseService.instance.getExpert(otherUser);
+          if (expertData != null) {
             String? eName = expertData['nickname']?.toString().trim();
             if (eName == null || eName.isEmpty) eName = expertData['name']?.toString().trim();
             if (eName == null || eName.isEmpty) eName = expertData['displayName']?.toString().trim();
@@ -71,11 +69,9 @@ class _ChatListScreenState extends State<ChatListScreen> {
               'timestamp': DateTime.now().millisecondsSinceEpoch,
             });
           } else {
-            // Try users collection
-            final userDoc = await FirebaseFirestore.instance.collection('users').doc(otherUser).get();
-            if (userDoc.exists && userDoc.data() != null) {
-              final userData = userDoc.data()!;
-              
+            // Try users
+            final userData = await UserDatabaseService.instance.getUser(otherUser);
+            if (userData != null) {
               String? uName = userData['nickname']?.toString().trim();
               if (uName == null || uName.isEmpty) uName = userData['name']?.toString().trim();
               if (uName == null || uName.isEmpty) uName = userData['displayName']?.toString().trim();
@@ -84,7 +80,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
               if (uName != null && uName.isNotEmpty) {
                 displayName = uName;
               } else {
-                displayName = otherUser; // Show UID as-is if no name found
+                displayName = otherUser;
               }
               
               data['avatarUrl'] = userData['avatarUrl'];
@@ -99,7 +95,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
                 'timestamp': DateTime.now().millisecondsSinceEpoch,
               });
             } else {
-              displayName = otherUser; // Show UID as-is if user doc not found
+              displayName = otherUser;
             }
           }
         }

@@ -14,6 +14,7 @@ import 'privacy_policy_screen.dart';
 import 'referral_screen.dart';
 
 import 'wallet_recharge_screen.dart';
+import '../services/user_database_service.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -46,10 +47,15 @@ class ProfileScreen extends StatelessWidget {
                   try {
                     final uid = FirebaseAuth.instance.currentUser?.uid;
                     if (uid != null) {
-                      final collection = appState.selectedGender == 'Female' ? 'experts' : 'users';
-                      await FirebaseFirestore.instance.collection(collection).doc(uid).update({
-                        'nickname': newName,
-                      });
+                      if (appState.selectedGender == 'Female') {
+                        await UserDatabaseService.instance.updateExpert(uid, {
+                          'nickname': newName,
+                        });
+                      } else {
+                        await UserDatabaseService.instance.updateUser(uid, {
+                          'nickname': newName,
+                        });
+                      }
                       appState.setNickname(newName);
                     }
                   } catch (e) {

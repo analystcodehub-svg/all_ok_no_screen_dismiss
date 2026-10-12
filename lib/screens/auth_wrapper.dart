@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_state.dart';
 import 'phone_auth_screen.dart';
@@ -11,6 +10,7 @@ import 'gender_selection_screen.dart';
 import '../theme/app_theme.dart';
 import 'male_dashboard_screen.dart';
 import '../services/block_service.dart';
+import '../services/user_database_service.dart';
 
 class AuthWrapper extends StatefulWidget {
   const AuthWrapper({super.key});
@@ -56,24 +56,20 @@ class _AuthWrapperState extends State<AuthWrapper> {
         // If phone auth, it usually has +91. Clean it.
         String mobileNumber = rawPhone?.replaceAll('+91', '') ?? '';
         
-        final userDoc = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .get();
+        final userData = await UserDatabaseService.instance.getUser(user.uid);
 
         if (mounted) {
           if (!mounted) return;
-          if (userDoc.exists) {
+          if (userData != null) {
             // Profile exists in users collection (Male Caller)
-            final data = userDoc.data()!;
-            final gender = data['gender'] ?? 'male';
+            final gender = userData['gender'] ?? 'male';
 
             final appState = context.read<AppState>();
             if (mobileNumber.isNotEmpty) {
               appState.setMobileNumber(mobileNumber);
             }
             appState.setSelectedGender(gender == 'male' ? 'Male' : 'Female');
-            appState.setNickname(data['nickname'] ?? '');
+            appState.setNickname(userData['nickname'] ?? '');
             
             // Sync blocked users
             BlockService.instance.syncBlockedUsers(user.uid);
@@ -86,21 +82,16 @@ class _AuthWrapperState extends State<AuthWrapper> {
             });
           } else {
             // Check if user exists in experts collection (Female Expert)
-            final expertDoc = await FirebaseFirestore.instance
-                .collection('experts')
-                .doc(user.uid)
-                .get();
+            final expertData = await UserDatabaseService.instance.getExpert(user.uid);
 
             if (!mounted) return;
-            if (expertDoc.exists) {
-              final data = expertDoc.data()!;
-              
+            if (expertData != null) {
               final appState = context.read<AppState>();
               if (mobileNumber.isNotEmpty) {
                 appState.setMobileNumber(mobileNumber);
               }
               appState.setSelectedGender('Female');
-              appState.setNickname((data['nickname'] ?? '').toString());
+              appState.setNickname((expertData['nickname'] ?? '').toString());
               appState.setAudioVerified(true);
               
               BlockService.instance.syncBlockedUsers(user.uid);

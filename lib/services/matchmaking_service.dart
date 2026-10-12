@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/foundation.dart';
-import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
 import 'block_service.dart';
+import 'user_database_service.dart';
 
 import 'package:flutter/services.dart';
 
@@ -56,17 +56,16 @@ class MatchmakingService {
         int avatarIndex = 1;
         
         try {
-          final doc = await FirebaseFirestore.instance.collection('experts').doc(expertId).get();
-          if (doc.exists) {
-            final data = doc.data();
-            talkSeconds = (data?['totalTalkSeconds'] as num?)?.toInt() ?? 0;
-            nickname = data?['nickname'] as String? ?? 'Expert';
-            age = (data?['age'] as num?)?.toInt() ?? 22;
-            avatarUrl = data?['profileImageUrl'] as String? ?? data?['avatarUrl'] as String?;
-            avatarIndex = (data?['avatarIndex'] as num?)?.toInt() ?? 1;
+          final data = await UserDatabaseService.instance.getExpert(expertId);
+          if (data != null) {
+            talkSeconds = (data['totalTalkSeconds'] as num?)?.toInt() ?? 0;
+            nickname = data['nickname'] as String? ?? 'Expert';
+            age = (data['age'] as num?)?.toInt() ?? 22;
+            avatarUrl = data['profileImageUrl'] as String? ?? data['avatarUrl'] as String?;
+            avatarIndex = (data['avatarIndex'] as num?)?.toInt() ?? 1;
           }
         } catch (e) {
-          debugPrint('Error fetching expert data: $e');
+          debugPrint('Error fetching expert data from new RTDB: $e');
         }
 
         // Auto-reconnect listener handles both the first connection and subsequent drops

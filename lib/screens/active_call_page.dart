@@ -3,13 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
 import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../providers/app_state.dart';
 import '../services/call_service.dart';
 import '../services/local_chat_database.dart';
 import '../services/block_service.dart';
+import '../services/user_database_service.dart';
 import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
 
 class ActiveCallPage extends StatefulWidget {
@@ -66,7 +66,7 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
   double _expertEarningRate = 1.0; // default Bronze
   bool _tierResolved = false;
   int? _callerCoinBalance;
-  bool? _callerHasUsedFreeCall;
+  StreamSubscription? _balanceSub;
 
   @override
   void initState() {
@@ -214,12 +214,9 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
       }
 
       if (actualExpertId.isNotEmpty) {
-        final expertDoc = await FirebaseFirestore.instance
-            .collection('experts')
-            .doc(actualExpertId)
-            .get();
-        if (expertDoc.exists) {
-          final tier = expertDoc.data()?['tier'] as String? ?? 'bronze';
+        final expertData = await UserDatabaseService.instance.getExpert(actualExpertId);
+        if (expertData != null) {
+          final tier = expertData['tier'] as String? ?? 'bronze';
           if (mounted) {
             setState(() {
               _expertEarningRate = tier == 'silver' ? 1.6 : 1.0;
@@ -229,22 +226,37 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
       }
 
       if (actualCallerId.isNotEmpty) {
-        final callerDoc = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(actualCallerId)
-            .get();
-        debugPrint('[_resolveRemoteData] callerDoc exists: ${callerDoc.exists}, data: ${callerDoc.data()}');
-        if (callerDoc.exists) {
-          final b = (callerDoc.data()?['coinBalance'] as num?)?.toInt() ?? 0;
-          final f = callerDoc.data()?['freeCallUsed'] as bool? ?? true;
-          debugPrint('[_resolveRemoteData] Setting balance: $b, freeUsed: $f');
+        final callerData = await UserDatabaseService.instance.getUser(actualCallerId);
+        debugPrint('[_resolveRemoteData] callerData exists: ${callerData != null}');
+        if (callerData != null) {
+          final b = (callerData['coinBalance'] as num?)?.toInt() ?? 0;
+          debugPrint('[_resolveRemoteData] Setting balance: $b');
           if (mounted) {
             setState(() {
-              _callerCoinBalance = b;
-              _callerHasUsedFreeCall = f;
+              if (_callerCoinBalance == null || _duration <= 1) {
+                _callerCoinBalance = b;
+              }
             });
           }
         }
+
+        // Listen for balance changes in real time (e.g. caller recharge during call)
+        _balanceSub?.cancel();
+        _balanceSub = UserDatabaseService.instance.usersRef
+            .child(actualCallerId)
+            .child('coinBalance')
+            .onValue
+            .listen((event) {
+          if (event.snapshot.exists && event.snapshot.value != null) {
+            final latestCoins = (event.snapshot.value as num).toInt();
+            if (mounted && _callerCoinBalance != null && latestCoins > _callerCoinBalance!) {
+              final added = latestCoins - _callerCoinBalance!;
+              setState(() {
+                _callerCoinBalance = (_callerCoinBalance ?? 0) + added;
+              });
+            }
+          }
+        });
       }
     } catch (e) {
       debugPrint('Error resolving remote data: $e');
@@ -366,9 +378,9 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
     final appState = context.read<AppState>();
     final myUid = appState.uid;
     appState.setHasUsedFreeCall(true);
-    await FirebaseFirestore.instance.collection('users').doc(myUid).set({
+    await UserDatabaseService.instance.updateUser(myUid, {
       'hasUsedFreeCall': true,
-    }, SetOptions(merge: true));
+    });
   }
 
 
@@ -417,10 +429,8 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
               return;
             } else {
               context.read<AppState>().deductCoinBalance(requiredCoins);
-              // Deduct Firestore instantly
-              FirebaseFirestore.instance.collection('users').doc(widget.callerId).update({
-                'coinBalance': FieldValue.increment(-requiredCoins),
-              }).catchError((e) => debugPrint('Error syncing caller wallet deduction: $e'));
+              // Deduct new RTDB instantly
+              UserDatabaseService.instance.deductUserCoins(widget.callerId, requiredCoins);
             }
           }
           
@@ -489,20 +499,17 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
         expertId = FirebaseAuth.instance.currentUser?.uid ?? '';
       }
       if (expertId.isEmpty) return;
-      final docRef = FirebaseFirestore.instance.collection('experts').doc(expertId);
-      
       int minutesToAdd = seconds ~/ 60;
       if (seconds % 60 >= 50) {
         minutesToAdd += 1;
       }
-      
-      // 1. Direct Firestore Update using FieldValue.increment
-      await docRef.set({
-        'totalEarnings': FieldValue.increment(earned),
-        'redeemableBalance': FieldValue.increment(earned),
-        'totalTalkSeconds': FieldValue.increment(seconds),
-        'totalTalktimeMinutes': FieldValue.increment(minutesToAdd),
-      }, SetOptions(merge: true));
+      // 1. Direct new RTDB Update using UserDatabaseService
+      await UserDatabaseService.instance.incrementExpertStats(
+        expertId,
+        earned: earned,
+        seconds: seconds,
+        minutesToAdd: minutesToAdd,
+      );
 
       // 2. Direct RTDB Update using ServerValue.increment
       try {
@@ -557,7 +564,7 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
 
       if (widget.isCaller) {
         // INCREMENTAL FIX: Continuously sync the exact duration to the database!
-        await FirebaseFirestore.instance.collection('call_logs').doc(logId).set(logData, SetOptions(merge: true));
+        await UserDatabaseService.instance.saveCallLog(logId, logData);
         
         // Only save to local SQLite at the very end of the call to avoid UI flickering
         if (_isHangingUp) {
@@ -574,17 +581,17 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
     final logId = 'log_${_roomId ?? DateTime.now().millisecondsSinceEpoch}';
     
     try {
-      DocumentSnapshot<Map<String, dynamic>>? logDoc;
-      // Wait up to 5 seconds for the caller to write the call log to Firestore
+      Map<String, dynamic>? logData;
+      // Wait up to 5 seconds for the caller to write the call log to database
       for (int i = 0; i < 5; i++) {
-        logDoc = await FirebaseFirestore.instance.collection('call_logs').doc(logId).get();
-        if (logDoc.exists) break;
+        logData = await UserDatabaseService.instance.getCallLog(logId);
+        if (logData != null) break;
         await Future.delayed(const Duration(seconds: 1));
       }
       
       int actualDuration = localDuration;
-      if (logDoc != null && logDoc.exists) {
-        final data = logDoc.data()!;
+      if (logData != null) {
+        final data = logData;
         final callerDuration = (data['durationSeconds'] as num?)?.toInt() ?? 0;
         // Use the caller's duration if it's smaller, to give the exact figure
         if (callerDuration < actualDuration) {
@@ -643,17 +650,15 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
   }
 
   String _formatDuration(int sec) {
-    final balance = _callerCoinBalance ?? widget.callerCoinBalance;
-    final usedFree = _callerHasUsedFreeCall ?? widget.callerHasUsedFreeCall ?? true;
-    
-    // Expert (female) sees a countdown based on caller's maximum affordable minutes
-    if (!widget.isCaller && balance != null) {
+    // Expert (female) sees a countdown based strictly on caller's maximum affordable minutes
+    if (!widget.isCaller) {
+      final balance = _callerCoinBalance ?? widget.callerCoinBalance ?? 30;
       int reqCoins = (widget.pricePerMin * 10).toInt();
-      if (reqCoins <= 0) reqCoins = 1;
+      if (reqCoins <= 0) reqCoins = 30;
       
       int maxMins = balance ~/ reqCoins;
-      if (usedFree == false) {
-        maxMins += 2; // Add 2 free minutes if not used
+      if (maxMins <= 0 && balance > 0) {
+        maxMins = 1;
       }
       
       int maxSecs = maxMins * 60;
@@ -675,6 +680,7 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
   void dispose() {
     _timer?.cancel();
     _ringingTimer?.cancel();
+    _balanceSub?.cancel();
     _localRenderer.srcObject = null;
     _remoteRenderer.srcObject = null;
     _localRenderer.dispose();
@@ -707,12 +713,11 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
                       final currentUid = FirebaseAuth.instance.currentUser?.uid ?? '';
                       final reporterId = widget.isCaller ? widget.callerId : (widget.receiverId.isEmpty ? currentUid : widget.receiverId);
                       final reportedId = widget.isCaller ? widget.receiverId : widget.callerId;
-                      await FirebaseFirestore.instance.collection('reports').add({
+                      await UserDatabaseService.instance.submitReport({
                         'reporterId': reporterId,
                         'reportedId': reportedId,
                         'reportedName': widget.nickname,
                         'reason': 'Inappropriate behavior on call',
-                        'timestamp': FieldValue.serverTimestamp(),
                       });
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_state.dart';
 import '../theme/app_colors.dart';
+import '../services/user_database_service.dart';
 
 class TierApplicationScreen extends StatefulWidget {
   final String tierName;
@@ -41,13 +41,12 @@ class _TierApplicationScreenState extends State<TierApplicationScreen> {
       final uid = appState.uid;
       final mobileNumber = appState.mobileNumber;
 
-      await FirebaseFirestore.instance.collection('tier_applications').add({
+      await UserDatabaseService.instance.submitTierApplication({
         'expertId': uid,
         'mobileNumber': mobileNumber,
         'tierName': widget.tierName,
         'feedback': feedback,
         'status': 'pending',
-        'timestamp': FieldValue.serverTimestamp(),
       });
 
       if (mounted) {

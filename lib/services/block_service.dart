@@ -1,6 +1,6 @@
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
+import 'user_database_service.dart';
 
 class BlockService {
   static final BlockService instance = BlockService._internal();
@@ -9,33 +9,28 @@ class BlockService {
   final Set<String> _blockedUids = {};
   String? _currentMyUid;
 
-  /// Fetch blocked users from Firestore and cache them locally (Single Sync).
+  /// Fetch blocked users from new RTDB and cache them locally (Single Sync).
   /// Call this when the app starts or user logs in.
   Future<void> syncBlockedUsers(String myUid) async {
     _currentMyUid = myUid;
     try {
       final prefs = await SharedPreferences.getInstance();
       
-      // 1. Fetch from Firestore (Single sync)
-      final doc = await FirebaseFirestore.instance.collection('blocked_users').doc(myUid).get();
+      // 1. Fetch from new RTDB (with Firestore fallback inside UserDatabaseService)
+      final uids = await UserDatabaseService.instance.getBlockedUsers(myUid);
       
-      if (doc.exists && doc.data() != null) {
-        final data = doc.data()!;
-        final uids = List<String>.from(data['uids'] ?? []);
-        
+      if (uids.isNotEmpty) {
         // 2. Update memory and local cache
         _blockedUids.clear();
         _blockedUids.addAll(uids);
         await prefs.setStringList('blocked_uids_$myUid', uids);
       } else {
-        // If Firestore has no document, check if we have local cache
         final cached = prefs.getStringList('blocked_uids_$myUid') ?? [];
         _blockedUids.clear();
         _blockedUids.addAll(cached);
       }
     } catch (e) {
       debugPrint('Error syncing blocked users: $e');
-      // Fallback to local cache
       final prefs = await SharedPreferences.getInstance();
       final cached = prefs.getStringList('blocked_uids_$myUid') ?? [];
       _blockedUids.clear();
@@ -48,7 +43,7 @@ class BlockService {
     return _blockedUids.contains(uid);
   }
 
-  /// Asynchronously checks if a user is blocked (Memory -> Local Cache -> Firestore Database)
+  /// Asynchronously checks if a user is blocked (Memory -> Local Cache -> Database)
   Future<bool> isUserBlockedAsync(String myUid, String otherUid) async {
     // 1. Check Memory
     if (_blockedUids.contains(otherUid)) return true;
@@ -61,19 +56,17 @@ class BlockService {
       return true;
     }
 
-    // 3. Check Database (Firestore)
+    // 3. Check Database
     try {
-      final doc = await FirebaseFirestore.instance.collection('blocked_users').doc(myUid).get();
-      if (doc.exists && doc.data() != null) {
-        final uids = List<String>.from(doc.data()!['uids'] ?? []);
-        // Sync local cache
+      final uids = await UserDatabaseService.instance.getBlockedUsers(myUid);
+      if (uids.isNotEmpty) {
         await prefs.setStringList('blocked_uids_$myUid', uids);
         _blockedUids.clear();
         _blockedUids.addAll(uids);
         return uids.contains(otherUid);
       }
     } catch (e) {
-      debugPrint('Error checking firestore for block status: $e');
+      debugPrint('Error checking database for block status: $e');
     }
 
     return false;
@@ -98,7 +91,7 @@ class BlockService {
     return false;
   }
 
-  /// Block a user and update both Firestore and Local Cache.
+  /// Block a user and update both new RTDB and Local Cache.
   Future<void> blockUser(String myUid, String otherUid) async {
     if (_blockedUids.contains(otherUid)) return;
 
@@ -110,17 +103,14 @@ class BlockService {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setStringList('blocked_uids_$myUid', _blockedUids.toList());
 
-      // 2. Sync to Firestore
-      await FirebaseFirestore.instance.collection('blocked_users').doc(myUid).set({
-        'uids': FieldValue.arrayUnion([otherUid]),
-        'blocked_uids': FieldValue.arrayUnion([otherUid]) // For cloud function backwards compatibility
-      }, SetOptions(merge: true));
+      // 2. Sync to new RTDB
+      await UserDatabaseService.instance.blockUser(myUid, otherUid);
     } catch (e) {
       debugPrint('Error blocking user: $e');
     }
   }
 
-  /// Unblock a user and update both Firestore and Local Cache.
+  /// Unblock a user and update both new RTDB and Local Cache.
   Future<void> unblockUser(String myUid, String otherUid) async {
     if (!_blockedUids.contains(otherUid)) return;
 
@@ -132,11 +122,8 @@ class BlockService {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setStringList('blocked_uids_$myUid', _blockedUids.toList());
 
-      // 2. Sync to Firestore
-      await FirebaseFirestore.instance.collection('blocked_users').doc(myUid).set({
-        'uids': FieldValue.arrayRemove([otherUid]),
-        'blocked_uids': FieldValue.arrayRemove([otherUid])
-      }, SetOptions(merge: true));
+      // 2. Sync to new RTDB
+      await UserDatabaseService.instance.unblockUser(myUid, otherUid);
     } catch (e) {
       debugPrint('Error unblocking user: $e');
     }

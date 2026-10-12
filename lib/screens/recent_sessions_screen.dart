@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import '../theme/app_colors.dart';
 import '../providers/app_state.dart';
 import '../services/local_chat_database.dart';
+import '../services/user_database_service.dart';
 class RecentSessionsScreen extends StatefulWidget {
   const RecentSessionsScreen({super.key});
 
@@ -24,31 +24,28 @@ class _RecentSessionsScreenState extends State<RecentSessionsScreen> {
       String displayName = (map['otherUserName']?.toString() ?? '').trim();
       if (displayName.isEmpty) displayName = otherUserId;
       
-      final collectionName = isCaller ? 'experts' : 'users';
-      
       try {
         if (otherUserId.isNotEmpty) {
           final cachedProfile = await LocalChatDatabase.instance.getUserProfile(otherUserId);
           if (cachedProfile != null) {
             displayName = cachedProfile['name'] as String? ?? otherUserId;
           } else {
-            final profileSnap = await FirebaseFirestore.instance.collection(collectionName).doc(otherUserId).get();
-            if (profileSnap.exists) {
-              final profileData = profileSnap.data();
-              if (profileData != null) {
-                final nick = profileData['nickname']?.toString().trim() ?? '';
-                final name = profileData['name']?.toString().trim() ?? '';
-                displayName = nick.isNotEmpty ? nick : (name.isNotEmpty ? name : otherUserId);
-                
-                await LocalChatDatabase.instance.saveUserProfile({
-                  'uid': otherUserId,
-                  'name': displayName,
-                  'avatarUrl': profileData['profileImageUrl'] ?? profileData['avatarUrl'],
-                  'avatarIndex': profileData['avatarIndex'] ?? 1,
-                  'role': isCaller ? 'expert' : 'user',
-                  'timestamp': DateTime.now().millisecondsSinceEpoch,
-                });
-              }
+            final profileData = isCaller
+                ? await UserDatabaseService.instance.getExpert(otherUserId)
+                : await UserDatabaseService.instance.getUser(otherUserId);
+            if (profileData != null) {
+              final nick = profileData['nickname']?.toString().trim() ?? '';
+              final name = profileData['name']?.toString().trim() ?? '';
+              displayName = nick.isNotEmpty ? nick : (name.isNotEmpty ? name : otherUserId);
+              
+              await LocalChatDatabase.instance.saveUserProfile({
+                'uid': otherUserId,
+                'name': displayName,
+                'avatarUrl': profileData['profileImageUrl'] ?? profileData['avatarUrl'],
+                'avatarIndex': profileData['avatarIndex'] ?? 1,
+                'role': isCaller ? 'expert' : 'user',
+                'timestamp': DateTime.now().millisecondsSinceEpoch,
+              });
             }
           }
         }

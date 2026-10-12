@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../providers/app_state.dart';
 import '../../theme/app_theme.dart';
 import '../main_navigation.dart';
+import '../../services/user_database_service.dart';
 
 class AudioVerificationPage extends StatefulWidget {
   const AudioVerificationPage({super.key});
@@ -117,19 +118,32 @@ class _AudioVerificationPageState extends State<AudioVerificationPage> with Sing
         await storageRef.putFile(audioFile);
         audioUrl = await storageRef.getDownloadURL();
 
-        // 2. Save to Firestore (We keep isVerified implicitly true/bypassed for Play Store testing)
-        await FirebaseFirestore.instance
-            .collection('experts')
-            .doc(expertId)
-            .set({
+        // 2. Save expert profile to NEW RTDB
+        await UserDatabaseService.instance.setExpert(expertId, {
+          'uid': expertId,
           'nickname': appState.nickname,
           'mobileNumber': appState.mobileNumber,
           'age': 2026 - appState.birthYear,
           'avatarIndex': appState.avatarIndex,
-          'pricePerMin': 3, // Changed to 3 to match system default
+          'pricePerMin': 3, // System default
           'languages': appState.primaryLanguage,
           'rating': 4.8,
-          'audioVerificationUrl': audioUrl, // Save the audio URL
+          'totalEarnings': 0.0,
+          'redeemableBalance': 0.0,
+          'totalTalktimeMinutes': 0,
+          'totalTalkSeconds': 0,
+          'audioVerificationUrl': audioUrl,
+        });
+
+        // 3. Keep audioVerificationUrl in Firestore as strictly requested
+        await FirebaseFirestore.instance
+            .collection('experts')
+            .doc(expertId)
+            .set({
+          'audioVerificationUrl': audioUrl,
+          'nickname': appState.nickname,
+          'mobileNumber': appState.mobileNumber,
+          'updatedAt': FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));
         
         appState.setAudioVerified(true);

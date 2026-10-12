@@ -1,8 +1,8 @@
 #!/bin/sh
 # This is a generated file; do not edit or check into version control.
 export "FLUTTER_ROOT=/home/codespace/flutter"
-export "FLUTTER_APPLICATION_PATH=/workspaces/healthy2/packages/auto_start_flutter/example"
-export "FLUTTER_FRAMEWORK_SWIFT_PACKAGE_PATH=/workspaces/healthy2/packages/auto_start_flutter/example/macos/Flutter/ephemeral/Packages/.packages/FlutterFramework"
+export "FLUTTER_APPLICATION_PATH=/workspaces/gooddisplay/healthy2/packages/auto_start_flutter/example"
+export "FLUTTER_FRAMEWORK_SWIFT_PACKAGE_PATH=/workspaces/gooddisplay/healthy2/packages/auto_start_flutter/example/macos/Flutter/ephemeral/Packages/.packages/FlutterFramework"
 export "COCOAPODS_PARALLEL_CODE_SIGN=true"
 export "FLUTTER_BUILD_DIR=build"
 export "FLUTTER_BUILD_NAME=1.0.0"

@@ -3,7 +3,6 @@ import "package:flutter/services.dart";
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -23,6 +22,7 @@ import 'expert_feed_screen.dart';
 import '../utils/auto_start_helper.dart';
 import '../services/foreground_task_service.dart';
 import '../services/local_chat_database.dart';
+import '../services/user_database_service.dart';
 
 class MaleCallerDashboard extends StatefulWidget {
   const MaleCallerDashboard({super.key});
@@ -67,24 +67,21 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
           avatarUrl = cachedProfile['avatarUrl'] as String?;
           avatarIndex = (cachedProfile['avatarIndex'] as num?)?.toInt() ?? 1;
         } else {
-          final expertSnap = await FirebaseFirestore.instance.collection('experts').doc(expertId).get();
-          if (expertSnap.exists) {
-            final expertData = expertSnap.data();
-            if (expertData != null) {
-              displayName = expertData['nickname'] ?? expertData['name'] ?? expertId;
-              avatarUrl = expertData['profileImageUrl'] ?? expertData['avatarUrl'];
-              avatarIndex = (expertData['avatarIndex'] as num?)?.toInt() ?? 1;
-              
-              // Save to local cache
-              await LocalChatDatabase.instance.saveUserProfile({
-                'uid': expertId,
-                'name': displayName,
-                'avatarUrl': avatarUrl,
-                'avatarIndex': avatarIndex,
-                'role': 'expert',
-                'timestamp': DateTime.now().millisecondsSinceEpoch,
-              });
-            }
+          final expertData = await UserDatabaseService.instance.getExpert(expertId);
+          if (expertData != null) {
+            displayName = expertData['nickname'] ?? expertData['name'] ?? expertId;
+            avatarUrl = expertData['profileImageUrl'] ?? expertData['avatarUrl'];
+            avatarIndex = (expertData['avatarIndex'] as num?)?.toInt() ?? 1;
+            
+            // Save to local cache
+            await LocalChatDatabase.instance.saveUserProfile({
+              'uid': expertId,
+              'name': displayName,
+              'avatarUrl': avatarUrl,
+              'avatarIndex': avatarIndex,
+              'role': 'expert',
+              'timestamp': DateTime.now().millisecondsSinceEpoch,
+            });
           }
         }
       } catch (e) {
@@ -217,6 +214,104 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
     );
   }
 
+  void _showZeroBalancePopup() {
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (BuildContext context) {
+        return Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          elevation: 0,
+          backgroundColor: Colors.transparent,
+          child: Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: const [
+                BoxShadow(color: Colors.black26, blurRadius: 10, offset: Offset(0, 10)),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFFEF3C7),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.account_balance_wallet_rounded,
+                    size: 44,
+                    color: Color(0xFFF59E0B),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  'Zero Balance (₹0)',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF0F172A),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'Your wallet is empty. Recharge now (starting at just ₹20) to connect with experts via voice call and chat!',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Color(0xFF64748B),
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const WalletRechargeScreen()),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFF97316),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      elevation: 2,
+                    ),
+                    child: const Text(
+                      'Recharge Wallet',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text(
+                    'Maybe Later',
+                    style: TextStyle(
+                      color: Color(0xFF94A3B8),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   void _setupMalePresenceAndCallListener() {
 
     final appState = context.read<AppState>();
@@ -272,29 +367,15 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
     final appState = context.read<AppState>();
     final myUid = appState.uid;
     try {
-      final docSnap = await FirebaseFirestore.instance.collection('users').doc(myUid).get();
-      if (docSnap.exists) {
-        final data = docSnap.data()!;
-        int coinBalance = 0;
-        
-        // Lazy Migration
-        if (data.containsKey('walletBalance')) {
-          double oldBalance = (data['walletBalance'] as num?)?.toDouble() ?? 0.0;
-          coinBalance = (oldBalance * 10).toInt();
-          
-          await FirebaseFirestore.instance.collection('users').doc(myUid).update({
-            'coinBalance': coinBalance,
-            'walletBalance': FieldValue.delete(),
-          });
-        } else {
-          coinBalance = (data['coinBalance'] as num?)?.toInt() ?? 0;
-        }
+      final data = await UserDatabaseService.instance.getUser(myUid);
+      if (data != null) {
+        int coinBalance = (data['coinBalance'] as num?)?.toInt() ?? 0;
 
         // Welcome Bonus Logic
         final bool welcomeBonusReceived = data['welcomeBonusReceived'] as bool? ?? false;
         if (!welcomeBonusReceived) {
           coinBalance += 100;
-          await FirebaseFirestore.instance.collection('users').doc(myUid).update({
+          await UserDatabaseService.instance.updateUser(myUid, {
             'coinBalance': coinBalance,
             'welcomeBonusReceived': true,
           });
@@ -309,21 +390,28 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
         appState.setCoinBalance(coinBalance);
         appState.setHasUsedFreeCall(hasUsedFreeCall);
         appState.setFreeMessagesUsed(freeMessagesUsed);
+
+        // Check if male user has zero balance
+        if (welcomeBonusReceived && coinBalance <= 0 && mounted) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _showZeroBalancePopup();
+          });
+        }
         
         final nickname = data['nickname'] as String? ?? '';
         if (nickname.isNotEmpty) {
           appState.setNickname(nickname);
         }
       } else {
-        await FirebaseFirestore.instance.collection('users').doc(myUid).set({
+        await UserDatabaseService.instance.setUser(myUid, {
           'uid': myUid,
           'coinBalance': 100,
           'welcomeBonusReceived': true,
           'hasUsedFreeCall': false,
-          'createdAt': FieldValue.serverTimestamp(),
+          'createdAt': DateTime.now().millisecondsSinceEpoch,
           'freeMessagesUsed': 0,
           'gender': 'male',
-        }, SetOptions(merge: true));
+        });
         appState.setCoinBalance(100);
         appState.setHasUsedFreeCall(false);
         appState.setFreeMessagesUsed(0);
@@ -1055,9 +1143,8 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
 
   void _triggerCallByExpertId(String expertId) async {
     try {
-      final doc = await FirebaseFirestore.instance.collection('experts').doc(expertId).get();
-      if (doc.exists) {
-        final data = doc.data() as Map<String, dynamic>;
+      final data = await UserDatabaseService.instance.getExpert(expertId);
+      if (data != null) {
         
         bool isOnline = false;
         try {
@@ -1074,7 +1161,7 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
         }
 
         final expert = FemaleExpert(
-          id: doc.id,
+          id: expertId,
           nickname: data['nickname'] ?? 'Expert',
           pricePerMin: (data['pricePerMin'] as num?)?.toInt() ?? 5,
           languages: data['languages'] ?? 'Hindi',

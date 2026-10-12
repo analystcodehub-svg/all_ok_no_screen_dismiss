@@ -6,10 +6,10 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_database/firebase_database.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import 'package:flutter/foundation.dart';
+import 'user_database_service.dart';
 
 class ForegroundTaskService {
   static final ForegroundTaskService _instance = ForegroundTaskService._internal();
@@ -142,16 +142,15 @@ void onStart(ServiceInstance service) async {
         final user = FirebaseAuth.instance.currentUser;
         if (user != null) {
           final expertId = user.uid;
-          final doc = await FirebaseFirestore.instance.collection('experts').doc(expertId).get();
-          if (doc.exists) {
-            final data = doc.data();
-            final gender = data?['gender'] as String? ?? 'female';
-            final language = data?['language'] as String? ?? 'hindi';
-            final talkSeconds = (data?['totalTalkSeconds'] as num?)?.toInt() ?? 0;
-            final nickname = data?['nickname'] as String? ?? 'Expert';
-            final age = (data?['age'] as num?)?.toInt() ?? 22;
-            final avatarUrl = data?['profileImageUrl'] as String? ?? data?['avatarUrl'] as String?;
-            final avatarIndex = (data?['avatarIndex'] as num?)?.toInt() ?? 1;
+          final data = await UserDatabaseService.instance.getExpert(expertId);
+          if (data != null) {
+            final gender = data['gender'] as String? ?? 'female';
+            final language = data['languages'] as String? ?? data['language'] as String? ?? 'hindi';
+            final talkSeconds = (data['totalTalkSeconds'] as num?)?.toInt() ?? 0;
+            final nickname = data['nickname'] as String? ?? 'Expert';
+            final age = (data['age'] as num?)?.toInt() ?? 22;
+            final avatarUrl = data['profileImageUrl'] as String? ?? data['avatarUrl'] as String?;
+            final avatarIndex = (data['avatarIndex'] as num?)?.toInt() ?? 1;
 
             final presenceRef = db.ref('status/$expertId');
             final queueRef = db.ref('queues/${gender.toLowerCase()}_${language.toLowerCase()}/$expertId');

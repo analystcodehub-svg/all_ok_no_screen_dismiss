@@ -178,6 +178,7 @@ class _SajniReAppState extends State<SajniReApp> with WidgetsBindingObserver {
             nickname:   args['callerName'] as String,
             pricePerMin: 3.0,
             isCaller: false,     // Receiver is accepting
+            callerCoinBalance: args['callerCoins'] as int?,
           );
         },
         '/chat': (context) {

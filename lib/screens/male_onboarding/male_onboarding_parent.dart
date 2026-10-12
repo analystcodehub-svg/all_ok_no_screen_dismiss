@@ -3,10 +3,10 @@ import '../../theme/app_theme.dart';
 import 'nickname_page.dart';
 import 'primary_language_page.dart';
 import 'package:provider/provider.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../providers/app_state.dart';
 import '../male_dashboard_screen.dart';
 import '../avatar_selection_page.dart';
+import '../../services/user_database_service.dart';
 
 class MaleOnboardingParent extends StatefulWidget {
   const MaleOnboardingParent({super.key});
@@ -38,7 +38,8 @@ class _MaleOnboardingParentState extends State<MaleOnboardingParent> {
       final nickname = appState.nickname.isNotEmpty ? appState.nickname : "User";
 
       try {
-        await FirebaseFirestore.instance.collection('users').doc(appState.uid).set({
+        await UserDatabaseService.instance.setUser(appState.uid, {
+          'uid': appState.uid,
           'mobileNumber': mobile,
           'nickname': nickname,
           'gender': 'male',
@@ -46,7 +47,8 @@ class _MaleOnboardingParentState extends State<MaleOnboardingParent> {
           'avatarIndex': appState.avatarIndex,
           'coinBalance': appState.coinBalance,
           'hasUsedFreeCall': appState.hasUsedFreeCall,
-        }, SetOptions(merge: true));
+          'freeMessagesUsed': 0,
+        });
 
 
 

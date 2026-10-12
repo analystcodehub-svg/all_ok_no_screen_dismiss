@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_database/firebase_database.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_state.dart';
 import '../models/female_expert.dart';
@@ -8,6 +7,7 @@ import 'matchmaking_screen.dart';
 import 'hybrid_chat_screen.dart';
 import '../widgets/expert_card.dart';
 import 'wallet_recharge_screen.dart';
+import '../services/user_database_service.dart';
 class ExpertFeedScreen extends StatefulWidget {
   const ExpertFeedScreen({super.key});
 
@@ -31,11 +31,11 @@ class _ExpertFeedScreenState extends State<ExpertFeedScreen> {
 
     String bucket = 'hindi'; // Default bucket
     
-    // First try to get from Firestore user profile
+    // First try to get from new RTDB user profile
     try {
-      final docSnap = await FirebaseFirestore.instance.collection('users').doc(mobile).get();
-      if (docSnap.exists && docSnap.data() != null) {
-        String lang = (docSnap.data()!['primaryLanguage'] as String?)?.toLowerCase() ?? '';
+      final userData = await UserDatabaseService.instance.getUser(mobile);
+      if (userData != null) {
+        String lang = (userData['primaryLanguage'] as String?)?.toLowerCase() ?? '';
         if (lang.isNotEmpty) {
           if (lang == 'english') {
             bucket = 'english';
@@ -217,11 +217,10 @@ class _ExpertFeedScreenState extends State<ExpertFeedScreen> {
 
                   final expertId = expert['id'];
                   try {
-                    final doc = await FirebaseFirestore.instance.collection('experts').doc(expertId).get();
-                    if (doc.exists && context.mounted) {
-                      final data = doc.data() as Map<String, dynamic>;
+                    final data = await UserDatabaseService.instance.getExpert(expertId);
+                    if (data != null && context.mounted) {
                       final expertObj = FemaleExpert(
-                        id: doc.id,
+                        id: expertId,
                         nickname: data['nickname'] ?? nickname,
                         pricePerMin: (data['pricePerMin'] as num?)?.toInt() ?? 5,
                         languages: data['languages'] ?? 'Hindi',

@@ -6,9 +6,9 @@ import '../theme/app_colors.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_state.dart';
 import '../widgets/local_avatar_widget.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'wallet_recharge_screen.dart';
 import '../services/block_service.dart';
+import '../services/user_database_service.dart';
 class HybridChatScreen extends StatefulWidget {
   final String myUid;
   final String otherUid;
@@ -55,12 +55,12 @@ class _HybridChatScreenState extends State<HybridChatScreen> with WidgetsBinding
       return cachedProfile;
     }
     
-    // 2. Fallback to Firestore
+    // 2. Fallback to new RTDB
     try {
-      final doc = await FirebaseFirestore.instance.collection(otherRole == 'expert' ? 'experts' : 'users').doc(widget.otherUid).get();
-      if (doc.exists && doc.data() != null) {
-        final data = doc.data() as Map<String, dynamic>;
-        
+      final data = otherRole == 'expert'
+          ? await UserDatabaseService.instance.getExpert(widget.otherUid)
+          : await UserDatabaseService.instance.getUser(widget.otherUid);
+      if (data != null) {
         final profile = {
           'uid': widget.otherUid,
           'name': data['nickname'] ?? data['name'] ?? data['displayName'] ?? data['fullName'] ?? widget.otherUserName,
@@ -260,11 +260,14 @@ class _HybridChatScreenState extends State<HybridChatScreen> with WidgetsBinding
 
   Widget _buildTickIcon(int status) {
     if (status == 1) {
-      return const Icon(Icons.check, size: 16, color: Colors.grey);
+      // Sent: Single Grey Tick
+      return const Icon(Icons.check, size: 16, color: Color(0xFF8696A0));
     } else if (status == 2) {
-      return const Icon(Icons.done_all, size: 16, color: Colors.grey);
+      // Delivered: Double Grey Tick
+      return const Icon(Icons.done_all, size: 16, color: Color(0xFF8696A0));
     } else if (status >= 3) {
-      return const Icon(Icons.done_all, size: 16, color: AppColors.primaryBlue);
+      // Read: Double Blue Tick (WhatsApp Blue)
+      return const Icon(Icons.done_all, size: 16, color: Color(0xFF53BDEB));
     }
     return const SizedBox(width: 16);
   }
@@ -335,12 +338,11 @@ class _HybridChatScreenState extends State<HybridChatScreen> with WidgetsBinding
             icon: const Icon(Icons.more_vert, color: Colors.white),
             onSelected: (value) async {
               if (value == 'report') {
-                await FirebaseFirestore.instance.collection('reports').add({
+                await UserDatabaseService.instance.submitReport({
                   'reporterId': widget.myUid,
                   'reportedId': widget.otherUid,
                   'reportedName': widget.otherUserName,
                   'reason': 'Inappropriate behavior in chat',
-                  'timestamp': FieldValue.serverTimestamp(),
                 });
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(

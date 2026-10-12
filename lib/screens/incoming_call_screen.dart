@@ -2,12 +2,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:vibration/vibration.dart';
 import 'package:provider/provider.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_database/firebase_database.dart';
 import '../providers/app_state.dart';
 import '../services/call_service.dart';
 import 'active_call_page.dart';
 import 'package:flutter_ringtone_player/flutter_ringtone_player.dart';
+import '../services/user_database_service.dart';
 
 class IncomingCallScreen extends StatefulWidget {
   final String callRoomId;
@@ -43,13 +43,10 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
       'hasUsedFreeCall': true,
     };
     try {
-      final doc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(widget.callerId)
-          .get()
+      final data = await UserDatabaseService.instance
+          .getUser(widget.callerId)
           .timeout(const Duration(seconds: 2));
-      if (doc.exists && doc.data() != null) {
-        final data = doc.data()!;
+      if (data != null) {
         if (data['nickname'] != null && data['nickname'].toString().isNotEmpty) {
           result['nickname'] = data['nickname'].toString();
         }

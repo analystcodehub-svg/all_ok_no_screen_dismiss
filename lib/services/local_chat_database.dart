@@ -175,8 +175,8 @@ class LocalChatDatabase {
     await db.update(
       'messages',
       {'status': newStatus},
-      where: 'msgId = ?',
-      whereArgs: [msgId],
+      where: 'msgId = ? AND status < ?',
+      whereArgs: [msgId, newStatus],
     );
     _updateController.add(null);
   }

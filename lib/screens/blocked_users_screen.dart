@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import '../services/block_service.dart';
 import '../providers/app_state.dart';
+import '../services/user_database_service.dart';
 import '../theme/app_theme.dart';
 
 class BlockedUsersScreen extends StatefulWidget {
@@ -26,30 +26,25 @@ class _BlockedUsersScreenState extends State<BlockedUsersScreen> {
     setState(() => _isLoading = true);
     try {
       final myUid = context.read<AppState>().uid;
-      final doc = await FirebaseFirestore.instance.collection('blocked_users').doc(myUid).get();
+      final uids = await UserDatabaseService.instance.getBlockedUsers(myUid);
       
       _blockedUsers.clear();
       
-      if (doc.exists) {
-        final uids = List<String>.from(doc.data()?['blocked_uids'] ?? doc.data()?['uids'] ?? []);
-        
-        for (String uid in uids) {
-          // Try to fetch nickname if available from users/experts
-          String name = 'Unknown User';
-          try {
-            final userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
-            if (userDoc.exists) {
-              name = userDoc.data()?['nickname'] ?? 'Unknown User';
-            } else {
-              final expertDoc = await FirebaseFirestore.instance.collection('experts').doc(uid).get();
-              if (expertDoc.exists) {
-                name = expertDoc.data()?['nickname'] ?? 'Unknown Expert';
-              }
+      for (String uid in uids) {
+        String name = 'Unknown User';
+        try {
+          final userData = await UserDatabaseService.instance.getUser(uid);
+          if (userData != null) {
+            name = userData['nickname'] ?? 'Unknown User';
+          } else {
+            final expertData = await UserDatabaseService.instance.getExpert(uid);
+            if (expertData != null) {
+              name = expertData['nickname'] ?? 'Unknown Expert';
             }
-          } catch (_) {}
-          
-          _blockedUsers.add({'uid': uid, 'name': name});
-        }
+          }
+        } catch (_) {}
+        
+        _blockedUsers.add({'uid': uid, 'name': name});
       }
     } catch (e) {
       debugPrint('Error loading blocked users: $e');

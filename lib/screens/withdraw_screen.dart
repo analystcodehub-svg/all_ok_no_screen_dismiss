@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../theme/app_colors.dart';
 import '../providers/app_state.dart';
 import 'kyc_pan_screen.dart';
+import '../services/user_database_service.dart';
 
 class WithdrawScreen extends StatefulWidget {
   final double amount;
@@ -53,11 +54,8 @@ class _WithdrawScreenState extends State<WithdrawScreen> {
         'requestedAt': FieldValue.serverTimestamp(),
       });
 
-      // Reset balance
-      await FirebaseFirestore.instance
-          .collection('experts')
-          .doc(expertId)
-          .update({'redeemableBalance': 0.0});
+      // Reset balance in new RTDB
+      await UserDatabaseService.instance.updateExpert(expertId, {'redeemableBalance': 0.0});
 
       if (!mounted) return;
       Navigator.pop(context, true); // signal success

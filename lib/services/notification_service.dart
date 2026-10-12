@@ -25,6 +25,7 @@ import 'package:firebase_database/firebase_database.dart';
 import '../firebase_options.dart';
 import 'call_service.dart';
 import 'block_service.dart';
+import 'user_database_service.dart';
 
 // ─── TOP-LEVEL BACKGROUND HANDLER ─────────────────────────────────────────
 //
@@ -69,6 +70,53 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 Future<void> showChatNotification(Map<String, dynamic> data) async {
   final plugin = FlutterLocalNotificationsPlugin();
   
+  String senderName = data['senderName'] as String? ?? '';
+  final senderId = data['senderId'] as String? ?? '';
+
+  // Resolve sender nickname if senderName is empty, equals senderId, or looks like a raw Firebase UID
+  if (senderId.isNotEmpty && (senderName.isEmpty || senderName == senderId || (senderName.length >= 20 && !senderName.contains(' ')))) {
+    // 1. Check local SharedPreferences cache
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cached = prefs.getString('user_nickname_$senderId');
+      if (cached != null && cached.isNotEmpty && cached != senderId) {
+        senderName = cached;
+      }
+    } catch (_) {}
+
+    // 2. Fetch directly from new RTDB users/$senderId/nickname
+    if (senderName.isEmpty || senderName == senderId || (senderName.length >= 20 && !senderName.contains(' '))) {
+      try {
+        final snap = await FirebaseDatabase.instanceFor(
+          app: Firebase.app(),
+          databaseURL: 'https://zegochat-c44b0-4cbfb.asia-southeast1.firebasedatabase.app',
+        ).ref('users/$senderId/nickname').get();
+        if (snap.exists && snap.value != null && snap.value.toString().isNotEmpty) {
+          senderName = snap.value.toString();
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('user_nickname_$senderId', senderName);
+        } else {
+          // Fallback to experts/$senderId/nickname
+          final expSnap = await FirebaseDatabase.instanceFor(
+            app: Firebase.app(),
+            databaseURL: 'https://zegochat-c44b0-4cbfb.asia-southeast1.firebasedatabase.app',
+          ).ref('experts/$senderId/nickname').get();
+          if (expSnap.exists && expSnap.value != null && expSnap.value.toString().isNotEmpty) {
+            senderName = expSnap.value.toString();
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setString('user_nickname_$senderId', senderName);
+          }
+        }
+      } catch (e) {
+        debugPrint('[FCM] Error resolving sender nickname from RTDB: $e');
+      }
+    }
+  }
+
+  if (senderName.isEmpty || senderName == senderId || (senderName.length >= 20 && !senderName.contains(' '))) {
+    senderName = 'New Message';
+  }
+
   ByteArrayAndroidBitmap? largeIcon;
   Uint8List? iconBytes;
   final avatarUrl = data['senderAvatar'] as String?;
@@ -107,7 +155,7 @@ Future<void> showChatNotification(Map<String, dynamic> data) async {
 
   // Use MessagingStyle for a chat-like premium look
   final person = Person(
-    name: data['senderName'] ?? 'New Message',
+    name: senderName,
     icon: iconBytes != null ? ByteArrayAndroidIcon(iconBytes) : null,
   );
   
@@ -119,8 +167,8 @@ Future<void> showChatNotification(Map<String, dynamic> data) async {
   );
 
   await plugin.show(
-    id: DateTime.now().millisecondsSinceEpoch ~/ 1000, // Unique ID
-    title: data['senderName'] ?? 'New Message',
+    id: senderId.isNotEmpty ? senderId.hashCode.abs() : (DateTime.now().millisecondsSinceEpoch ~/ 1000),
+    title: senderName,
     body: data['body'] ?? '',
     notificationDetails: NotificationDetails(
       android: AndroidNotificationDetails(
@@ -141,9 +189,24 @@ Future<void> showChatNotification(Map<String, dynamic> data) async {
 Future<void> _showCallkitIncoming(Map<String, dynamic> data) async {
   debugPrint('[CallKit] _showCallkitIncoming triggered with data: $data');
   final uuid         = data['callRoomId']  ?? 'uuid-${DateTime.now().millisecondsSinceEpoch}';
-  final callerName   = data['callerName']  ?? 'Unknown Caller';
+  String callerName   = data['callerName']  ?? 'Unknown Caller';
   final callRoomId   = data['callRoomId']  ?? '';
   final callerId     = data['callerId']    ?? '';
+
+  // Resolve caller nickname if callerName is empty, equals callerId, or looks like a raw Firebase UID
+  if (callerId.isNotEmpty && (callerName.isEmpty || callerName == callerId || callerName == 'Unknown Caller' || (callerName.length >= 20 && !callerName.contains(' ')))) {
+    try {
+      final snap = await FirebaseDatabase.instanceFor(
+        app: Firebase.app(),
+        databaseURL: 'https://zegochat-c44b0-4cbfb.asia-southeast1.firebasedatabase.app',
+      ).ref('users/$callerId/nickname').get();
+      if (snap.exists && snap.value != null && snap.value.toString().isNotEmpty) {
+        callerName = snap.value.toString();
+      }
+    } catch (e) {
+      debugPrint('[CallKit] Error resolving caller nickname from RTDB: $e');
+    }
+  }
 
   // 1. Check if caller is blocked locally before ringing
   if (callerId.isNotEmpty) {
@@ -183,6 +246,23 @@ Future<void> _showCallkitIncoming(Map<String, dynamic> data) async {
   final prefs = await SharedPreferences.getInstance();
   await prefs.setString('callerName_$callRoomId', callerName);
   await prefs.setString('callerId_$callRoomId', callerId);
+
+  // Pre-fetch caller's balance from RTDB for immediate accurate countdown timer
+  if (callerId.isNotEmpty) {
+    try {
+      final coinSnap = await FirebaseDatabase.instanceFor(
+        app: Firebase.app(),
+        databaseURL: 'https://zegochat-c44b0-4cbfb.asia-southeast1.firebasedatabase.app',
+      ).ref('users/$callerId/coinBalance').get();
+      if (coinSnap.exists && coinSnap.value != null) {
+        final coins = (coinSnap.value as num).toInt();
+        await prefs.setInt('callerCoins_$callRoomId', coins);
+        debugPrint('[CallKit] Cached caller coins: $coins for $callRoomId');
+      }
+    } catch (e) {
+      debugPrint('[CallKit] Error caching caller coins: $e');
+    }
+  }
 
   // Explicitly play the ringtone using flutter_ringtone_player
   FlutterRingtonePlayer().play(
@@ -402,19 +482,36 @@ class NotificationService {
       final token = await _messaging.getToken();
       if (token == null || userId.isEmpty) return;
 
-      await FirebaseFirestore.instance
-          .collection(collection)
-          .doc(userId)
-          .set({'fcmToken': token}, SetOptions(merge: true));
+      // 1. Save to new RTDB
+      if (collection == 'experts') {
+        await UserDatabaseService.instance.updateExpert(userId, {'fcmToken': token});
+      } else {
+        await UserDatabaseService.instance.updateUser(userId, {'fcmToken': token});
+      }
+
+      // 2. Also save to Firestore so Cloud Functions onCallInitiated can lookup fcmToken
+      try {
+        await FirebaseFirestore.instance.collection(collection).doc(userId).set({
+          'fcmToken': token,
+        }, SetOptions(merge: true));
+      } catch (e) {
+        debugPrint('[FCM] Firestore token sync error: $e');
+      }
 
       debugPrint('[FCM] Token saved → $collection/$userId');
 
       // Auto-refresh when token rotates
       _messaging.onTokenRefresh.listen((t) async {
-        await FirebaseFirestore.instance
-            .collection(collection)
-            .doc(userId)
-            .set({'fcmToken': t}, SetOptions(merge: true));
+        if (collection == 'experts') {
+          await UserDatabaseService.instance.updateExpert(userId, {'fcmToken': t});
+        } else {
+          await UserDatabaseService.instance.updateUser(userId, {'fcmToken': t});
+        }
+        try {
+          await FirebaseFirestore.instance.collection(collection).doc(userId).set({
+            'fcmToken': t,
+          }, SetOptions(merge: true));
+        } catch (_) {}
         debugPrint('[FCM] Token refreshed → $collection/$userId');
       });
     } catch (e) {
@@ -449,8 +546,23 @@ class NotificationService {
     _routeFromNotification(message.data);
   }
 
-  void _routeFromNotification(Map<String, dynamic> data) {
+  void _routeFromNotification(Map<String, dynamic> data) async {
     if (data['type'] == 'message') {
+      final senderId = data['senderId'] ?? '';
+      String senderName = data['senderName'] ?? 'User';
+      
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final cached = prefs.getString('user_nickname_$senderId');
+        if (cached != null && cached.isNotEmpty && cached != senderId) {
+          senderName = cached;
+        }
+      } catch (_) {}
+
+      if (senderName.isEmpty || senderName == senderId || (senderName.length >= 20 && !senderName.contains(' '))) {
+        senderName = 'User';
+      }
+
       int retries = 0;
       void pushRoute() {
         final currentState = navigatorKey?.currentState;
@@ -460,8 +572,8 @@ class NotificationService {
             currentState.pushNamed(
               '/chat',
               arguments: <String, dynamic>{
-                'otherUid': data['senderId'] ?? '',
-                'otherUserName': data['senderName'] ?? 'User',
+                'otherUid': senderId,
+                'otherUserName': senderName,
               },
             );
             debugPrint('[FCM] Successfully routed to chat!');
@@ -502,6 +614,7 @@ class NotificationService {
           final storedCallerName = prefs.getString('callerName_$callRoomId');
           final resolvedName = storedCallerName ?? NotificationService.lastCallerName ?? 'Unknown';
           final resolvedCallerId = prefs.getString('callerId_$callRoomId') ?? '';
+          final storedCallerCoins = prefs.getInt('callerCoins_$callRoomId');
 
           void pushRoute() {
             if (navigatorKey?.currentState != null) {
@@ -511,6 +624,7 @@ class NotificationService {
                   'callRoomId': callRoomId,
                   'callerName': resolvedName,
                   'callerId': resolvedCallerId,
+                  'callerCoins': storedCallerCoins,
                 },
               );
             } else {
@@ -539,6 +653,7 @@ class NotificationService {
         final storedCallerName = prefs.getString('callerName_$callRoomId');
         final resolvedName = storedCallerName ?? NotificationService.lastCallerName ?? 'Unknown';
         final resolvedCallerId = prefs.getString('callerId_$callRoomId') ?? '';
+        final storedCallerCoins = prefs.getInt('callerCoins_$callRoomId');
 
         void pushRoute() {
           if (navigatorKey?.currentState != null) {
@@ -548,6 +663,7 @@ class NotificationService {
                 'callRoomId': callRoomId,
                 'callerName': resolvedName,
                 'callerId': resolvedCallerId,
+                'callerCoins': storedCallerCoins,
               },
             );
           } else {

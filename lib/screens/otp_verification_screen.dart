@@ -1,14 +1,13 @@
 import "package:flutter/services.dart";
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../providers/app_state.dart';
 import 'gender_selection_screen.dart';
 import 'main_navigation.dart';
 import 'male_dashboard_screen.dart';
+import '../services/user_database_service.dart';
 
 class OtpVerificationScreen extends StatefulWidget {
   final String verificationId;
@@ -27,30 +26,49 @@ class OtpVerificationScreen extends StatefulWidget {
 class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
   final TextEditingController _otpController = TextEditingController();
   bool _isLoading = false;
-  late StreamSubscription<User?> _authSubscription;
+  AppState? _appState;
 
   @override
   void initState() {
     super.initState();
-    // Listen for automatic background login (Android Auto-retrieval)
-    _authSubscription = FirebaseAuth.instance.authStateChanges().listen((User? user) async {
-      if (user != null && mounted) {
-        // User was automatically logged in by Firebase in the background
-        // 1. Visibly fill the OTP code if it was caught by PhoneAuthScreen
-        final autoCode = context.read<AppState>().autoRetrievedSmsCode;
-        if (autoCode != null && autoCode.isNotEmpty) {
-          _otpController.text = autoCode;
-          context.read<AppState>().setAutoRetrievedSmsCode(null);
-        }
-        
-        // We STOP here. The user must manually press 'Proceed' to continue.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _checkAutoRetrievedSms();
       }
     });
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final newAppState = context.read<AppState>();
+    if (_appState != newAppState) {
+      _appState?.removeListener(_onAppStateChanged);
+      _appState = newAppState;
+      _appState?.addListener(_onAppStateChanged);
+      _checkAutoRetrievedSms();
+    }
+  }
+
+  void _onAppStateChanged() {
+    _checkAutoRetrievedSms();
+  }
+
+  void _checkAutoRetrievedSms() {
+    final autoCode = _appState?.autoRetrievedSmsCode;
+    if (autoCode != null && autoCode.isNotEmpty && _otpController.text != autoCode) {
+      if (mounted) {
+        setState(() {
+          _otpController.text = autoCode;
+        });
+      }
+      // We STOP here. The user must manually press 'Proceed' to submit.
+    }
+  }
+
+  @override
   void dispose() {
-    _authSubscription.cancel();
+    _appState?.removeListener(_onAppStateChanged);
     _otpController.dispose();
     super.dispose();
   }
@@ -73,12 +91,18 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
     try {
       User? currentUser = FirebaseAuth.instance.currentUser;
       
-      // If user is not automatically logged in by Android Auto-Retrieval, sign them in manually
+      // If user is not yet logged in, sign them in with credential or entered OTP
       if (currentUser == null) {
-        PhoneAuthCredential credential = PhoneAuthProvider.credential(
-          verificationId: widget.verificationId,
-          smsCode: otp,
-        );
+        final autoCredential = context.read<AppState>().autoRetrievedCredential;
+        PhoneAuthCredential credential;
+        if (autoCredential != null && (autoCredential.smsCode == otp || autoCredential.smsCode == null)) {
+          credential = autoCredential;
+        } else {
+          credential = PhoneAuthProvider.credential(
+            verificationId: widget.verificationId,
+            smsCode: otp,
+          );
+        }
 
         UserCredential userCredential =
             await FirebaseAuth.instance.signInWithCredential(credential);
@@ -86,19 +110,16 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
       }
 
       if (currentUser != null) {
-        // Successful login, check if user exists in Firestore
+        // Successful login, check if user exists in new RTDB (with lazy fallback)
         final uid = currentUser.uid;
         
-        final userDoc = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(uid)
-            .get();
+        final userData = await UserDatabaseService.instance.getUser(uid);
 
         if (mounted) {
           if (!mounted) return;
-          if (userDoc.exists) {
+          if (userData != null) {
             // Profile exists in users collection (Male Caller)
-            final data = userDoc.data() ?? {};
+            final data = userData;
 
             // Load app state
             final appState = context.read<AppState>();
@@ -114,14 +135,11 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
             );
           } else {
             // Check if user exists in experts collection (Female Expert)
-            final expertDoc = await FirebaseFirestore.instance
-                .collection('experts')
-                .doc(uid)
-                .get();
+            final expertData = await UserDatabaseService.instance.getExpert(uid);
 
             if (!mounted) return;
-            if (expertDoc.exists) {
-              final data = expertDoc.data() ?? {};
+            if (expertData != null) {
+              final data = expertData;
 
               // Load app state
               final appState = context.read<AppState>();
@@ -268,6 +286,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                       child: TextField(
                         controller: _otpController,
                         keyboardType: TextInputType.number,
+                        autofillHints: const [AutofillHints.oneTimeCode],
                         maxLength: 6,
                         style: const TextStyle(
                           fontSize: 22,

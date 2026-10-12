@@ -158,18 +158,37 @@ exports.onCallInitiated = functions.region("asia-south1").database
     let callerName = callerId;
     let callerAvatar = "";
 
-    // Try 'users' collection first (male callers), then 'experts'
-    const callerUserDoc = await db.collection("users").doc(callerId).get();
-    if (callerUserDoc.exists) {
-      const d = callerUserDoc.data();
-      callerName   = d.nickname   || callerId;
-      callerAvatar = d.avatarPath || "";
-    } else {
-      const callerExpertDoc = await db.collection("experts").doc(callerId).get();
-      if (callerExpertDoc.exists) {
-        const d = callerExpertDoc.data();
+    try {
+      const newRtdb = admin.app().database("https://zegochat-c44b0-4cbfb.asia-southeast1.firebasedatabase.app");
+      const userSnap = await newRtdb.ref(`users/${callerId}`).once("value");
+      if (userSnap.exists()) {
+        const d = userSnap.val();
+        callerName = d.nickname || callerId;
+        callerAvatar = d.avatarUrl || "";
+      } else {
+        const expertSnap = await newRtdb.ref(`experts/${callerId}`).once("value");
+        if (expertSnap.exists()) {
+          const d = expertSnap.val();
+          callerName = d.nickname || callerId;
+          callerAvatar = d.profileImageUrl || d.avatarUrl || "";
+        }
+      }
+    } catch (_) {}
+
+    if (callerName === callerId) {
+      // Try 'users' collection first (male callers), then 'experts'
+      const callerUserDoc = await db.collection("users").doc(callerId).get();
+      if (callerUserDoc.exists) {
+        const d = callerUserDoc.data();
         callerName   = d.nickname   || callerId;
         callerAvatar = d.avatarPath || "";
+      } else {
+        const callerExpertDoc = await db.collection("experts").doc(callerId).get();
+        if (callerExpertDoc.exists) {
+          const d = callerExpertDoc.data();
+          callerName   = d.nickname   || callerId;
+          callerAvatar = d.avatarPath || "";
+        }
       }
     }
 
@@ -279,15 +298,34 @@ exports.onMessageSent = functions.region("asia-south1").database
     let senderName = senderId;
     let senderAvatar = null;
     
-    let senderDoc = await db.collection("users").doc(senderId).get();
-    if (senderDoc.exists) {
-      senderName = senderDoc.data().nickname || senderId;
-      senderAvatar = senderDoc.data().avatarUrl || null;
-    } else {
-      senderDoc = await db.collection("experts").doc(senderId).get();
+    try {
+      const newRtdb = admin.app().database("https://zegochat-c44b0-4cbfb.asia-southeast1.firebasedatabase.app");
+      const userSnap = await newRtdb.ref(`users/${senderId}`).once("value");
+      if (userSnap.exists()) {
+        const d = userSnap.val();
+        senderName = d.nickname || senderId;
+        senderAvatar = d.avatarUrl || null;
+      } else {
+        const expertSnap = await newRtdb.ref(`experts/${senderId}`).once("value");
+        if (expertSnap.exists()) {
+          const d = expertSnap.val();
+          senderName = d.nickname || senderId;
+          senderAvatar = d.profileImageUrl || d.avatarUrl || null;
+        }
+      }
+    } catch (_) {}
+
+    if (senderName === senderId) {
+      let senderDoc = await db.collection("users").doc(senderId).get();
       if (senderDoc.exists) {
         senderName = senderDoc.data().nickname || senderId;
-        senderAvatar = senderDoc.data().profileImageUrl || senderDoc.data().avatarUrl || null;
+        senderAvatar = senderDoc.data().avatarUrl || null;
+      } else {
+        senderDoc = await db.collection("experts").doc(senderId).get();
+        if (senderDoc.exists) {
+          senderName = senderDoc.data().nickname || senderId;
+          senderAvatar = senderDoc.data().profileImageUrl || senderDoc.data().avatarUrl || null;
+        }
       }
     }
 

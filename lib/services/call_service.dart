@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
-import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'block_service.dart';
+import 'user_database_service.dart';
 
 class CallService {
   final FirebaseDatabase _database = FirebaseDatabase.instanceFor(
@@ -534,35 +534,18 @@ class CallService {
     await unlockExpertFromCall(userId);
   }
 
-  /// Cloud Firestore Transaction to safely deduct coin balance.
+  /// Safely deduct coin balance in new RTDB using atomic transaction.
   /// Validates sufficient balance and prevents concurrent deduction race conditions.
   Future<void> deductCoinBalance({required String userId, required int callCost}) async {
-    final DocumentReference userRef = FirebaseFirestore.instance.collection('users').doc(userId);
-    
     try {
-      await FirebaseFirestore.instance.runTransaction((transaction) async {
-        final snapshot = await transaction.get(userRef);
-        
-        if (!snapshot.exists) {
-          throw Exception("User document does not exist.");
-        }
-        
-        final data = snapshot.data() as Map<String, dynamic>?;
-        int currentBalance = (data?['coinBalance'] as num?)?.toInt() ?? 0;
-        
-        if (currentBalance < callCost) {
-          throw Exception("Insufficient balance. Required: $callCost, Available: $currentBalance");
-        }
-        
-        // Safe deduction within transaction lock
-        int newBalance = currentBalance - callCost;
-        transaction.update(userRef, {'coinBalance': newBalance});
-      });
-      
-      debugPrint('Successfully deducted $callCost coins from user $userId. Transaction completed.');
+      final success = await UserDatabaseService.instance.deductUserCoins(userId, callCost);
+      if (!success) {
+        throw Exception("Failed to deduct coins: Insufficient balance or user missing.");
+      }
+      debugPrint('Successfully deducted $callCost coins from user $userId in new RTDB.');
     } catch (e) {
       debugPrint('Error deducting coin balance for $userId: $e');
-      rethrow; // Rethrow so the caller knows the transaction failed and can terminate the call
+      rethrow;
     }
   }
 }

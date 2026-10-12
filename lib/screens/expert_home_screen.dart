@@ -18,6 +18,7 @@ import '../services/hybrid_chat_service.dart';
 import '../services/local_chat_database.dart';
 import '../widgets/local_avatar_widget.dart';
 import '../screens/blocked_users_screen.dart';
+import '../services/user_database_service.dart';
 
 class ExpertHomeScreen extends StatefulWidget {
   final VoidCallback? onNavigateToChat;
@@ -39,7 +40,7 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
   late final MatchmakingService _matchingService;
   StreamSubscription? _incomingCallSubscription;
   StreamSubscription? _chatDbSubscription;
-  StreamSubscription<DocumentSnapshot>? _expertStatsSubscription;
+  StreamSubscription? _expertStatsSubscription;
 
   // Animations
   late AnimationController _pulseController;
@@ -210,7 +211,7 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
     if (!mounted) return;
     final uid = context.read<AppState>().uid;
     if (uid.isEmpty) return;
-    final count = await LocalChatDatabase.instance.getTotalUnreadCount(uid);
+    await LocalChatDatabase.instance.getTotalUnreadCount(uid);
     if (mounted) {
       setState(() {
       });
@@ -245,13 +246,11 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
     );
     
     _expertStatsSubscription?.cancel();
-    _expertStatsSubscription = FirebaseFirestore.instance
-        .collection('experts')
-        .doc(expertId)
-        .snapshots()
-        .listen((doc) {
-      if (doc.exists && mounted) {
-        final data = doc.data()!;
+    _expertStatsSubscription = UserDatabaseService.instance
+        .streamExpert(expertId)
+        .listen((event) {
+      if (event.snapshot.exists && event.snapshot.value != null && mounted) {
+        final data = Map<String, dynamic>.from(event.snapshot.value as Map);
         setState(() {
           _totalTalktimeMinutes = (data['totalTalktimeMinutes'] as num?)?.toInt() ?? 0;
           _redeemableBalance = (data['redeemableBalance'] as num?)?.toDouble() ?? 0.0;
@@ -261,6 +260,8 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
         if (data.containsKey('avatarIndex')) {
           context.read<AppState>().setAvatarIndex((data['avatarIndex'] as num).toInt());
         }
+      } else {
+        if (mounted) setState(() => _isLoadingStats = false);
       }
     }, onError: (e) {
       debugPrint('Error listening to expert stats: $e');
@@ -324,18 +325,15 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
           language: appState.primaryLanguage,
         );
         debugPrint('[STATUS] RTDB queue updated for $expertId → $value');
-        await FirebaseFirestore.instance
-            .collection('experts')
-            .doc(expertId)
-            .set({
+        await UserDatabaseService.instance.updateExpert(expertId, {
           'nickname': appState.nickname,
           'mobileNumber': appState.mobileNumber,
           'age': 2026 - appState.birthYear,
           'pricePerMin': 3,
           'languages': appState.primaryLanguage,
           'rating': 4.8,
-        }, SetOptions(merge: true));
-        debugPrint('[STATUS] Firestore updated experts/$expertId');
+        });
+        debugPrint('[STATUS] Updated new RTDB experts/$expertId');
       } catch (e) {
         debugPrint('[STATUS] ERROR updating online status: $e');
       }
@@ -358,7 +356,7 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
     _incomingCallSubscription = _callService.listenForIncomingCalls(
       expertId: expertId,
       onCallReceived: (roomId, callerId) {
-        // Native CallKit will be triggered by FCM instead.
+        // Native CallKit (shown via FCM) handles the incoming call UI directly
       },
     );
   }
@@ -474,10 +472,7 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
         'status': 'pending',
         'requestedAt': FieldValue.serverTimestamp(),
       });
-      await FirebaseFirestore.instance
-          .collection('experts')
-          .doc(expertId)
-          .update({'redeemableBalance': 0.0});
+      await UserDatabaseService.instance.updateExpert(expertId, {'redeemableBalance': 0.0});
       if (mounted) {
         setState(() => _redeemableBalance = 0.0);
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(

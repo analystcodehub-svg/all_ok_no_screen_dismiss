@@ -163,24 +163,22 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
         await FirebaseAuth.instance.verifyPhoneNumber(
           phoneNumber: phoneNumber,
           verificationCompleted: (PhoneAuthCredential credential) async {
-            // Auto-retrieval or Instant verification (usually on Android)
+            // Auto-retrieval / Instant verification on Android:
+            // Do NOT sign in here automatically!
+            // Store the credential & SMS code so OtpVerificationScreen autofills it.
+            // The user must manually click 'Proceed' to submit and trigger sign-in & permissions.
             try {
-              if (credential.smsCode != null && mounted) {
-                context.read<AppState>().setAutoRetrievedSmsCode(credential.smsCode);
-              }
-              await FirebaseAuth.instance.signInWithCredential(credential);
-              // Handle routing in AuthWrapper or via another listener, 
-              // but we'll let auth state changes handle it generally, 
-              // or navigate manually if needed. For now, we'll let AuthWrapper catch the state change.
               if (mounted) {
+                if (credential.smsCode != null && credential.smsCode!.isNotEmpty) {
+                  context.read<AppState>().setAutoRetrievedSmsCode(credential.smsCode);
+                }
+                context.read<AppState>().setAutoRetrievedCredential(credential);
                 setState(() => _isLoading = false);
               }
             } catch (e) {
+              debugPrint('Auto-retrieval credential error: $e');
               if (mounted) {
                 setState(() => _isLoading = false);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Auto-verification failed: $e')),
-                );
               }
             }
           },
