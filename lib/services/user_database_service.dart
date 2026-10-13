@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
@@ -25,8 +26,13 @@ class UserDatabaseService {
 
   DatabaseReference get usersRef => db.ref('users');
   DatabaseReference get expertsRef => db.ref('experts');
+
+  /// Language buckets of ONLINE experts (new RTDB only): `expert_buckets/{language}/{uid}`
+  /// Feeds the male dashboard, ranked by totalTalkSeconds.
+  DatabaseReference get expertBucketsRef => db.ref('expert_buckets');
   DatabaseReference get blockedUsersRef => db.ref('blocked_users');
   DatabaseReference get callLogsRef => db.ref('call_logs');
+  DatabaseReference get userCallLogsRef => db.ref('user_call_logs');
   DatabaseReference get reportsRef => db.ref('reports');
   DatabaseReference get tierApplicationsRef => db.ref('tier_applications');
 
@@ -196,7 +202,7 @@ class UserDatabaseService {
     if (expertId.isEmpty) return;
     try {
       final ref = expertsRef.child(expertId);
-      await ref.runTransaction((currentValue) {
+      final result = await ref.runTransaction((currentValue) {
         Map<String, dynamic> data = {};
         if (currentValue != null && currentValue is Map) {
           data = Map<String, dynamic>.from(currentValue);
@@ -214,33 +220,162 @@ class UserDatabaseService {
 
         return Transaction.success(data);
       });
+
+      // Keep the language-bucket ranking in sync with the profile.
+      await _syncBucketTalkSeconds(expertId, result.snapshot.value);
     } catch (e) {
       debugPrint('Error incrementing expert stats for $expertId: $e');
     }
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // CALL LOGS
+  // EXPERT LANGUAGE BUCKETS (online experts, feeds the male dashboard)
+  // Lives ONLY in this new RTDB: expert_buckets/<language>/<uid>
   // ─────────────────────────────────────────────────────────────────────────
 
-  Future<void> saveCallLog(String logId, Map<String, dynamic> logData) async {
+  StreamSubscription<DatabaseEvent>? _bucketConnectionSub;
+
+  /// Bucket key for a language name, e.g. "Hindi" -> "hindi". Must be used by
+  /// both the expert (writer) and the male dashboard (reader).
+  static String bucketKeyFor(String? language) {
+    final key = (language ?? '').trim().toLowerCase();
+    return key.isEmpty ? 'hindi' : key;
+  }
+
+  /// Puts the expert into her language bucket and keeps her there while the
+  /// connection is alive. Re-publishes automatically after a network drop
+  /// (the server-side onDisconnect removes the entry when the socket dies).
+  Future<void> joinExpertBucket(String expertId, String language) async {
+    if (expertId.isEmpty) return;
+    await _bucketConnectionSub?.cancel();
+    _bucketConnectionSub = db.ref('.info/connected').onValue.listen((event) {
+      if (event.snapshot.value == true) {
+        publishExpertBucketEntry(expertId, language);
+      }
+    });
+  }
+
+  /// Removes the expert from her language bucket (went offline / logged out).
+  Future<void> leaveExpertBucket(String expertId, String language) async {
+    await _bucketConnectionSub?.cancel();
+    _bucketConnectionSub = null;
+    if (expertId.isEmpty) return;
+    try {
+      final ref = expertBucketsRef.child(bucketKeyFor(language)).child(expertId);
+      await ref.remove();
+      await ref.onDisconnect().cancel();
+    } catch (e) {
+      debugPrint('Error leaving expert bucket for $expertId: $e');
+    }
+  }
+
+  /// Writes (or refreshes) the bucket entry and arms onDisconnect().remove().
+  /// Safe to call repeatedly; never throws.
+  Future<void> publishExpertBucketEntry(String expertId, String language) async {
+    if (expertId.isEmpty) return;
+    try {
+      final profile = await getExpert(expertId);
+      final ref = expertBucketsRef.child(bucketKeyFor(language)).child(expertId);
+      final dynamic avatarUrl = profile?['profileImageUrl'] ?? profile?['avatarUrl'];
+
+      await ref.set({
+        'totalTalkSeconds': (profile?['totalTalkSeconds'] as num?)?.toInt() ?? 0,
+        'nickname': profile?['nickname'] ?? 'Expert',
+        'age': (profile?['age'] as num?)?.toInt() ?? 22,
+        'avatarIndex': (profile?['avatarIndex'] as num?)?.toInt() ?? 1,
+        if (avatarUrl is String && avatarUrl.isNotEmpty) 'avatarUrl': avatarUrl,
+        'timestamp': ServerValue.timestamp,
+      });
+      await ref.onDisconnect().remove();
+    } catch (e) {
+      debugPrint('Error publishing expert bucket entry for $expertId: $e');
+    }
+  }
+
+  /// Updates totalTalkSeconds on the bucket entry ONLY if it already exists.
+  Future<void> _syncBucketTalkSeconds(String expertId, Object? profile) async {
+    try {
+      if (profile is! Map) return;
+      final int totalSeconds = (profile['totalTalkSeconds'] as num?)?.toInt() ?? 0;
+      final String bucket = bucketKeyFor(profile['languages']?.toString());
+      await expertBucketsRef.child(bucket).child(expertId).runTransaction((cur) {
+        if (cur == null || cur is! Map) return Transaction.abort(); // not online, don't create
+        final data = Map<String, dynamic>.from(cur);
+        data['totalTalkSeconds'] = totalSeconds;
+        return Transaction.success(data);
+      });
+    } catch (e) {
+      debugPrint('Error syncing bucket talk seconds for $expertId: $e');
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // CALL LOGS (Capped to last 20 calls per user in user_call_logs/{uid})
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Future<void> saveCallLog(
+    String logId,
+    Map<String, dynamic> logData, {
+    bool isFinal = false,
+  }) async {
     if (logId.isEmpty) return;
     try {
       final clean = _sanitizeForRtdb(logData);
+      final callerId = clean['callerId']?.toString() ?? '';
+      final receiverId = clean['receiverId']?.toString() ?? '';
+
+      // 1. Root call_logs node holds active handshake during call
       await callLogsRef.child(logId).update(clean);
+
+      // 2. Caller's personal recent calls node (incremental & final)
+      if (callerId.isNotEmpty) {
+        await userCallLogsRef.child(callerId).child(logId).update(clean);
+      }
+
+      // 3. When call finishes (isFinal = true):
+      if (isFinal) {
+        // Also add to receiver's personal recent calls
+        if (receiverId.isNotEmpty) {
+          await userCallLogsRef.child(receiverId).child(logId).update(clean);
+        }
+
+        // Cap to last 20 calls per user (deletes oldest excess calls)
+        if (callerId.isNotEmpty) {
+          _pruneOldCallLogs(callerId, maxKeep: 20);
+        }
+        if (receiverId.isNotEmpty) {
+          _pruneOldCallLogs(receiverId, maxKeep: 20);
+        }
+
+        // Clean up temporary root call_log handshake after 60s
+        // so root 'call_logs' never bloats the database!
+        Future.delayed(const Duration(seconds: 60), () {
+          callLogsRef.child(logId).remove().catchError((_) {});
+        });
+      }
     } catch (e) {
       debugPrint('Error saving call log $logId in new RTDB: $e');
     }
   }
 
-  Future<Map<String, dynamic>?> getCallLog(String logId) async {
+  Future<Map<String, dynamic>?> getCallLog(String logId, {String? callerId}) async {
     if (logId.isEmpty) return null;
     try {
+      // 1. Check temporary root call_logs
       final snap = await callLogsRef.child(logId).get();
       if (snap.exists && snap.value != null) {
         return Map<String, dynamic>.from(snap.value as Map);
       }
-      // Fallback: check Firestore
+
+      // 2. Check caller's user_call_logs if callerId is provided
+      if (callerId != null && callerId.isNotEmpty) {
+        final userSnap = await userCallLogsRef.child(callerId).child(logId).get();
+        if (userSnap.exists && userSnap.value != null) {
+          return Map<String, dynamic>.from(userSnap.value as Map);
+        }
+      }
+
+      // 3. Fallback: check Firestore
       final doc = await FirebaseFirestore.instance.collection('call_logs').doc(logId).get();
       if (doc.exists && doc.data() != null) {
         final data = Map<String, dynamic>.from(doc.data()!);
@@ -250,6 +385,65 @@ class UserDatabaseService {
       debugPrint('Error getting call log $logId: $e');
     }
     return null;
+  }
+
+  /// Fetches up to [limit] recent call logs for a user from new RTDB.
+  Future<List<Map<String, dynamic>>> getUserCallLogs(String userId, {int limit = 20}) async {
+    if (userId.isEmpty) return [];
+    try {
+      final snap = await userCallLogsRef
+          .child(userId)
+          .orderByChild('timestamp')
+          .limitToLast(limit)
+          .get();
+      if (snap.exists && snap.value != null) {
+        final data = Map<dynamic, dynamic>.from(snap.value as Map);
+        final list = <Map<String, dynamic>>[];
+        for (final entry in data.entries) {
+          if (entry.value is Map) {
+            list.add(Map<String, dynamic>.from(entry.value as Map));
+          }
+        }
+        list.sort((a, b) {
+          final aTime = (a['timestamp'] as num?)?.toInt() ?? 0;
+          final bTime = (b['timestamp'] as num?)?.toInt() ?? 0;
+          return bTime.compareTo(aTime); // descending (newest first)
+        });
+        return list;
+      }
+    } catch (e) {
+      debugPrint('Error getting user call logs for $userId: $e');
+    }
+    return [];
+  }
+
+  /// Automatically keeps only the newest [maxKeep] (20) calls for a user,
+  /// deleting the oldest ones in RTDB.
+  Future<void> _pruneOldCallLogs(String userId, {int maxKeep = 20}) async {
+    if (userId.isEmpty) return;
+    try {
+      final snap = await userCallLogsRef.child(userId).get();
+      if (!snap.exists || snap.value == null) return;
+      final data = Map<dynamic, dynamic>.from(snap.value as Map);
+      if (data.length <= maxKeep) return;
+
+      final entries = data.entries.toList();
+      // Sort oldest first
+      entries.sort((a, b) {
+        final aTime = (a.value is Map ? (a.value['timestamp'] as num?)?.toInt() : null) ?? 0;
+        final bTime = (b.value is Map ? (b.value['timestamp'] as num?)?.toInt() : null) ?? 0;
+        return aTime.compareTo(bTime);
+      });
+
+      final removeCount = entries.length - maxKeep;
+      final updates = <String, Object?>{};
+      for (int i = 0; i < removeCount; i++) {
+        updates[entries[i].key.toString()] = null; // null deletes key in RTDB
+      }
+      await userCallLogsRef.child(userId).update(updates);
+    } catch (e) {
+      debugPrint('Error pruning call logs for $userId: $e');
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_database/firebase_database.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_state.dart';
 import '../models/female_expert.dart';
@@ -29,98 +28,46 @@ class _ExpertFeedScreenState extends State<ExpertFeedScreen> {
     String mobile = appState.uid.isNotEmpty ? appState.uid : appState.mobileNumber;
     String languageCode = Localizations.localeOf(context).languageCode;
 
-    String bucket = 'hindi'; // Default bucket
-    
-    // First try to get from new RTDB user profile
+    // 1. Male's language -> bucket key (same normalisation the experts use).
+    String language = '';
     try {
       final userData = await UserDatabaseService.instance.getUser(mobile);
-      if (userData != null) {
-        String lang = (userData['primaryLanguage'] as String?)?.toLowerCase() ?? '';
-        if (lang.isNotEmpty) {
-          if (lang == 'english') {
-            bucket = 'english';
-          } else if (lang == 'punjabi') {
-            bucket = 'punjabi';
-          } else if (lang == 'bengali') {
-            bucket = 'bengali';
-          } else if (lang == 'marathi') {
-            bucket = 'marathi';
-          } else if (lang == 'gujarati') {
-            bucket = 'gujarati';
-          } else if (lang == 'tamil') {
-            bucket = 'tamil';
-          } else if (lang == 'telugu') {
-            bucket = 'telugu';
-          } else if (lang == 'kannada') {
-            bucket = 'kannada';
-          } else if (lang == 'malayalam') {
-            bucket = 'malayalam';
-          } else {
-            bucket = 'hindi';
-          }
-        }
-      }
+      language = (userData?['primaryLanguage'] as String?) ?? '';
     } catch (e) {
       debugPrint('Error fetching primary language: $e');
     }
+    if (language.trim().isEmpty) language = appState.primaryLanguage;
+    if (language.trim().isEmpty && languageCode == 'pa') language = 'punjabi';
+    final String bucket = UserDatabaseService.bucketKeyFor(language);
 
-    // Fallback to device locale if bucket is still hindi and we want to check locale
-    if (bucket == 'hindi') {
-      if (languageCode == 'pa') {
-        bucket = 'punjabi';
-      }
-    }
-    
-    const int limit = 150; // Hardcoded Smart Limit
-    
-    final db = FirebaseDatabase.instanceFor(
-      app: FirebaseDatabase.instance.app,
-      databaseURL: 'https://zegochat-c44b0.asia-southeast1.firebasedatabase.app',
-    );
-    final snapshot = await db
-        .ref('queues/female_$bucket')
+    const int limit = 100; // Top 100 by totalTalkSeconds in this language bucket
+
+    // 2. Read the language bucket from the NEW RTDB only:
+    //    expert_buckets/<language>/<uid>  (online experts, ranked server-side
+    //    by totalTalkSeconds via .indexOn).
+    final snapshot = await UserDatabaseService.instance.expertBucketsRef
+        .child(bucket)
         .orderByChild('totalTalkSeconds')
         .limitToLast(limit)
         .get();
 
+    final String displayLang = bucket[0].toUpperCase() + bucket.substring(1);
     List<Map<dynamic, dynamic>> expertList = [];
     if (snapshot.exists) {
       for (var child in snapshot.children) {
-        if (child.value != null) {
-          Map<dynamic, dynamic> data = {};
-          
-          if (child.value is Map) {
-            data = Map<dynamic, dynamic>.from(child.value as Map);
-          } else {
-            // Real experts set from MatchmakingService just put a ServerValue.timestamp
-            data['timestamp'] = child.value;
-            data['nickname'] = 'Expert'; // Fallback if no nickname is in the payload
-          }
-          
+        if (child.value is Map) {
+          final data = Map<dynamic, dynamic>.from(child.value as Map);
           data['id'] = child.key;
-          
-          // Capitalize first letter for display
-          String displayLang = bucket.isEmpty ? 'Hindi' : bucket[0].toUpperCase() + bucket.substring(1);
           data['language'] = displayLang;
-          
+          data['isOnline'] = true; // bucket only holds online experts
           expertList.add(data);
         }
       }
     }
-    
-    // Fetch isOnline status for all fetched experts in parallel
-    await Future.wait(expertList.map((expert) async {
-      try {
-        final statusEvent = await db.ref('status/${expert['id']}/isOnline').once();
-        expert['isOnline'] = statusEvent.snapshot.value == true;
-      } catch (e) {
-        expert['isOnline'] = true; // Fallback
-      }
-    }));
 
-    // Client-side shuffle in RAM to randomize the top 150
+    // 3. Client-side shuffle in RAM to randomize the top 100
     expertList.shuffle();
-    
+
     return expertList;
   }
 

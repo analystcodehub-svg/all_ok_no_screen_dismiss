@@ -5,6 +5,7 @@ import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'user_database_service.dart';
 
 class LocalChatDatabase {
   static final LocalChatDatabase instance = LocalChatDatabase._init();
@@ -255,7 +256,42 @@ class LocalChatDatabase {
       log,
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
+
+    // Auto-prune phone SQLite: keep only last 50 calls per user
+    final callerId = log['callerId']?.toString() ?? '';
+    final receiverId = log['receiverId']?.toString() ?? '';
+    if (callerId.isNotEmpty) {
+      await _pruneLocalCallLogs(callerId, 50);
+    }
+    if (receiverId.isNotEmpty && receiverId != callerId) {
+      await _pruneLocalCallLogs(receiverId, 50);
+    }
+
     _updateController.add(null);
+  }
+
+  Future<void> _pruneLocalCallLogs(String uid, int maxKeep) async {
+    try {
+      final db = await instance.database;
+      final rows = await db.query(
+        'call_logs',
+        columns: ['logId'],
+        where: 'callerId = ? OR receiverId = ?',
+        whereArgs: [uid, uid],
+        orderBy: 'timestamp DESC',
+      );
+      if (rows.length > maxKeep) {
+        final toDelete = rows.sublist(maxKeep).map((r) => r['logId'] as String).toList();
+        final placeholders = List.filled(toDelete.length, '?').join(',');
+        await db.delete(
+          'call_logs',
+          where: 'logId IN ($placeholders)',
+          whereArgs: toDelete,
+        );
+      }
+    } catch (e) {
+      debugPrint('Error pruning local call logs for $uid: $e');
+    }
   }
 
   Future<List<Map<String, dynamic>>> getRecentCallLogs(String myId) async {
@@ -265,6 +301,7 @@ class LocalChatDatabase {
       where: 'callerId = ? OR receiverId = ?',
       whereArgs: [myId, myId],
       orderBy: 'timestamp DESC',
+      limit: 50,
     );
   }
 
@@ -278,7 +315,7 @@ class LocalChatDatabase {
     _updateController.add(null);
   }
 
-  // Sync last 50 call logs from Firestore (Only once per install/login)
+  // Sync last 20 call logs from RTDB (Fallback to Firestore if empty)
   Future<void> syncCallLogsFromFirestore(String myId) async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -288,6 +325,33 @@ class LocalChatDatabase {
         return; // Already synced once
       }
 
+      // 1. Try new RTDB user_call_logs (Capped at 20)
+      final rtdbLogs = await UserDatabaseService.instance.getUserCallLogs(myId, limit: 20);
+      if (rtdbLogs.isNotEmpty) {
+        final db = await instance.database;
+        final batch = db.batch();
+        for (var data in rtdbLogs) {
+          batch.insert(
+            'call_logs',
+            {
+              'logId': data['logId'] ?? '',
+              'callerId': data['callerId'] ?? '',
+              'receiverId': data['receiverId'] ?? '',
+              'durationSeconds': data['durationSeconds'] ?? 0,
+              'status': data['status'] ?? 'unknown',
+              'timestamp': data['timestamp'] ?? DateTime.now().millisecondsSinceEpoch,
+              'otherUserName': data['otherUserName'] ?? '',
+            },
+            conflictAlgorithm: ConflictAlgorithm.replace,
+          );
+        }
+        await batch.commit(noResult: true);
+        _updateController.add(null);
+        await prefs.setBool('has_synced_call_logs_$myId', true);
+        return;
+      }
+
+      // 2. Fallback to Firestore call_logs
       final snapshot = await FirebaseFirestore.instance
           .collection('call_logs')
           .where(Filter.or(

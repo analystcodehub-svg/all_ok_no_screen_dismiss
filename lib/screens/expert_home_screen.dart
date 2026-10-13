@@ -337,6 +337,18 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
       } catch (e) {
         debugPrint('[STATUS] ERROR updating online status: $e');
       }
+
+      // Language bucket in the NEW RTDB (feeds the male dashboard).
+      // Separate from the call/queue logic above so it can never affect it.
+      try {
+        if (value) {
+          await UserDatabaseService.instance.joinExpertBucket(expertId, appState.primaryLanguage);
+        } else {
+          await UserDatabaseService.instance.leaveExpertBucket(expertId, appState.primaryLanguage);
+        }
+      } catch (e) {
+        debugPrint('[STATUS] ERROR updating expert bucket: $e');
+      }
     } else {
       debugPrint('[STATUS] expertId is EMPTY — skipping Firestore update!');
     }

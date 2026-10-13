@@ -36,29 +36,37 @@ class CallService {
     }
   }
 
-  // WebRTC ICE Configuration using Google's free STUN servers
+  // WebRTC ICE Configuration.
+  // - 2 STUN servers instead of 5: extra Google STUN servers return the SAME
+  //   public IP, so they only add duplicate candidates (= extra RTDB writes
+  //   and extra connectivity checks) without improving connectivity.
+  // - TURN is KEPT as a fallback: many Indian mobile carriers (Jio/Airtel CGNAT)
+  //   use symmetric NAT where STUN alone fails. Because we use trickle ICE,
+  //   TURN gathering runs in parallel and does not delay calls that succeed
+  //   via STUN/host candidates.
+  // - iceCandidatePoolSize pre-gathers candidates as soon as the peer
+  //   connection is created, before the offer/answer is generated.
   final Map<String, dynamic> _iceConfiguration = {
     'iceServers': [
       {
         'urls': [
           'stun:stun.l.google.com:19302',
           'stun:stun1.l.google.com:19302',
-          'stun:stun2.l.google.com:19302',
-          'stun:stun3.l.google.com:19302',
-          'stun:stun4.l.google.com:19302',
         ]
       },
       {
         'urls': [
           'turn:openrelay.metered.ca:80',
-          'turn:openrelay.metered.ca:443',
           'turn:openrelay.metered.ca:443?transport=tcp'
         ],
         'username': 'openrelayproject',
         'credential': 'openrelayproject'
       }
     ],
-    'sdpSemantics': 'unified-plan'
+    'sdpSemantics': 'unified-plan',
+    'iceCandidatePoolSize': 2,
+    'bundlePolicy': 'max-bundle',
+    'rtcpMuxPolicy': 'require',
   };
 
   // Getters
@@ -108,14 +116,22 @@ class CallService {
     onRemoteStreamListener = onRemoteStream;
     onCallEndedListener = onCallEnded;
     try {
-      // 1. Initialize local media audio track
-      _localStream = await navigator.mediaDevices.getUserMedia({
-        'audio': true,
-        'video': false,
-      });
-
-      // 2. Create peer connection
-      _peerConnection = await createPeerConnection(_iceConfiguration);
+      // 1 + 2. Initialize local audio and peer connection IN PARALLEL
+      // (independent steps; the call doc — and therefore the FCM ring on the
+      // female phone — is created sooner).
+      final setup = await Future.wait<dynamic>([
+        navigator.mediaDevices.getUserMedia({
+          'audio': {
+            'echoCancellation': true,
+            'noiseSuppression': true,
+            'autoGainControl': true,
+          },
+          'video': false,
+        }),
+        createPeerConnection(_iceConfiguration),
+      ]);
+      _localStream = setup[0] as MediaStream;
+      _peerConnection = setup[1] as RTCPeerConnection;
 
       // 3. Add local track to connection
       _localStream!.getTracks().forEach((track) {
@@ -241,7 +257,30 @@ class CallService {
     onCallEndedListener = onCallEnded;
     try {
       final DatabaseReference roomRef = _database.ref('calls/$callRoomId');
-      final roomSnapshot = await roomRef.get();
+
+      // PARALLEL SETUP: previously these 3 steps ran one after another
+      // (RTDB read → mic hardware spin-up → peer connection). They are
+      // independent, so run them concurrently. Total wait becomes the
+      // slowest single step (~mic spin-up) instead of the sum of all three.
+      final results = await Future.wait<dynamic>([
+        roomRef.get(),
+        navigator.mediaDevices.getUserMedia({
+          'audio': {
+            'echoCancellation': true,
+            'noiseSuppression': true,
+            'autoGainControl': true,
+          },
+          'video': false,
+        }),
+        createPeerConnection(_iceConfiguration),
+      ]);
+
+      final roomSnapshot = results[0] as DataSnapshot;
+      // 1. Local media audio track
+      _localStream = results[1] as MediaStream;
+      // 2. Peer connection (already pre-gathering ICE via iceCandidatePoolSize)
+      _peerConnection = results[2] as RTCPeerConnection;
+
       if (!roomSnapshot.exists) {
         throw Exception('Call room not found');
       }
@@ -251,15 +290,6 @@ class CallService {
       if (offerMap == null) {
         throw Exception('No SDP Offer found in room');
       }
-
-      // 1. Initialize local media audio track
-      _localStream = await navigator.mediaDevices.getUserMedia({
-        'audio': true,
-        'video': false,
-      });
-
-      // 2. Create peer connection
-      _peerConnection = await createPeerConnection(_iceConfiguration);
 
       // 3. Add local track to connection
       _localStream!.getTracks().forEach((track) {
@@ -296,6 +326,26 @@ class CallService {
       );
       await _peerConnection!.setRemoteDescription(remoteDescription);
 
+      // Subscribe to remote ICE candidates (callerCandidates) IMMEDIATELY after
+      // the offer is applied — no need to wait for the answer write round-trip.
+      // onChildAdded also replays candidates the caller already uploaded.
+      final candidatesSub = roomRef
+          .child('callerCandidates')
+          .onChildAdded
+          .listen((event) {
+        if (event.snapshot.value != null && _peerConnection != null) {
+          final data = Map<String, dynamic>.from(event.snapshot.value as Map);
+          _peerConnection!.addCandidate(
+            RTCIceCandidate(
+              data['candidate'],
+              data['sdpMid'],
+              data['sdpMLineIndex'],
+            ),
+          );
+        }
+      });
+      _subscriptions.add(candidatesSub);
+
       // 7. Generate SDP Answer
       final RTCSessionDescription answer = await _peerConnection!.createAnswer();
       await _peerConnection!.setLocalDescription(answer);
@@ -316,24 +366,6 @@ class CallService {
         }
       });
       _subscriptions.add(roomSub);
-
-      // 10. Subscribe to remote ICE candidates (callerCandidates)
-      final candidatesSub = roomRef
-          .child('callerCandidates')
-          .onChildAdded
-          .listen((event) {
-        if (event.snapshot.value != null && _peerConnection != null) {
-          final data = Map<String, dynamic>.from(event.snapshot.value as Map);
-          _peerConnection!.addCandidate(
-            RTCIceCandidate(
-              data['candidate'],
-              data['sdpMid'],
-              data['sdpMLineIndex'],
-            ),
-          );
-        }
-      });
-      _subscriptions.add(candidatesSub);
     } catch (e) {
       debugPrint('Error accepting WebRTC call: $e');
       await disposeCall();

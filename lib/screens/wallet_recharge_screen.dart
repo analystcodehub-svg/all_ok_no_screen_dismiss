@@ -25,7 +25,7 @@ class RechargePackage {
     this.badgeColor,
   });
 
-  String get productId => 'sajnire_coins_${amount.toInt()}';
+  String get productId => 'sajnire_recharge_${amount.toInt()}';
 }
 
 class WalletRechargeScreen extends StatefulWidget {

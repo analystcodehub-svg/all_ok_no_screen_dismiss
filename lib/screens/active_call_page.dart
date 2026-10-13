@@ -50,8 +50,6 @@ class ActiveCallPage extends StatefulWidget {
 
 class _ActiveCallPageState extends State<ActiveCallPage> {
   late final CallService _callService;
-  final RTCVideoRenderer _localRenderer = RTCVideoRenderer();
-  final RTCVideoRenderer _remoteRenderer = RTCVideoRenderer();
   bool _isConnected = false;
   String? _roomId;
   int _duration = 0;
@@ -104,9 +102,9 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
         return;
       }
 
-      await _localRenderer.initialize();
-      await _remoteRenderer.initialize();
-
+      // Audio-only call: no RTCVideoRenderer surfaces are initialized
+      // (saves ~100-200ms of GL texture setup). WebRTC plays remote audio
+      // tracks automatically without a renderer.
       if (widget.preStartedCallService != null) {
         await _initCall();
         return;
@@ -118,7 +116,6 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
           onRemoteStream: (stream) {
             if (mounted) {
               setState(() {
-                _remoteRenderer.srcObject = stream;
                 _isConnected = true;
                 _isSpeakerOn = true;
               });
@@ -134,11 +131,7 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
 
         if (mounted) {
           setState(() {
-            if (_callService.localStream != null) {
-              _localRenderer.srcObject = _callService.localStream;
-            }
             if (_callService.remoteStream != null) {
-              _remoteRenderer.srcObject = _callService.remoteStream;
               _isConnected = true;
               _isSpeakerOn = true;
               _startCallTimer();
@@ -156,7 +149,6 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
             onRemoteStream: (stream) {
               if (mounted) {
                 setState(() {
-                  _remoteRenderer.srcObject = stream;
                   _isConnected = true;
                   _isSpeakerOn = true;
                 });
@@ -172,9 +164,6 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
           if (mounted) {
             setState(() {
               _roomId = generatedRoomId;
-              if (_callService.localStream != null) {
-                _localRenderer.srcObject = _callService.localStream;
-              }
             });
           } else {
             _callService.endCall(generatedRoomId);
@@ -270,7 +259,6 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
         onRemoteStream: (stream) {
           if (mounted) {
             setState(() {
-              _remoteRenderer.srcObject = stream;
               _isConnected = true;
               _isSpeakerOn = true;
             });
@@ -286,11 +274,7 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
 
       if (mounted) {
         setState(() {
-          if (_callService.localStream != null) {
-            _localRenderer.srcObject = _callService.localStream;
-          }
           if (_callService.remoteStream != null) {
-            _remoteRenderer.srcObject = _callService.remoteStream;
             _isConnected = true;
             _isSpeakerOn = true;
             _startCallTimer();
@@ -308,7 +292,6 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
           onRemoteStream: (stream) {
             if (mounted) {
               setState(() {
-                _remoteRenderer.srcObject = stream;
                 _isConnected = true;
                 _isSpeakerOn = true;
               });
@@ -324,9 +307,6 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
         if (mounted) {
           setState(() {
             _roomId = generatedRoomId;
-            if (_callService.localStream != null) {
-              _localRenderer.srcObject = _callService.localStream;
-            }
           });
         }
       } catch (e) {
@@ -344,7 +324,6 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
           onRemoteStream: (stream) {
             if (mounted) {
               setState(() {
-                _remoteRenderer.srcObject = stream;
                 _isConnected = true;
                 _isSpeakerOn = true;
               });
@@ -356,13 +335,6 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
           },
           onCallEnded: _hangupLocal,
         );
-        if (mounted) {
-          setState(() {
-            if (_callService.localStream != null) {
-              _localRenderer.srcObject = _callService.localStream;
-            }
-          });
-        }
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -564,7 +536,11 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
 
       if (widget.isCaller) {
         // INCREMENTAL FIX: Continuously sync the exact duration to the database!
-        await UserDatabaseService.instance.saveCallLog(logId, logData);
+        await UserDatabaseService.instance.saveCallLog(
+          logId,
+          logData,
+          isFinal: _isHangingUp,
+        );
         
         // Only save to local SQLite at the very end of the call to avoid UI flickering
         if (_isHangingUp) {
@@ -584,7 +560,10 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
       Map<String, dynamic>? logData;
       // Wait up to 5 seconds for the caller to write the call log to database
       for (int i = 0; i < 5; i++) {
-        logData = await UserDatabaseService.instance.getCallLog(logId);
+        logData = await UserDatabaseService.instance.getCallLog(
+          logId,
+          callerId: widget.callerId,
+        );
         if (logData != null) break;
         await Future.delayed(const Duration(seconds: 1));
       }
@@ -597,6 +576,9 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
         if (callerDuration < actualDuration) {
           actualDuration = callerDuration;
         }
+
+        // Save call log in expert's local SQLite history as well
+        await LocalChatDatabase.instance.saveCallLogLocally(data);
       } else {
         actualDuration = 0;
         debugPrint('Caller did not log the call (logDoc missing). Forcing actualDuration to 0 to prevent ghost earning.');
@@ -681,10 +663,6 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
     _timer?.cancel();
     _ringingTimer?.cancel();
     _balanceSub?.cancel();
-    _localRenderer.srcObject = null;
-    _remoteRenderer.srcObject = null;
-    _localRenderer.dispose();
-    _remoteRenderer.dispose();
     _callService.disposeCall();
     super.dispose();
   }
