@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
@@ -27,13 +28,20 @@ class AppTheme {
         onSurface: textBlack,
       ),
       appBarTheme: const AppBarTheme(
-        backgroundColor: primaryBlue,
+        backgroundColor: Colors.white,
         elevation: 0,
-        iconTheme: IconThemeData(color: Colors.white),
+        iconTheme: IconThemeData(color: primaryBlue),
         titleTextStyle: TextStyle(
-          color: Colors.white,
+          color: textBlack,
           fontSize: 20,
           fontWeight: FontWeight.bold,
+        ),
+        systemOverlayStyle: SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: Brightness.dark,
+          statusBarBrightness: Brightness.light,
+          systemNavigationBarColor: Colors.white,
+          systemNavigationBarIconBrightness: Brightness.dark,
         ),
       ),
       textTheme: GoogleFonts.poppinsTextTheme().copyWith(

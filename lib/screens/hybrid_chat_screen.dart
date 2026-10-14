@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../services/local_chat_database.dart';
 import '../services/hybrid_chat_service.dart';
 import '../theme/app_colors.dart';
@@ -280,6 +281,11 @@ class _HybridChatScreenState extends State<HybridChatScreen> with WidgetsBinding
     return Scaffold(
       backgroundColor: const Color(0xFFF0F2F5), // WhatsApp-like background
       appBar: AppBar(
+        systemOverlayStyle: const SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: Brightness.light,
+          statusBarBrightness: Brightness.dark,
+        ),
         flexibleSpace: Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
