@@ -35,7 +35,7 @@ class TermsConditionScreen extends StatelessWidget {
 
             _buildSection('2. For Male Users (Callers)',
               '• Male users can browse female expert profiles and initiate audio calls or chat sessions.\n'
-              '• Calls are charged at ₹3 per minute. The first call may include a free introductory period at our discretion.\n'
+              '• Calls are charged at ₹3 per minute.\n'
               '• Chat messages are charged at ₹0.50 per message after the first 5 free messages.\n'
               '• Charges are deducted from your in-app coin wallet. You must maintain a sufficient balance to use paid services.\n'
               '• You agree NOT to:\n'

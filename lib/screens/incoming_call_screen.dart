@@ -40,7 +40,6 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
       'avatarUrl': null,
       'avatarIndex': 1,
       'coinBalance': 0,
-      'hasUsedFreeCall': true,
     };
     try {
       final data = await UserDatabaseService.instance
@@ -53,8 +52,22 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
         result['avatarUrl'] = data['profileImageUrl'] ?? data['avatarUrl'];
         result['avatarIndex'] = (data['avatarIndex'] as num?)?.toInt() ?? 1;
         result['coinBalance'] = (data['coinBalance'] as num?)?.toInt() ?? 0;
-        result['hasUsedFreeCall'] = data['hasUsedFreeCall'] as bool? ?? false;
       }
+
+      // Check if room has exact callerCoins
+      try {
+        final rtdb = FirebaseDatabase.instanceFor(
+          app: FirebaseDatabase.instance.app,
+          databaseURL: 'https://zegochat-c44b0.asia-southeast1.firebasedatabase.app',
+        );
+        final roomSnap = await rtdb.ref('calls/${widget.callRoomId}').get();
+        if (roomSnap.exists && roomSnap.value != null) {
+          final rData = Map<String, dynamic>.from(roomSnap.value as Map);
+          if (rData['callerCoins'] != null) {
+            result['coinBalance'] = (rData['callerCoins'] as num).toInt();
+          }
+        }
+      } catch (_) {}
     } catch (e) {
       debugPrint("Error fetching caller data: $e");
     }
@@ -175,7 +188,6 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
             pricePerMin: 3.0,
             isCaller: false,
             callerCoinBalance: (callerData['coinBalance'] as num?)?.toInt() ?? 0,
-            callerHasUsedFreeCall: callerData['hasUsedFreeCall'] as bool? ?? true,
             onCallEnded: widget.onCallEnded,
           ),
         ),

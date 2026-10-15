@@ -59,8 +59,6 @@ class AppState extends ChangeNotifier {
   int _coinBalance = 0;
   int get coinBalance => _coinBalance;
 
-  bool _hasUsedFreeCall = false;
-  bool get hasUsedFreeCall => _hasUsedFreeCall;
 
   int _freeMessagesUsed = 0;
   int get freeMessagesUsed => _freeMessagesUsed;
@@ -147,10 +145,6 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setHasUsedFreeCall(bool used) {
-    _hasUsedFreeCall = used;
-    notifyListeners();
-  }
 
   void setFreeMessagesUsed(int count) {
     _freeMessagesUsed = count;
@@ -248,7 +242,6 @@ class AppState extends ChangeNotifier {
     _isOnline = false;
     _totalEarnings = 0.0;
     _coinBalance = 0;
-    _hasUsedFreeCall = false;
     _freeMessagesUsed = 0;
     _autoRetrievedSmsCode = null;
     _autoRetrievedCredential = null;

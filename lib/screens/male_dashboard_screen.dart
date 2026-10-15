@@ -44,10 +44,9 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
   static const Color brandTextGrey = Color(0xFF64748B); // Slate 500
   static const Color brandCardBg = Colors.white;
 
-  // (Pagination and old expert list removed for RTDB bucket system)
-  int _feedKey = 0;
-
+  final ScrollController _homeScrollController = ScrollController();
   StreamSubscription? _incomingCallSubscription;
+  StreamSubscription? _walletSubscription;
 
   Future<List<Map<String, dynamic>>> _fetchEnrichedCallLogs(String uid) async {
     final docs = await LocalChatDatabase.instance.getRecentCallLogs(uid);
@@ -154,10 +153,11 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
   }
 
 
-  void _showWelcomeBonusPopup() {
+
+  void _showFreeMessagesPopup() {
     showDialog(
       context: context,
-      barrierDismissible: false,
+      barrierDismissible: true,
       builder: (BuildContext context) {
         return Dialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
@@ -168,8 +168,8 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(24),
-              boxShadow: [
-                BoxShadow(color: Colors.black26, blurRadius: 10, offset: const Offset(0, 10)),
+              boxShadow: const [
+                BoxShadow(color: Colors.black26, blurRadius: 10, offset: Offset(0, 10)),
               ],
             ),
             child: Column(
@@ -177,19 +177,34 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
               children: [
                 Container(
                   padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(color: const Color(0xFFFEF3C7), shape: BoxShape.circle),
-                  child: const Icon(Icons.card_giftcard_rounded, size: 48, color: Color(0xFFF59E0B)),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFEFF6FF),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.mark_chat_unread_rounded,
+                    size: 48,
+                    color: Color(0xFF3B82F6),
+                  ),
                 ),
                 const SizedBox(height: 24),
                 const Text(
-                  '₹10 Welcome Bonus!',
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                  '5 मुफ़्त मैसेज!',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF0F172A),
+                  ),
                 ),
                 const SizedBox(height: 12),
                 const Text(
-                  'You have received ₹10 (100 Coins) as a welcome gift. You can use these coins to start making calls right away!',
+                  'आपको मिले हैं 5 मुफ़्त चैट मैसेज!\nअपनी पसंदीदा एक्सपर्ट से तुरंत चैटिंग शुरू करें।',
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 15, color: Color(0xFF64748B), height: 1.5),
+                  style: TextStyle(
+                    fontSize: 15,
+                    color: Color(0xFF64748B),
+                    height: 1.5,
+                  ),
                 ),
                 const SizedBox(height: 24),
                 SizedBox(
@@ -199,11 +214,18 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
                       Navigator.of(context).pop();
                     },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF4F46E5),
+                      backgroundColor: const Color(0xFF3B82F6),
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
-                    child: const Text('Claim Coins', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                    child: const Text(
+                      'चैट शुरू करें',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -350,6 +372,19 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
         );
       },
     );
+
+    // Listen to real-time wallet balance changes
+    _walletSubscription?.cancel();
+    _walletSubscription = UserDatabaseService.instance.usersRef
+        .child(myUid)
+        .child('coinBalance')
+        .onValue
+        .listen((event) {
+      if (event.snapshot.exists && event.snapshot.value != null && mounted) {
+        final coins = (event.snapshot.value as num).toInt();
+        context.read<AppState>().setCoinBalance(coins);
+      }
+    });
   }
 
   @override
@@ -358,6 +393,8 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
     // HybridChatService.instance.dispose();
     _chatUpdatesSubscription?.cancel();
     _incomingCallSubscription?.cancel();
+    _walletSubscription?.cancel();
+    _homeScrollController.dispose();
     super.dispose();
   }
 
@@ -370,29 +407,22 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
       final data = await UserDatabaseService.instance.getUser(myUid);
       if (data != null) {
         int coinBalance = (data['coinBalance'] as num?)?.toInt() ?? 0;
-
-        // Welcome Bonus Logic
-        final bool welcomeBonusReceived = data['welcomeBonusReceived'] as bool? ?? false;
-        if (!welcomeBonusReceived) {
-          coinBalance += 100;
-          await UserDatabaseService.instance.updateUser(myUid, {
-            'coinBalance': coinBalance,
-            'welcomeBonusReceived': true,
-          });
-          
-          if (mounted) {
-            _showWelcomeBonusPopup();
-          }
-        }
-
-        final hasUsedFreeCall = data['hasUsedFreeCall'] as bool? ?? false;
         final freeMessagesUsed = (data['freeMessagesUsed'] as num?)?.toInt() ?? 0;
+        final bool seenFreeMessagesPopup = data['seenFreeMessagesPopup'] as bool? ?? false;
         appState.setCoinBalance(coinBalance);
-        appState.setHasUsedFreeCall(hasUsedFreeCall);
         appState.setFreeMessagesUsed(freeMessagesUsed);
 
-        // Check if male user has zero balance
-        if (welcomeBonusReceived && coinBalance <= 0 && mounted) {
+        // Show Free 5 Messages Popup in Hindi if not seen yet and free messages available
+        if (!seenFreeMessagesPopup && freeMessagesUsed < 5) {
+          await UserDatabaseService.instance.updateUser(myUid, {
+            'seenFreeMessagesPopup': true,
+          });
+          if (mounted) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) _showFreeMessagesPopup();
+            });
+          }
+        } else if (coinBalance <= 0 && mounted) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted) _showZeroBalancePopup();
           });
@@ -405,19 +435,19 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
       } else {
         await UserDatabaseService.instance.setUser(myUid, {
           'uid': myUid,
-          'coinBalance': 100,
-          'welcomeBonusReceived': true,
-          'hasUsedFreeCall': false,
+          'coinBalance': 0,
+          'seenFreeMessagesPopup': true,
           'createdAt': DateTime.now().millisecondsSinceEpoch,
           'freeMessagesUsed': 0,
           'gender': 'male',
         });
-        appState.setCoinBalance(100);
-        appState.setHasUsedFreeCall(false);
+        appState.setCoinBalance(0);
         appState.setFreeMessagesUsed(0);
         
         if (mounted) {
-          _showWelcomeBonusPopup();
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _showFreeMessagesPopup();
+          });
         }
       }
       
@@ -469,8 +499,7 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
 
     const overridePricePerMin = 3.0; // Enforce ₹3/min for male callers
     
-    // Temporary disable 2 min free
-    if (balance < (overridePricePerMin * 10).toInt() /* && hasUsedFreeCall */) {
+    if (balance < (overridePricePerMin * 10).toInt()) {
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
@@ -520,8 +549,7 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
 
     const requiredCoins = 30; // equivalent to ₹3/min
     
-    // Temporary disable 2 min free
-    if (balance < requiredCoins /* && hasUsedFreeCall */) {
+    if (balance < requiredCoins) {
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
@@ -675,6 +703,7 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
     final appState = context.watch<AppState>();
 
     return SingleChildScrollView(
+      controller: _homeScrollController,
       child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -866,85 +895,6 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
             ),
 
 
-            /*
-            // FIRST 2 MIN FREE Banner
-            if (false /* !appState.hasUsedFreeCall */)
-              GestureDetector(
-                onTap: _startRandomMatchmaking,
-                child: Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFFF97316), Color(0xFFEA580C)], // Sunset Orange gradient
-                      begin: Alignment.centerLeft,
-                      end: Alignment.centerRight,
-                    ),
-                    borderRadius: BorderRadius.circular(16), // Sharper
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFFF97316).withValues(alpha: 0.35),
-                        blurRadius: 20,
-                        offset: const Offset(0, 8),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      // Gift icon
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.2),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Text('🎁', style: TextStyle(fontSize: 22)),
-                      ),
-                      const SizedBox(width: 14),
-                      // Main text
-                      const Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'FIRST 2 MIN FREE!',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 18,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 0.8,
-                              ),
-                            ),
-                            SizedBox(height: 3),
-                            Text(
-                              'Tap to connect now ✨',
-                              style: TextStyle(
-                                color: Colors.white70,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      // Arrow
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.2),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.arrow_forward_rounded,
-                          color: Colors.white,
-                          size: 20,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            */
 
             // Promotional Banner (5 FREE MESSAGES + SALE)
             Container(
@@ -1110,35 +1060,23 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
             ),
 
             // Section Header
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
-              child: Row(
-                children: [
-                  const Text(
-                    'Featured Experts',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      color: brandTextDark,
-                    ),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Featured Experts',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: brandTextDark,
                   ),
-                  const Spacer(),
-                  IconButton(
-                    icon: const Icon(Icons.refresh_rounded, color: brandPrimary, size: 22),
-                    tooltip: 'Refresh Experts',
-                    onPressed: () {
-                      setState(() {
-                        _feedKey++;
-                      });
-                    },
-                  ),
-                ],
+                ),
               ),
             ),
-            const SizedBox(height: 0), // Reduced height since IconButton adds padding
 
-            // Integrated Expert Feed Screen (Fetch Once)
-            ExpertFeedScreen(key: ValueKey(_feedKey)),
+            // Integrated Expert Feed Screen (Live Real-Time Stream with Progressive Pagination)
+            ExpertFeedScreen(scrollController: _homeScrollController),
           ],
         ),
       );

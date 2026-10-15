@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_database/firebase_database.dart';
 import 'local_avatar_widget.dart';
 
 class ExpertCard extends StatelessWidget {
@@ -79,36 +78,13 @@ class ExpertCard extends StatelessWidget {
                           spacing: 8,
                           runSpacing: 4,
                           children: [
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                StreamBuilder<DatabaseEvent>(
-                                  stream: FirebaseDatabase.instanceFor(
-                                    app: FirebaseDatabase.instance.app,
-                                    databaseURL: 'https://zegochat-c44b0.asia-southeast1.firebasedatabase.app',
-                                  ).ref('status/$expertId/isOnline').onValue,
-                                  builder: (context, snapshot) {
-                                    bool currentOnline = isOnline; // default to initial
-                                    if (snapshot.hasData && snapshot.data!.snapshot.value != null) {
-                                      currentOnline = snapshot.data!.snapshot.value == true;
-                                    }
-                                    return Icon(
-                                      Icons.fiber_manual_record,
-                                      size: 10,
-                                      color: currentOnline ? Colors.green : Colors.grey,
-                                    );
-                                  },
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  '$age Yrs',
-                                  style: const TextStyle(
-                                    fontSize: 13,
-                                    color: Colors.grey,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ],
+                            Text(
+                              '$age Yrs',
+                              style: const TextStyle(
+                                fontSize: 13,
+                                color: Colors.grey,
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
                             Row(
                               mainAxisSize: MainAxisSize.min,

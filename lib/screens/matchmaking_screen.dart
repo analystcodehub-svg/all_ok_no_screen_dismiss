@@ -210,9 +210,12 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> with SingleTicker
 
 
     try {
+      final maleCoins = mounted ? context.read<AppState>().coinBalance : null;
       final callRoomId = await _callService.startCall(
         expertId: matchedExpertUid,
         callerId: callerUid,
+        callerCoins: maleCoins,
+        pricePerMin: 3.0,
         onRemoteStream: (stream) {},
         onCallEnded: () {},
       );
@@ -281,7 +284,6 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> with SingleTicker
                 pricePerMin: pricePerMin,
                 isCaller: true,
                 preStartedCallService: _callService,
-                isFirstFreeCall: false, // Temporary disable 2 min free: !hasUsedFreeCall,
               ),
             ),
           );

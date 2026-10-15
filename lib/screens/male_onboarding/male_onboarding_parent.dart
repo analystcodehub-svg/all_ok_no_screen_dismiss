@@ -46,7 +46,6 @@ class _MaleOnboardingParentState extends State<MaleOnboardingParent> {
           'primaryLanguage': appState.primaryLanguage,
           'avatarIndex': appState.avatarIndex,
           'coinBalance': appState.coinBalance,
-          'hasUsedFreeCall': appState.hasUsedFreeCall,
           'freeMessagesUsed': 0,
         });
 

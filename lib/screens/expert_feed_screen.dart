@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:math';
+import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_state.dart';
@@ -7,28 +10,86 @@ import 'hybrid_chat_screen.dart';
 import '../widgets/expert_card.dart';
 import 'wallet_recharge_screen.dart';
 import '../services/user_database_service.dart';
+
 class ExpertFeedScreen extends StatefulWidget {
-  const ExpertFeedScreen({super.key});
+  final ScrollController? scrollController;
+  const ExpertFeedScreen({super.key, this.scrollController});
 
   @override
   State<ExpertFeedScreen> createState() => _ExpertFeedScreenState();
 }
 
 class _ExpertFeedScreenState extends State<ExpertFeedScreen> {
-  Future<List<Map<dynamic, dynamic>>>? _expertsFuture;
+  StreamSubscription<DatabaseEvent>? _bucketSubscription;
+  List<Map<dynamic, dynamic>> _displayExperts = [];
+  bool _isLoading = true;
+  String _displayLang = 'Hindi';
+
+  // Progressive Streaming Pagination parameters (50 initially, +15 on scroll, max 100)
+  static const int _initialCount = 50;
+  static const int _batchSize = 15;
+  static const int _maxCeiling = 100;
+
+  int _visibleCount = _initialCount;
+  bool _isLoadingMore = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.scrollController?.addListener(_onScroll);
+  }
+
+  @override
+  void didUpdateWidget(covariant ExpertFeedScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.scrollController != widget.scrollController) {
+      oldWidget.scrollController?.removeListener(_onScroll);
+      widget.scrollController?.addListener(_onScroll);
+    }
+  }
+
+  void _onScroll() {
+    if (widget.scrollController == null) return;
+    final pos = widget.scrollController!.position;
+    if (pos.pixels >= pos.maxScrollExtent - 300) {
+      _loadMore();
+    }
+  }
+
+  void _loadMore() {
+    if (_isLoadingMore) return;
+    final int currentTotal = _displayExperts.length < _maxCeiling
+        ? _displayExperts.length
+        : _maxCeiling;
+    if (_visibleCount >= currentTotal) return;
+
+    setState(() {
+      _isLoadingMore = true;
+    });
+
+    Future.delayed(const Duration(milliseconds: 250), () {
+      if (!mounted) return;
+      setState(() {
+        _visibleCount = (_visibleCount + _batchSize).clamp(0, _maxCeiling);
+        _isLoadingMore = false;
+      });
+    });
+  }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _expertsFuture ??= _fetchExperts();
+    if (_bucketSubscription == null) {
+      _initBucketStream();
+    }
   }
 
-  Future<List<Map<dynamic, dynamic>>> _fetchExperts() async {
+  Future<void> _initBucketStream() async {
     final appState = context.read<AppState>();
     String mobile = appState.uid.isNotEmpty ? appState.uid : appState.mobileNumber;
     String languageCode = Localizations.localeOf(context).languageCode;
 
-    // 1. Male's language -> bucket key (same normalisation the experts use).
+    // 1. Male's language -> bucket key
     String language = '';
     try {
       final userData = await UserDatabaseService.instance.getUser(mobile);
@@ -39,73 +100,151 @@ class _ExpertFeedScreenState extends State<ExpertFeedScreen> {
     if (language.trim().isEmpty) language = appState.primaryLanguage;
     if (language.trim().isEmpty && languageCode == 'pa') language = 'punjabi';
     final String bucket = UserDatabaseService.bucketKeyFor(language);
+    _displayLang = bucket[0].toUpperCase() + bucket.substring(1);
 
     const int limit = 100; // Top 100 by totalTalkSeconds in this language bucket
 
-    // 2. Read the language bucket from the NEW RTDB only:
-    //    expert_buckets/<language>/<uid>  (online experts, ranked server-side
-    //    by totalTalkSeconds via .indexOn).
-    final snapshot = await UserDatabaseService.instance.expertBucketsRef
+    // 2. Real-time stream from Firebase RTDB
+    final query = UserDatabaseService.instance.expertBucketsRef
         .child(bucket)
         .orderByChild('totalTalkSeconds')
-        .limitToLast(limit)
-        .get();
+        .limitToLast(limit);
 
-    final String displayLang = bucket[0].toUpperCase() + bucket.substring(1);
-    List<Map<dynamic, dynamic>> expertList = [];
-    if (snapshot.exists) {
-      for (var child in snapshot.children) {
-        if (child.value is Map) {
-          final data = Map<dynamic, dynamic>.from(child.value as Map);
-          data['id'] = child.key;
-          data['language'] = displayLang;
-          data['isOnline'] = true; // bucket only holds online experts
-          expertList.add(data);
+    await _bucketSubscription?.cancel();
+    _bucketSubscription = query.onValue.listen((event) {
+      final snapshot = event.snapshot;
+      final Map<String, Map<dynamic, dynamic>> incomingMap = {};
+
+      if (snapshot.exists && snapshot.children.isNotEmpty) {
+        for (var child in snapshot.children) {
+          if (child.value is Map) {
+            final data = Map<dynamic, dynamic>.from(child.value as Map);
+            data['id'] = child.key;
+            data['language'] = _displayLang;
+            data['isOnline'] = true;
+            incomingMap[child.key!] = data;
+          }
         }
       }
-    }
 
-    // 3. Client-side shuffle in RAM to randomize the top 100
-    expertList.shuffle();
+      if (!mounted) return;
 
-    return expertList;
+      setState(() {
+        _isLoading = false;
+        if (_displayExperts.isEmpty) {
+          // Initial load: take all and randomize
+          _displayExperts = incomingMap.values.toList()..shuffle();
+        } else {
+          // Live incremental sync:
+          // 1. Remove experts who went offline
+          _displayExperts.removeWhere((exp) => !incomingMap.containsKey(exp['id']));
+
+          // 2. Update existing experts with fresh stats/avatars
+          for (int i = 0; i < _displayExperts.length; i++) {
+            final id = _displayExperts[i]['id'];
+            if (incomingMap.containsKey(id)) {
+              _displayExperts[i] = incomingMap[id]!;
+            }
+          }
+
+          // 3. Add newly online experts at a randomized position for fair immediate exposure
+          final existingIds = _displayExperts.map((e) => e['id']).toSet();
+          final newExperts = incomingMap.values
+              .where((e) => !existingIds.contains(e['id']))
+              .toList()
+            ..shuffle();
+
+          final rand = Random();
+          for (var newExp in newExperts) {
+            final insertIndex = _displayExperts.isEmpty
+                ? 0
+                : rand.nextInt(_displayExperts.length + 1);
+            _displayExperts.insert(insertIndex, newExp);
+          }
+
+          // Cap at 100
+          if (_displayExperts.length > 100) {
+            _displayExperts = _displayExperts.sublist(0, 100);
+          }
+        }
+      });
+    }, onError: (error) {
+      debugPrint('Error listening to expert bucket: $error');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    widget.scrollController?.removeListener(_onScroll);
+    _bucketSubscription?.cancel();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<Map<dynamic, dynamic>>>(
-      future: _expertsFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
+    if (_isLoading) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 32.0),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
 
-          if (snapshot.hasError) {
-            return Center(
-              child: Text(
-                'Error loading experts',
-                style: TextStyle(color: Colors.red[400]),
-              ),
-            );
-          }
+    if (_displayExperts.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 32.0),
+        child: Center(
+          child: Text(
+            'No experts available right now.',
+            style: TextStyle(fontSize: 16, color: Colors.grey),
+          ),
+        ),
+      );
+    }
 
-          final experts = snapshot.data;
-          if (experts == null || experts.isEmpty) {
-            return const Center(
-              child: Text(
-                'No experts available right now.',
-                style: TextStyle(fontSize: 16, color: Colors.grey),
-              ),
-            );
-          }
+    final int currentVisibleTotal = _displayExperts.length < _visibleCount
+        ? _displayExperts.length
+        : (_visibleCount > _maxCeiling ? _maxCeiling : _visibleCount);
+    final bool hasMoreToLoad = currentVisibleTotal < _displayExperts.length && currentVisibleTotal < _maxCeiling;
+    final int totalListCount = currentVisibleTotal + (hasMoreToLoad ? 1 : 0);
 
-          return ListView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: experts.length,
-            padding: const EdgeInsets.only(top: 8, bottom: 24),
-            itemBuilder: (context, index) {
-              final expert = experts[index];
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: totalListCount,
+      padding: const EdgeInsets.only(top: 8, bottom: 24),
+      itemBuilder: (context, index) {
+        if (index == currentVisibleTotal) {
+          // Bottom loader tile for progressive streaming pagination
+          if (!_isLoadingMore) {
+            WidgetsBinding.instance.addPostFrameCallback((_) => _loadMore());
+          }
+          return Container(
+            padding: const EdgeInsets.symmetric(vertical: 20),
+            alignment: Alignment.center,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: const [
+                SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF4F46E5)),
+                ),
+                SizedBox(width: 12),
+                Text(
+                  'Loading more experts...',
+                  style: TextStyle(fontSize: 13, color: Color(0xFF64748B), fontWeight: FontWeight.w500),
+                ),
+              ],
+            ),
+          );
+        }
+
+        final expert = _displayExperts[index];
               final String nickname = expert['nickname'] ?? 'Unknown';
               final String language = expert['language'] ?? 'Hindi';
               final bool isOnline = expert['isOnline'] ?? true;
@@ -217,7 +356,5 @@ class _ExpertFeedScreenState extends State<ExpertFeedScreen> {
               );
             },
           );
-        },
-      );
   }
 }

@@ -262,6 +262,19 @@ Future<void> _showCallkitIncoming(Map<String, dynamic> data) async {
     } catch (e) {
       debugPrint('[CallKit] Error caching caller coins: $e');
     }
+
+    // Also check calls room node on primary RTDB
+    try {
+      final roomSnap = await FirebaseDatabase.instanceFor(
+        app: Firebase.app(),
+        databaseURL: 'https://zegochat-c44b0.asia-southeast1.firebasedatabase.app',
+      ).ref('calls/$callRoomId/callerCoins').get();
+      if (roomSnap.exists && roomSnap.value != null) {
+        final coins = (roomSnap.value as num).toInt();
+        await prefs.setInt('callerCoins_$callRoomId', coins);
+        debugPrint('[CallKit] Cached caller coins from room: $coins for $callRoomId');
+      }
+    } catch (_) {}
   }
 
   // Explicitly play the ringtone using flutter_ringtone_player

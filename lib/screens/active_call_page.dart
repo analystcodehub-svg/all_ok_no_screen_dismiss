@@ -19,13 +19,11 @@ class ActiveCallPage extends StatefulWidget {
   final String nickname;
   final bool isCaller;
   final double pricePerMin;
-  final bool isFirstFreeCall;
   final CallService? preStartedCallService;
   final String? avatarUrl;
   final int avatarIndex;
   final VoidCallback? onCallEnded;
   final int? callerCoinBalance;
-  final bool? callerHasUsedFreeCall;
 
   const ActiveCallPage({
     super.key,
@@ -35,13 +33,11 @@ class ActiveCallPage extends StatefulWidget {
     required this.nickname,
     required this.isCaller,
     required this.pricePerMin,
-    this.isFirstFreeCall = false,
     this.preStartedCallService,
     this.avatarUrl,
     this.avatarIndex = 1,
     this.onCallEnded,
     this.callerCoinBalance,
-    this.callerHasUsedFreeCall,
   });
 
   @override
@@ -72,6 +68,10 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
     _roomId = widget.callRoomId;
     _callService = widget.preStartedCallService ?? CallService();
     
+    if (widget.callerCoinBalance != null && widget.callerCoinBalance! > 0) {
+      _callerCoinBalance = widget.callerCoinBalance;
+    }
+
     if (!widget.isCaller) {
       _resolveRemoteData();
     }
@@ -143,9 +143,12 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
 
       if (widget.isCaller) {
         try {
+          final maleCoins = mounted ? context.read<AppState>().coinBalance : null;
           final generatedRoomId = await _callService.startCall(
             expertId: widget.receiverId,
             callerId: widget.callerId,
+            callerCoins: maleCoins,
+            pricePerMin: widget.pricePerMin,
             onRemoteStream: (stream) {
               if (mounted) {
                 setState(() {
@@ -188,17 +191,29 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
 
       debugPrint('[_resolveRemoteData] Initial - expert: $actualExpertId, caller: $actualCallerId');
 
-      if (actualExpertId.isEmpty || actualCallerId.isEmpty || actualCallerId.length < 20 || actualCallerId.contains(' ') || actualCallerId == 'Unknown Caller') {
-        final FirebaseDatabase database = FirebaseDatabase.instanceFor(
-          app: FirebaseDatabase.instance.app,
-          databaseURL: 'https://zegochat-c44b0.asia-southeast1.firebasedatabase.app',
-        );
-        final callDoc = await database.ref('calls/${widget.callRoomId}').get();
-        if (callDoc.exists) {
-          final data = Map<String, dynamic>.from(callDoc.value as Map);
-          actualCallerId = data['callerId'] ?? actualCallerId;
-          actualExpertId = data['receiverId'] ?? actualExpertId;
-          debugPrint('[_resolveRemoteData] Fetched from calls - expert: $actualExpertId, caller: $actualCallerId');
+      if (widget.callRoomId != null) {
+        try {
+          final FirebaseDatabase database = FirebaseDatabase.instanceFor(
+            app: FirebaseDatabase.instance.app,
+            databaseURL: 'https://zegochat-c44b0.asia-southeast1.firebasedatabase.app',
+          );
+          final callDoc = await database.ref('calls/${widget.callRoomId}').get();
+          if (callDoc.exists) {
+            final data = Map<String, dynamic>.from(callDoc.value as Map);
+            actualCallerId = data['callerId'] ?? actualCallerId;
+            actualExpertId = data['receiverId'] ?? actualExpertId;
+            debugPrint('[_resolveRemoteData] Fetched from calls - expert: $actualExpertId, caller: $actualCallerId');
+            if (data['callerCoins'] != null && _callerCoinBalance == null) {
+              final c = (data['callerCoins'] as num).toInt();
+              if (mounted) {
+                setState(() {
+                  _callerCoinBalance = c;
+                });
+              }
+            }
+          }
+        } catch (e) {
+          debugPrint('[_resolveRemoteData] Error fetching callDoc: $e');
         }
       }
 
@@ -215,17 +230,17 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
       }
 
       if (actualCallerId.isNotEmpty) {
-        final callerData = await UserDatabaseService.instance.getUser(actualCallerId);
-        debugPrint('[_resolveRemoteData] callerData exists: ${callerData != null}');
-        if (callerData != null) {
-          final b = (callerData['coinBalance'] as num?)?.toInt() ?? 0;
-          debugPrint('[_resolveRemoteData] Setting balance: $b');
-          if (mounted) {
-            setState(() {
-              if (_callerCoinBalance == null || _duration <= 1) {
+        if (_callerCoinBalance == null) {
+          final callerData = await UserDatabaseService.instance.getUser(actualCallerId);
+          debugPrint('[_resolveRemoteData] callerData exists: ${callerData != null}');
+          if (callerData != null) {
+            final b = (callerData['coinBalance'] as num?)?.toInt() ?? 0;
+            debugPrint('[_resolveRemoteData] Setting balance: $b');
+            if (mounted && _callerCoinBalance == null) {
+              setState(() {
                 _callerCoinBalance = b;
-              }
-            });
+              });
+            }
           }
         }
 
@@ -289,6 +304,8 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
         final generatedRoomId = await _callService.startCall(
           expertId: widget.receiverId,
           callerId: widget.callerId,
+          callerCoins: context.read<AppState>().coinBalance,
+          pricePerMin: widget.pricePerMin,
           onRemoteStream: (stream) {
             if (mounted) {
               setState(() {
@@ -346,16 +363,6 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
     }
   }
 
-  void _markFreeCallUsed() async {
-    final appState = context.read<AppState>();
-    final myUid = appState.uid;
-    appState.setHasUsedFreeCall(true);
-    await UserDatabaseService.instance.updateUser(myUid, {
-      'hasUsedFreeCall': true,
-    });
-  }
-
-
   void _startCallTimer() {
     if (_timer != null && _timer!.isActive) return;
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
@@ -364,46 +371,45 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
         _duration++;
       });
 
-      if (_duration == 1 && widget.isCaller && widget.isFirstFreeCall) {
-        _markFreeCallUsed();
-      }
-
-      // At exactly 2 min (120s): free period ends, check balance immediately
-      if (_duration == 120 && widget.isCaller && widget.isFirstFreeCall) {
-        final balance = context.read<AppState>().coinBalance;
-        if (balance < (widget.pricePerMin * 10).toInt()) {
+      // Female auto-hangup guard if duration exceeds caller's affordable time
+      if (!widget.isCaller) {
+        final balance = _callerCoinBalance ?? widget.callerCoinBalance ?? 30;
+        int reqCoins = (widget.pricePerMin * 10).toInt();
+        if (reqCoins <= 0) reqCoins = 30;
+        int maxMins = balance ~/ reqCoins;
+        if (maxMins <= 0 && balance > 0) maxMins = 1;
+        int maxSecs = maxMins * 60;
+        if (_duration > maxSecs && !_isHangingUp) {
           _triggerHangup();
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Free 2 minutes over! Recharge to keep talking.'),
-              backgroundColor: Colors.orange,
-              duration: Duration(seconds: 4),
-            ),
-          );
           return;
         }
       }
 
-      // Deduct balances at the start of every minute (1s, 61s, 121s) after free period
-      // Deduct balances at the start of every minute (1s, 61s, 121s) after free period
+      // Check and deduct balances on every first second of minute start (1s, 61s, 121s, 181s...)
       if (_duration > 0 && (_duration - 1) % 60 == 0) {
         if (widget.isCaller) {
-          bool isFreeMinute = widget.isFirstFreeCall && _duration <= 120;
-          if (!isFreeMinute) {
-            final requiredCoins = (widget.pricePerMin * 10).toInt();
-            final currentBalance = context.read<AppState>().coinBalance;
-            
-            if (currentBalance < requiredCoins) {
-              _triggerHangup();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Call ended: Insufficient balance')),
-              );
-              return;
-            } else {
-              context.read<AppState>().deductCoinBalance(requiredCoins);
-              // Deduct new RTDB instantly
-              UserDatabaseService.instance.deductUserCoins(widget.callerId, requiredCoins);
-            }
+          final requiredCoins = (widget.pricePerMin * 10).toInt() > 0
+              ? (widget.pricePerMin * 10).toInt()
+              : 30;
+          final currentBalance = context.read<AppState>().coinBalance;
+          
+          if (currentBalance < requiredCoins) {
+            _triggerHangup();
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Call ended: Insufficient balance')),
+            );
+            return;
+          } else {
+            context.read<AppState>().deductCoinBalance(requiredCoins);
+            // Deduct new RTDB instantly via transaction
+            UserDatabaseService.instance.deductUserCoins(widget.callerId, requiredCoins).then((success) {
+              if (!success && mounted && !_isHangingUp) {
+                _triggerHangup();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Call ended: Insufficient balance')),
+                );
+              }
+            });
           }
           
           // Male incrementally logs the duration!
@@ -597,14 +603,7 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
         debugPrint('Call duration on Firestore was less than 50s. No earnings.');
       }
     } catch (e) {
-      debugPrint('Error verifying earnings: $e');
-      // Fallback to local duration if Firestore fails
-      int callMinutes = localDuration ~/ 60;
-      if (localDuration % 60 >= 50) {
-        callMinutes += 1;
-      }
-      final earned = _expertEarningRate * callMinutes;
-      await _updateExpertStats(earned, localDuration, 'hindi');
+      debugPrint('Error verifying earnings: $e. Unverified earnings will not be credited to prevent fraud.');
     }
   }
 

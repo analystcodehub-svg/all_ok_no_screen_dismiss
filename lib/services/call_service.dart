@@ -112,6 +112,8 @@ class CallService {
     required String callerId,
     required Function(MediaStream stream) onRemoteStream,
     required Function() onCallEnded,
+    int? callerCoins,
+    double pricePerMin = 3.0,
   }) async {
     onRemoteStreamListener = onRemoteStream;
     onCallEndedListener = onCallEnded;
@@ -150,6 +152,16 @@ class CallService {
         onRemoteStreamListener?.call(_remoteStream!);
       };
 
+      // Detect network disconnection immediately via WebRTC ICE state
+      _peerConnection!.onIceConnectionState = (RTCIceConnectionState state) {
+        debugPrint('[WebRTC] Caller ICE State: $state');
+        if (state == RTCIceConnectionState.RTCIceConnectionStateDisconnected ||
+            state == RTCIceConnectionState.RTCIceConnectionStateFailed ||
+            state == RTCIceConnectionState.RTCIceConnectionStateClosed) {
+          onCallEndedListener?.call();
+        }
+      };
+
       // 5. Create call document in RTDB
       final DatabaseReference roomRef = _database.ref('calls').push();
       final String roomId = roomRef.key!;
@@ -181,6 +193,8 @@ class CallService {
         'callerId': callerId,
         'receiverId': expertId,
         'status': 'calling',
+        'callerCoins': ?callerCoins,
+        'pricePerMin': pricePerMin,
       });
 
       bool remoteDescriptionSet = false;
@@ -306,6 +320,16 @@ class CallService {
       _peerConnection!.onAddStream = (MediaStream stream) {
         _remoteStream = stream;
         onRemoteStreamListener?.call(_remoteStream!);
+      };
+
+      // Detect network disconnection immediately via WebRTC ICE state
+      _peerConnection!.onIceConnectionState = (RTCIceConnectionState state) {
+        debugPrint('[WebRTC] Receiver ICE State: $state');
+        if (state == RTCIceConnectionState.RTCIceConnectionStateDisconnected ||
+            state == RTCIceConnectionState.RTCIceConnectionStateFailed ||
+            state == RTCIceConnectionState.RTCIceConnectionStateClosed) {
+          onCallEndedListener?.call();
+        }
       };
 
       // 5. Handle local ICE candidates and upload them
