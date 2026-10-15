@@ -8,6 +8,7 @@ import '../services/call_service.dart';
 import 'active_call_page.dart';
 import 'package:flutter_ringtone_player/flutter_ringtone_player.dart';
 import '../services/user_database_service.dart';
+import '../services/local_chat_database.dart';
 
 class IncomingCallScreen extends StatefulWidget {
   final String callRoomId;
@@ -202,6 +203,25 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
     _vibrateTimer?.cancel();
     FlutterRingtonePlayer().stop();
     
+    final appState = context.read<AppState>();
+    final currentUserId = appState.uid;
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final logId = 'log_${widget.callRoomId}';
+    
+    _callerDataFuture.then((callerData) {
+      final logData = {
+        'logId': logId,
+        'callerId': widget.callerId,
+        'receiverId': currentUserId,
+        'otherUserName': callerData['nickname'] ?? 'User',
+        'durationSeconds': 0,
+        'status': 'missed',
+        'timestamp': timestamp,
+      };
+      LocalChatDatabase.instance.saveCallLogLocally(logData);
+      UserDatabaseService.instance.saveCallLog(logId, logData, isFinal: true);
+    }).catchError((_) {});
+
     if (mounted) {
       Navigator.pop(context);
     }

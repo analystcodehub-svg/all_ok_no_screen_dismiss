@@ -440,20 +440,43 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
     _timer?.cancel();
     _ringingTimer?.cancel();
     
-    // Final sync for any remaining seconds
-    if (widget.isCaller) {
-      _saveCallLogIncremental();
-    }
+    final int finalDuration = _duration;
+    final status = finalDuration > 0 ? 'ended' : 'missed';
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final logId = 'log_${_roomId ?? timestamp}';
     
-    // Caller's Wallet is now safely deducted incrementally in the timer!
+    final logData = {
+      'logId': logId,
+      'callerId': widget.callerId,
+      'receiverId': widget.receiverId,
+      'otherUserName': widget.nickname,
+      'durationSeconds': finalDuration,
+      'status': status,
+      'timestamp': timestamp,
+    };
+
+    // ALWAYS save to local SQLite on this device immediately!
+    LocalChatDatabase.instance.saveCallLogLocally(logData);
+
+    // ALWAYS save final call log to RTDB (syncs to both caller & receiver)
+    UserDatabaseService.instance.saveCallLog(
+      logId,
+      logData,
+      isFinal: true,
+    );
 
     // Credit expert earnings and update talk time at end of call (only if >= 50 seconds)
     if (!widget.isCaller) {
-      if (_duration >= 50) {
-        // Fetch caller's logged duration to prevent ghost call earnings
-        _verifyAndCreditExpertEarnings();
-      } else if (_duration > 0) {
-        // Female talked for less than 50 seconds
+      if (finalDuration >= 50) {
+        int callMinutes = finalDuration ~/ 60;
+        if (finalDuration % 60 >= 50) {
+          callMinutes += 1;
+        }
+        final earned = _expertEarningRate * callMinutes;
+        _updateExpertStats(earned, finalDuration, 'hindi');
+        debugPrint('Expert earned: ₹${earned.toStringAsFixed(2)} (${finalDuration}s at ₹$_expertEarningRate/min, billed as $callMinutes min)');
+      } else if (finalDuration > 0) {
+        // Female talked for less than 50 seconds -> Earns Rs 0
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Aapko Rs 1 earn karne ke liye kam se kam 50 seconds baat karni hogi.'),
@@ -558,54 +581,6 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
     }
   }
 
-  Future<void> _verifyAndCreditExpertEarnings() async {
-    final localDuration = _duration;
-    final logId = 'log_${_roomId ?? DateTime.now().millisecondsSinceEpoch}';
-    
-    try {
-      Map<String, dynamic>? logData;
-      // Wait up to 5 seconds for the caller to write the call log to database
-      for (int i = 0; i < 5; i++) {
-        logData = await UserDatabaseService.instance.getCallLog(
-          logId,
-          callerId: widget.callerId,
-        );
-        if (logData != null) break;
-        await Future.delayed(const Duration(seconds: 1));
-      }
-      
-      int actualDuration = localDuration;
-      if (logData != null) {
-        final data = logData;
-        final callerDuration = (data['durationSeconds'] as num?)?.toInt() ?? 0;
-        // Use the caller's duration if it's smaller, to give the exact figure
-        if (callerDuration < actualDuration) {
-          actualDuration = callerDuration;
-        }
-
-        // Save call log in expert's local SQLite history as well
-        await LocalChatDatabase.instance.saveCallLogLocally(data);
-      } else {
-        actualDuration = 0;
-        debugPrint('Caller did not log the call (logDoc missing). Forcing actualDuration to 0 to prevent ghost earning.');
-      }
-      
-      if (actualDuration >= 50) {
-        int callMinutes = actualDuration ~/ 60;
-        if (actualDuration % 60 >= 50) {
-          callMinutes += 1;
-        }
-        final earned = _expertEarningRate * callMinutes;
-        
-        await _updateExpertStats(earned, actualDuration, 'hindi');
-        debugPrint('Expert earned: ₹${earned.toStringAsFixed(2)} (${actualDuration}s at ₹$_expertEarningRate/min, billed as $callMinutes min)');
-      } else {
-        debugPrint('Call duration on Firestore was less than 50s. No earnings.');
-      }
-    } catch (e) {
-      debugPrint('Error verifying earnings: $e. Unverified earnings will not be credited to prevent fraud.');
-    }
-  }
 
   void _toggleMute() {
     if (_callService.localStream != null) {

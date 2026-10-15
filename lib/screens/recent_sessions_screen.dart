@@ -14,7 +14,20 @@ class RecentSessionsScreen extends StatefulWidget {
 class _RecentSessionsScreenState extends State<RecentSessionsScreen> {
 
   Future<List<Map<String, dynamic>>> _fetchEnrichedCallLogs(String uid) async {
-    final docs = await LocalChatDatabase.instance.getRecentCallLogs(uid);
+    List<Map<String, dynamic>> docs = await LocalChatDatabase.instance.getRecentCallLogs(uid);
+    if (docs.isEmpty && uid.isNotEmpty) {
+      try {
+        final rtdbLogs = await UserDatabaseService.instance.getUserCallLogs(uid, limit: 20);
+        if (rtdbLogs.isNotEmpty) {
+          for (var log in rtdbLogs) {
+            await LocalChatDatabase.instance.saveCallLogLocally(log);
+          }
+          docs = await LocalChatDatabase.instance.getRecentCallLogs(uid);
+        }
+      } catch (e) {
+        debugPrint('Error syncing RTDB call logs fallback: $e');
+      }
+    }
     final enriched = <Map<String, dynamic>>[];
     for (var data in docs) {
       final map = Map<String, dynamic>.from(data);
@@ -189,7 +202,7 @@ class _RecentSessionsScreenState extends State<RecentSessionsScreen> {
 
                           // Determine duration text and cost
                           String durationText = isMissed ? 'Missed Call' : 'Ended';
-                          String costText = isMissed ? '₹0' : 'Ended';
+                          String costText = isMissed ? 'Rs 0' : 'Ended';
                           
                           if (!isMissed && data['durationSeconds'] != null) {
                             final sec = data['durationSeconds'] as int;
@@ -204,10 +217,15 @@ class _RecentSessionsScreenState extends State<RecentSessionsScreen> {
                             
                             if (isCaller) {
                               // Caller is User (Male), uses Coins
-                              costText = '-${callMinutes * 50} Coins';
+                              final coins = callMinutes > 0 ? callMinutes * 30 : 30;
+                              costText = '-$coins Coins';
                             } else {
                               // Receiver is Expert (Female), earns Rupees
-                              costText = '+₹${callMinutes.toStringAsFixed(1)}';
+                              if (sec < 50 || callMinutes == 0) {
+                                costText = 'Rs 0';
+                              } else {
+                                costText = '+₹$callMinutes';
+                              }
                             }
                           }
 
@@ -354,7 +372,9 @@ class _RecentSessionsScreenState extends State<RecentSessionsScreen> {
                 decoration: BoxDecoration(
                   color: isMissed 
                     ? Colors.red.withValues(alpha: 0.1) 
-                    : AppColors.successGreen.withValues(alpha: 0.1),
+                    : (cost == 'Rs 0' || cost == '₹0')
+                      ? Colors.grey.withValues(alpha: 0.15)
+                      : AppColors.successGreen.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
@@ -362,7 +382,11 @@ class _RecentSessionsScreenState extends State<RecentSessionsScreen> {
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
-                    color: isMissed ? Colors.red : AppColors.successGreen,
+                    color: isMissed 
+                      ? Colors.red 
+                      : (cost == 'Rs 0' || cost == '₹0')
+                        ? AppColors.textGrey
+                        : AppColors.successGreen,
                   ),
                 ),
               ),
