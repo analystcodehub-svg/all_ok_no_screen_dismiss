@@ -86,47 +86,15 @@ class _RecentSessionsScreenState extends State<RecentSessionsScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Header
-            Padding(
-              padding: const EdgeInsets.only(left: 20, right: 20, top: 20, bottom: 10),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Recent Session',
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textDark,
-                    ),
-                  ),
-                  if (currentUserId.isNotEmpty)
-                    TextButton.icon(
-                      onPressed: () {
-                        showDialog(
-                          context: context,
-                          builder: (context) => AlertDialog(
-                            title: const Text('Clear History'),
-                            content: const Text('Are you sure you want to clear all your recent sessions?'),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(context),
-                                child: const Text('Cancel'),
-                              ),
-                              TextButton(
-                                onPressed: () {
-                                  Navigator.pop(context);
-                                  LocalChatDatabase.instance.clearCallLogs(currentUserId);
-                                },
-                                child: const Text('Clear', style: TextStyle(color: Colors.red)),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                      icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
-                      label: const Text('Clear', style: TextStyle(color: Colors.red)),
-                    ),
-                ],
+            const Padding(
+              padding: EdgeInsets.only(left: 20, right: 20, top: 20, bottom: 10),
+              child: Text(
+                'Recent Session',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textDark,
+                ),
               ),
             ),
 
