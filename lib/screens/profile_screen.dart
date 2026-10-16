@@ -14,65 +14,9 @@ import 'privacy_policy_screen.dart';
 import 'referral_screen.dart';
 
 import 'wallet_recharge_screen.dart';
-import '../services/user_database_service.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
-
-  void _showEditNicknameDialog(BuildContext context, AppState appState) {
-    final TextEditingController controller = TextEditingController(text: appState.nickname);
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Edit Name'),
-          content: TextField(
-            controller: controller,
-            textCapitalization: TextCapitalization.words,
-            decoration: const InputDecoration(
-              labelText: 'New Name',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryBlue),
-              onPressed: () async {
-                final newName = controller.text.trim();
-                if (newName.isNotEmpty) {
-                  try {
-                    final uid = FirebaseAuth.instance.currentUser?.uid;
-                    if (uid != null) {
-                      if (appState.selectedGender == 'Female') {
-                        await UserDatabaseService.instance.updateExpert(uid, {
-                          'nickname': newName,
-                        });
-                      } else {
-                        await UserDatabaseService.instance.updateUser(uid, {
-                          'nickname': newName,
-                        });
-                      }
-                      appState.setNickname(newName);
-                    }
-                  } catch (e) {
-                    debugPrint('Error updating name: $e');
-                  }
-                  if (context.mounted) {
-                    Navigator.pop(context);
-                  }
-                }
-              },
-              child: const Text('Save', style: TextStyle(color: Colors.white)),
-            ),
-          ],
-        );
-      },
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -115,30 +59,14 @@ class ProfileScreen extends StatelessWidget {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           const SizedBox(height: 20),
-                          // Username and Edit Icon
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(
-                                nickname,
-                                style: const TextStyle(
-                                  fontSize: 28,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              InkWell(
-                                onTap: () {
-                                  _showEditNicknameDialog(context, appState);
-                                },
-                                child: const Icon(
-                                  Icons.edit,
-                                  color: Colors.white70,
-                                  size: 20,
-                                ),
-                              ),
-                            ],
+                          // Username
+                          Text(
+                            nickname,
+                            style: const TextStyle(
+                              fontSize: 28,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
                           ),
                         ],
                       ),
