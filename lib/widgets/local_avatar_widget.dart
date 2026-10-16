@@ -22,11 +22,23 @@ class LocalAvatarWidget extends StatelessWidget {
     
     ImageProvider imageProvider;
 
+    final int targetDim = (radius * 2.5).toInt().clamp(48, 256);
+
     if (avatarUrl != null && avatarUrl!.isNotEmpty) {
-      imageProvider = NetworkImage(avatarUrl!);
+      imageProvider = ResizeImage(
+        NetworkImage(avatarUrl!),
+        width: targetDim,
+        height: targetDim,
+        allowUpscaling: false,
+      );
     } else {
       assetPath = role == 'expert' ? 'assets/avatars/female_$avatarIndex.png' : 'assets/avatars/male_$avatarIndex.png';
-      imageProvider = AssetImage(assetPath);
+      imageProvider = ResizeImage(
+        AssetImage(assetPath),
+        width: targetDim,
+        height: targetDim,
+        allowUpscaling: false,
+      );
     }
 
     return CircleAvatar(

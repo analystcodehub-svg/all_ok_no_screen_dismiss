@@ -25,6 +25,24 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // ── Memory Optimization (Google Play Vitals & Bitmap Thresholds) ──────
+  // 1. Cap memory image cache from default 100MB+ down to 35MB
+  PaintingBinding.instance.imageCache.maximumSizeBytes = 35 << 20; // 35 MB
+  PaintingBinding.instance.imageCache.maximumSize = 60; // 60 images
+
+  // 2. Automatically release bitmap memory when app is backgrounded or hidden
+  AppLifecycleListener(
+    onHide: () {
+      PaintingBinding.instance.imageCache.clear();
+      PaintingBinding.instance.imageCache.clearLiveImages();
+      debugPrint('[Memory] App backgrounded: Released non-visible bitmap caches.');
+    },
+    onPause: () {
+      PaintingBinding.instance.imageCache.clear();
+      PaintingBinding.instance.imageCache.clearLiveImages();
+    },
+  );
+
   // Register port to reliably identify if UI isolate is alive from the background
   IsolateNameServer.removePortNameMapping('ui_isolate');
   IsolateNameServer.registerPortWithName(ReceivePort().sendPort, 'ui_isolate');
