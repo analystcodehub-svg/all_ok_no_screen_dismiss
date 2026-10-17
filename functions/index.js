@@ -431,3 +431,142 @@ exports.onRtdbPresenceChanged = functions.region("asia-south1").database
   });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// CLOUD FUNCTION 5: onFemaleIntroCallInitiated
+// Dedicated trigger for new female-to-male 1-min free intro calls.
+// Isolated on database instance: zegochat-c44b0-1e689
+// Dispatches high-priority data-only FCM push to wake male users in killed state.
+// ─────────────────────────────────────────────────────────────────────────────
+
+exports.onFemaleIntroCallInitiated = functions.region("asia-south1").database
+  .instance("zegochat-c44b0-1e689")
+  .ref("calls/{callId}")
+  .onCreate(async (snap, context) => {
+    const callData = snap.val();
+    const callId = context.params.callId;
+
+    if (!callData) return null;
+
+    const receiverId = callData.receiverId; // Male user UID
+    const callerId   = callData.callerId;   // Female expert UID
+
+    functions.logger.info(`[onFemaleIntroCallInitiated] callId=${callId}, caller=${callerId}, receiver=${receiverId}`);
+
+    if (!receiverId || !callerId) {
+      functions.logger.warn("Missing receiverId or callerId — aborting intro call.");
+      return null;
+    }
+
+    const newDb = admin.app().database("https://zegochat-c44b0-1e689.asia-southeast1.firebasedatabase.app");
+
+    // ── Safety Check: Has the male user already used their single 1-min free intro call? ──
+    try {
+      const recordSnap = await newDb.ref(`free_intro_call_records/${receiverId}`).once("value");
+      if (recordSnap.exists() && recordSnap.val().hasUsed === true) {
+        functions.logger.warn(`Male receiver '${receiverId}' has already consumed their free intro call.`);
+        await snap.ref.update({ status: "rejected_already_used" });
+        return null;
+      }
+    } catch (err) {
+      functions.logger.error("Error checking free intro call records:", err);
+    }
+
+    // ── Check if caller is blocked by receiver ────────────────────────────
+    try {
+      const blockedDoc = await db.collection("blocked_users").doc(receiverId).get();
+      if (blockedDoc.exists) {
+        const blockedUids = blockedDoc.data().blocked_uids || [];
+        if (blockedUids.includes(callerId)) {
+          functions.logger.info(`Caller '${callerId}' is blocked by Receiver '${receiverId}'. Suppressing intro call.`);
+          await snap.ref.update({ status: "rejected_blocked" });
+          return null;
+        }
+      }
+    } catch (err) {
+      functions.logger.error("Error checking blocked status:", err);
+    }
+
+    // ── Retrieve Male FCM Token ──────────────────────────────────────────
+    let fcmToken = callData.receiverFcmToken || null;
+
+    if (!fcmToken) {
+      // Lookup in user RTDB (zegochat-c44b0-4cbfb)
+      try {
+        const userRtdb = admin.app().database("https://zegochat-c44b0-4cbfb.asia-southeast1.firebasedatabase.app");
+        const userSnap = await userRtdb.ref(`users/${receiverId}/fcmToken`).once("value");
+        if (userSnap.exists() && userSnap.val()) {
+          fcmToken = userSnap.val();
+        }
+      } catch (err) {
+        functions.logger.error("Error querying user RTDB for FCM token:", err);
+      }
+    }
+
+    if (!fcmToken) {
+      // Fallback: lookup in Firestore users collection
+      try {
+        const userDoc = await db.collection("users").doc(receiverId).get();
+        if (userDoc.exists && userDoc.data().fcmToken) {
+          fcmToken = userDoc.data().fcmToken;
+        }
+      } catch (err) {
+        functions.logger.error("Error querying Firestore for FCM token:", err);
+      }
+    }
+
+    if (!fcmToken) {
+      functions.logger.warn(`Male receiver '${receiverId}' has no FCM token — cannot wake app.`);
+      return null;
+    }
+
+    // ── Retrieve Caller (Female) Display Info ─────────────────────────────
+    let callerName = callData.callerName || "";
+    let callerAvatar = callData.callerAvatar || "";
+
+    if (!callerName || callerName === callerId) {
+      try {
+        const userRtdb = admin.app().database("https://zegochat-c44b0-4cbfb.asia-southeast1.firebasedatabase.app");
+        const expertSnap = await userRtdb.ref(`experts/${callerId}`).once("value");
+        if (expertSnap.exists()) {
+          const d = expertSnap.val();
+          callerName = d.nickname || d.name || callerId;
+          callerAvatar = d.profileImageUrl || d.avatarUrl || "";
+        }
+      } catch (_) {}
+    }
+
+    if (!callerName || callerName === callerId) {
+      try {
+        const expertDoc = await db.collection("experts").doc(callerId).get();
+        if (expertDoc.exists) {
+          const d = expertDoc.data();
+          callerName = d.nickname || d.name || callerId;
+          callerAvatar = d.avatarPath || d.avatarUrl || "";
+        }
+      } catch (_) {}
+    }
+
+    // ── Build High-Priority FCM Data Payload (Wakes killed-state CallKit) ───
+    const fcmData = {
+      type: "call",
+      callUuid: callId,
+      callRoomId: callId,
+      callerId: callerId,
+      callerName: callerName || "Female Host",
+      callerAvatar: callerAvatar || "",
+      receiverId: receiverId,
+      dbUrl: "https://zegochat-c44b0-1e689.asia-southeast1.firebasedatabase.app",
+      isFreeIntroCall: "true",
+      maxDurationSeconds: "60",
+    };
+
+    // Send data-only message (no notification block) to wake background isolate & CallKit
+    await sendFcmMessage(fcmToken, fcmData, null, true);
+
+    functions.logger.info(
+      `[onFemaleIntroCallInitiated] High-priority intro call push sent to male '${receiverId}'.`
+    );
+    return null;
+  });
+
+
+// ─────────────────────────────────────────────────────────────────────────────

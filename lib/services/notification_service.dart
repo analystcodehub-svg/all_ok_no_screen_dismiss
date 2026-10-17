@@ -225,9 +225,15 @@ Future<void> _showCallkitIncoming(Map<String, dynamic> data) async {
   // 2. Prevent "Ghost Ringing" without delaying the UI!
   // We immediately show the CallKit UI, but we also attach a listener.
   // If the RTDB connects and tells us the call is already ended/deleted, we kill the CallKit UI instantly.
+  final dbUrl = data['dbUrl'] as String? ?? 'https://zegochat-c44b0.asia-southeast1.firebasedatabase.app';
+  final isFreeIntro = data['isFreeIntroCall'] == 'true' || data['isFreeIntroCall'] == true;
+
   StreamSubscription? ghostCheckSub;
   if (callRoomId.isNotEmpty) {
-    ghostCheckSub = FirebaseDatabase.instance.ref('calls/$callRoomId').onValue.listen((event) {
+    ghostCheckSub = FirebaseDatabase.instanceFor(
+      app: Firebase.app(),
+      databaseURL: dbUrl,
+    ).ref('calls/$callRoomId').onValue.listen((event) {
       if (!event.snapshot.exists || (event.snapshot.value as Map?)?['status'] == 'ended') {
         debugPrint('[CallKit] Ghost call detected (ended/deleted). Auto-canceling CallKit.');
         FlutterCallkitIncoming.endCall(uuid);
@@ -246,6 +252,8 @@ Future<void> _showCallkitIncoming(Map<String, dynamic> data) async {
   final prefs = await SharedPreferences.getInstance();
   await prefs.setString('callerName_$callRoomId', callerName);
   await prefs.setString('callerId_$callRoomId', callerId);
+  await prefs.setString('dbUrl_$callRoomId', dbUrl);
+  await prefs.setBool('isFreeIntroCall_$callRoomId', isFreeIntro);
 
   // Pre-fetch caller's balance from RTDB for immediate accurate countdown timer
   if (callerId.isNotEmpty) {
@@ -667,6 +675,8 @@ class NotificationService {
         final resolvedName = storedCallerName ?? NotificationService.lastCallerName ?? 'Unknown';
         final resolvedCallerId = prefs.getString('callerId_$callRoomId') ?? '';
         final storedCallerCoins = prefs.getInt('callerCoins_$callRoomId');
+        final storedDbUrl = prefs.getString('dbUrl_$callRoomId');
+        final storedIsFreeIntro = prefs.getBool('isFreeIntroCall_$callRoomId') ?? false;
 
         void pushRoute() {
           if (navigatorKey?.currentState != null) {
@@ -677,6 +687,9 @@ class NotificationService {
                 'callerName': resolvedName,
                 'callerId': resolvedCallerId,
                 'callerCoins': storedCallerCoins,
+                'dbUrl': storedDbUrl,
+                'isFreeIntroCall': storedIsFreeIntro,
+                'maxDurationSeconds': 60,
               },
             );
           } else {
@@ -692,7 +705,9 @@ class NotificationService {
         // End call properly via CallService (this also unlocks both users in RTDB)
         if (callRoomId.isNotEmpty) {
           try {
-            await CallService().endCall(callRoomId);
+            final prefs = await SharedPreferences.getInstance();
+            final storedDbUrl = prefs.getString('dbUrl_$callRoomId');
+            await CallService(databaseURL: storedDbUrl).endCall(callRoomId);
           } catch (e) {
             debugPrint('[CallKit] RTDB error: $e');
           }
@@ -703,7 +718,9 @@ class NotificationService {
         
         // End call properly via CallService to release locks
         if (callRoomId.isNotEmpty) {
-           await CallService().endCall(callRoomId);
+           final prefs = await SharedPreferences.getInstance();
+           final storedDbUrl = prefs.getString('dbUrl_$callRoomId');
+           await CallService(databaseURL: storedDbUrl).endCall(callRoomId);
         }
         await FlutterCallkitIncoming.endAllCalls();
       }

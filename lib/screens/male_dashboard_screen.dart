@@ -23,6 +23,7 @@ import '../utils/auto_start_helper.dart';
 import '../services/foreground_task_service.dart';
 import '../services/local_chat_database.dart';
 import '../services/user_database_service.dart';
+import '../services/new_male_service.dart';
 
 class MaleCallerDashboard extends StatefulWidget {
   const MaleCallerDashboard({super.key});
@@ -46,6 +47,7 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
 
   final ScrollController _homeScrollController = ScrollController();
   StreamSubscription? _incomingCallSubscription;
+  StreamSubscription? _introCallSubscription;
   StreamSubscription? _walletSubscription;
 
   Future<List<Map<String, dynamic>>> _fetchEnrichedCallLogs(String uid) async {
@@ -373,6 +375,37 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
       },
     );
 
+    // Listen for incoming 1-minute intro calls from female experts on new database (zegochat-c44b0-1e689)
+    _introCallSubscription?.cancel();
+    _introCallSubscription = CallService(
+      databaseURL: NewMaleService.newDbUrl,
+    ).listenForIncomingCalls(
+      expertId: myUid,
+      onCallReceived: (roomId, callerId) {
+        if (!mounted) return;
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => IncomingCallScreen(
+              callRoomId: roomId,
+              callerId: callerId,
+              callDatabaseURL: NewMaleService.newDbUrl,
+              isFreeIntroCall: true,
+            ),
+          ),
+        );
+      },
+    );
+
+    // Sync male user to new_males_pool on new RTDB for female discovery
+    NewMaleService.instance.registerOrUpdateMale(
+      uid: myUid,
+      nickname: appState.nickname,
+      avatarUrl: '',
+      avatarIndex: appState.avatarIndex,
+      isOnline: true,
+    );
+
     // Listen to real-time wallet balance changes
     _walletSubscription?.cancel();
     _walletSubscription = UserDatabaseService.instance.usersRef
@@ -393,6 +426,7 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
     // HybridChatService.instance.dispose();
     _chatUpdatesSubscription?.cancel();
     _incomingCallSubscription?.cancel();
+    _introCallSubscription?.cancel();
     _walletSubscription?.cancel();
     _homeScrollController.dispose();
     super.dispose();

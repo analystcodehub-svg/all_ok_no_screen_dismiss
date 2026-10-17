@@ -7,10 +7,16 @@ import 'block_service.dart';
 import 'user_database_service.dart';
 
 class CallService {
-  final FirebaseDatabase _database = FirebaseDatabase.instanceFor(
-    app: FirebaseDatabase.instance.app,
-    databaseURL: 'https://zegochat-c44b0.asia-southeast1.firebasedatabase.app',
-  );
+  final String databaseURL;
+  final FirebaseDatabase _database;
+
+  CallService({
+    String? databaseURL,
+  })  : databaseURL = databaseURL ?? 'https://zegochat-c44b0.asia-southeast1.firebasedatabase.app',
+        _database = FirebaseDatabase.instanceFor(
+          app: FirebaseDatabase.instance.app,
+          databaseURL: databaseURL ?? 'https://zegochat-c44b0.asia-southeast1.firebasedatabase.app',
+        );
 
   RTCPeerConnection? _peerConnection;
   MediaStream? _localStream;
@@ -114,6 +120,7 @@ class CallService {
     required Function() onCallEnded,
     int? callerCoins,
     double pricePerMin = 3.0,
+    Map<String, dynamic>? extraRoomData,
   }) async {
     onRemoteStreamListener = onRemoteStream;
     onCallEndedListener = onCallEnded;
@@ -195,6 +202,7 @@ class CallService {
         'status': 'calling',
         'callerCoins': ?callerCoins,
         'pricePerMin': pricePerMin,
+        ...?extraRoomData,
       });
 
       bool remoteDescriptionSet = false;

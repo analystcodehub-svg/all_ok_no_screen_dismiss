@@ -197,9 +197,15 @@ class _SajniReAppState extends State<SajniReApp> with WidgetsBindingObserver {
             receiverId: appState.uid,
             callerId:   resolvedCallerId,
             nickname:   args['callerName'] as String,
-            pricePerMin: 3.0,
+            pricePerMin: (args['isFreeIntroCall'] == true || args['isFreeIntroCall'] == 'true')
+                ? 0.0
+                : ((args['pricePerMin'] as num?)?.toDouble() ?? 3.0),
             isCaller: false,     // Receiver is accepting
             callerCoinBalance: args['callerCoins'] as int?,
+            callDatabaseURL: args['dbUrl'] as String?,
+            isFreeIntroCall: args['isFreeIntroCall'] == true || args['isFreeIntroCall'] == 'true',
+            maxDurationSeconds: (args['maxDurationSeconds'] as num?)?.toInt() ??
+                ((args['isFreeIntroCall'] == true || args['isFreeIntroCall'] == 'true') ? 60 : null),
           );
         },
         '/chat': (context) {

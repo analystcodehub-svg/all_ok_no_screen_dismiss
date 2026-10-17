@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../theme/app_colors.dart';
 import '../providers/app_state.dart';
 import '../services/local_chat_database.dart';
 import '../widgets/local_avatar_widget.dart';
 import 'hybrid_chat_screen.dart';
 import '../services/user_database_service.dart';
+import '../services/new_male_service.dart';
+import '../services/call_service.dart';
+import '../services/block_service.dart';
+import 'active_call_page.dart';
 
 class ChatListScreen extends StatefulWidget {
   const ChatListScreen({super.key});
@@ -16,12 +21,17 @@ class ChatListScreen extends StatefulWidget {
 
 class _ChatListScreenState extends State<ChatListScreen> {
   late String _currentUserMobile;
+  Future<List<Map<String, dynamic>>>? _newMalesFuture;
+  bool _isCallingUser = false;
 
   @override
   void initState() {
     super.initState();
-    // We defer getting the current user mobile to build() using Provider, 
-    // but we can initialize data fetching here if needed.
+    _refreshNewMales();
+  }
+
+  void _refreshNewMales() {
+    _newMalesFuture = NewMaleService.instance.fetchNewMalesWithFallback(limit: 20);
   }
 
   Future<List<Map<String, dynamic>>> _fetchEnrichedChats(String myUid, bool isCurrentMale) async {
@@ -141,6 +151,8 @@ class _ChatListScreenState extends State<ChatListScreen> {
                 ),
               ),
             ),
+            if (!isCurrentMale)
+              _buildNewMaleUsersSection(context, appState),
             // List View connected to Local SQLite
             Expanded(
               child: StreamBuilder<void>(
@@ -337,5 +349,438 @@ class _ChatListScreenState extends State<ChatListScreen> {
         ),
       ),
     );
+  }
+
+  Widget _buildNewMaleUsersSection(BuildContext context, AppState appState) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 2, 16, 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFE4E6),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.person_pin_rounded, color: Color(0xFFE11D48), size: 18),
+                  ),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'New Users',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.textDark,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFDCFCE7),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Text(
+                      '1-Min Free',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF166534),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              InkWell(
+                onTap: () => _handleRandomCall(context, appState),
+                borderRadius: BorderRadius.circular(20),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFFE11D48), Color(0xFFF43F5E)],
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFFF43F5E).withValues(alpha: 0.3),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.shuffle_rounded, color: Colors.white, size: 14),
+                      SizedBox(width: 5),
+                      Text(
+                        'Random Call',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            height: 98,
+            child: FutureBuilder<List<Map<String, dynamic>>>(
+              future: _newMalesFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: 5,
+                    itemBuilder: (context, index) => Padding(
+                      padding: const EdgeInsets.only(right: 12),
+                      child: Column(
+                        children: [
+                          Container(
+                            width: 50,
+                            height: 50,
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade200,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Container(
+                            width: 42,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade200,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+
+                final users = snapshot.data ?? [];
+                if (users.isEmpty) {
+                  return const Center(
+                    child: Text(
+                      'No new users available right now.',
+                      style: TextStyle(fontSize: 12, color: AppColors.textGrey),
+                    ),
+                  );
+                }
+
+                return ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  physics: const BouncingScrollPhysics(),
+                  itemCount: users.length > 20 ? 20 : users.length,
+                  itemBuilder: (context, index) {
+                    final user = users[index];
+                    final nickname = user['nickname'] as String? ?? 'User';
+                    final avatarUrl = user['avatarUrl'] as String?;
+                    final avatarIndex = (user['avatarIndex'] as num?)?.toInt() ?? 1;
+
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 14),
+                      child: InkWell(
+                        onTap: () => _startIntroCall(context, appState, user),
+                        borderRadius: BorderRadius.circular(16),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Stack(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(2),
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: const Color(0xFFF43F5E),
+                                      width: 1.8,
+                                    ),
+                                  ),
+                                  child: LocalAvatarWidget(
+                                    uid: user['uid'] ?? '',
+                                    role: 'user',
+                                    radius: 23,
+                                    avatarIndex: avatarIndex,
+                                    avatarUrl: avatarUrl,
+                                  ),
+                                ),
+                                Positioned(
+                                  bottom: 0,
+                                  right: 0,
+                                  child: Container(
+                                    padding: const EdgeInsets.all(3),
+                                    decoration: const BoxDecoration(
+                                      color: Color(0xFF10B981),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(
+                                      Icons.call,
+                                      size: 10,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 5),
+                            SizedBox(
+                              width: 58,
+                              child: Text(
+                                nickname,
+                                textAlign: TextAlign.center,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.textDark,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF3F4F6),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: const Text(
+                                '1m Free',
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  color: Color(0xFF6B7280),
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _startIntroCall(
+    BuildContext context,
+    AppState appState,
+    Map<String, dynamic> maleUser,
+  ) async {
+    if (_isCallingUser) return;
+    final status = await Permission.microphone.request();
+    if (!status.isGranted) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Microphone permission required for calling.')),
+        );
+      }
+      return;
+    }
+
+    setState(() => _isCallingUser = true);
+    final targetUid = maleUser['uid'] as String;
+    final nickname = maleUser['nickname'] as String? ?? 'User';
+    final avatarUrl = maleUser['avatarUrl'] as String?;
+    final avatarIndex = (maleUser['avatarIndex'] as num?)?.toInt() ?? 1;
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+              ),
+              const SizedBox(width: 12),
+              Text('Calling $nickname (1-Min Free Intro)...'),
+            ],
+          ),
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    }
+
+    try {
+      final callService = CallService(databaseURL: NewMaleService.newDbUrl);
+      final roomId = await callService.startCall(
+        expertId: targetUid,
+        callerId: appState.uid,
+        callerCoins: 0,
+        pricePerMin: 0.0,
+        extraRoomData: {
+          'isFreeIntroCall': true,
+          'maxDurationSeconds': 60,
+          'callerName': appState.nickname.isNotEmpty ? appState.nickname : 'Female Expert',
+          'callerAvatar': 'assets/avatars/female_${appState.avatarIndex}.png',
+          'callerAvatarIndex': appState.avatarIndex,
+          'receiverFcmToken': maleUser['fcmToken'] ?? '',
+          'dbUrl': NewMaleService.newDbUrl,
+        },
+        onRemoteStream: (_) {},
+        onCallEnded: () {},
+      );
+
+      if (mounted) {
+        setState(() => _isCallingUser = false);
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ActiveCallPage(
+              callRoomId: roomId,
+              receiverId: targetUid,
+              callerId: appState.uid,
+              nickname: nickname,
+              avatarUrl: avatarUrl,
+              avatarIndex: avatarIndex,
+              pricePerMin: 0.0,
+              isCaller: true,
+              preStartedCallService: callService,
+              callDatabaseURL: NewMaleService.newDbUrl,
+              isFreeIntroCall: true,
+              maxDurationSeconds: 60,
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('[ChatList] Error starting intro call: $e');
+      if (mounted) {
+        setState(() => _isCallingUser = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to place call: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _handleRandomCall(BuildContext context, AppState appState) async {
+    if (_isCallingUser) return;
+    final status = await Permission.microphone.request();
+    if (!status.isGranted) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Microphone permission required for calling.')),
+        );
+      }
+      return;
+    }
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogCtx) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          child: Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.15),
+                  blurRadius: 20,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFFEE2E2),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.shuffle_rounded, color: Color(0xFFE11D48), size: 36),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Random Matchmaking',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                    color: AppColors.textDark,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Connecting you with a new male user for a 1-minute intro call...',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 13, color: AppColors.textGrey),
+                ),
+                const SizedBox(height: 20),
+                const CircularProgressIndicator(color: Color(0xFFE11D48)),
+                const SizedBox(height: 16),
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogCtx),
+                  child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    try {
+      final blocked = BlockService.instance.blockedUids;
+      final randomMale = await NewMaleService.instance.pickRandomMale(blocked);
+      if (!mounted) return;
+      Navigator.of(context, rootNavigator: true).pop(); // Dismiss search dialog
+
+      if (randomMale == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No new users available at the moment. Please try again soon!')),
+        );
+        return;
+      }
+
+      await _startIntroCall(context, appState, randomMale);
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Matchmaking error: $e')),
+        );
+      }
+    }
   }
 }

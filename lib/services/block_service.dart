@@ -7,6 +7,7 @@ class BlockService {
   BlockService._internal();
 
   final Set<String> _blockedUids = {};
+  Set<String> get blockedUids => Set.unmodifiable(_blockedUids);
   String? _currentMyUid;
 
   /// Fetch blocked users from new RTDB and cache them locally (Single Sync).

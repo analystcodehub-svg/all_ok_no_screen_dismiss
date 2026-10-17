@@ -14,12 +14,16 @@ class IncomingCallScreen extends StatefulWidget {
   final String callRoomId;
   final String callerId;
   final VoidCallback? onCallEnded;
+  final String? callDatabaseURL;
+  final bool isFreeIntroCall;
 
   const IncomingCallScreen({
     super.key,
     required this.callRoomId,
     required this.callerId,
     this.onCallEnded,
+    this.callDatabaseURL,
+    this.isFreeIntroCall = false,
   });
 
   @override
@@ -29,11 +33,14 @@ class IncomingCallScreen extends StatefulWidget {
 class _IncomingCallScreenState extends State<IncomingCallScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _pulseController;
-  final CallService _callService = CallService();
+  late final CallService _callService;
   StreamSubscription<DatabaseEvent>? _callSub;
   bool _isDismissing = false;
   late Future<Map<String, dynamic>> _callerDataFuture;
   Timer? _vibrateTimer;
+
+  String get _effectiveDatabaseUrl =>
+      widget.callDatabaseURL ?? 'https://zegochat-c44b0.asia-southeast1.firebasedatabase.app';
 
   Future<Map<String, dynamic>> _fetchCallerData() async {
     Map<String, dynamic> result = {
@@ -59,7 +66,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
       try {
         final rtdb = FirebaseDatabase.instanceFor(
           app: FirebaseDatabase.instance.app,
-          databaseURL: 'https://zegochat-c44b0.asia-southeast1.firebasedatabase.app',
+          databaseURL: _effectiveDatabaseUrl,
         );
         final roomSnap = await rtdb.ref('calls/${widget.callRoomId}').get();
         if (roomSnap.exists && roomSnap.value != null) {
@@ -78,6 +85,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
   @override
   void initState() {
     super.initState();
+    _callService = CallService(databaseURL: widget.callDatabaseURL);
     _callerDataFuture = _fetchCallerData();
     
     // Start playing system ringtone and vibration when the screen opens
@@ -103,7 +111,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
         // Crucial for MatchmakingService: set 'status' to 'ringing' in active_calls lock
         FirebaseDatabase.instanceFor(
           app: FirebaseDatabase.instance.app,
-          databaseURL: 'https://zegochat-c44b0.asia-southeast1.firebasedatabase.app',
+          databaseURL: _effectiveDatabaseUrl,
         ).ref('active_calls/$currentUserId').update({
           'status': 'ringing',
         }).catchError((e) => debugPrint('Error setting active_calls status: $e'));
@@ -111,7 +119,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
         // Keep the existing profile status update as well
         FirebaseDatabase.instanceFor(
           app: FirebaseDatabase.instance.app,
-          databaseURL: 'https://zegochat-c44b0.asia-southeast1.firebasedatabase.app',
+          databaseURL: _effectiveDatabaseUrl,
         ).ref('status/$currentUserId').update({
           'callStatus': 'ringing',
         }).catchError((e) => debugPrint('Error setting ringing status: $e'));
@@ -125,7 +133,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
 
     _callSub = FirebaseDatabase.instanceFor(
       app: FirebaseDatabase.instance.app,
-      databaseURL: 'https://zegochat-c44b0.asia-southeast1.firebasedatabase.app',
+      databaseURL: _effectiveDatabaseUrl,
     )
         .ref('calls/${widget.callRoomId}')
         .onValue
@@ -186,10 +194,13 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
             nickname: callerData['nickname'] ?? 'User',
             avatarUrl: callerData['avatarUrl'] as String?,
             avatarIndex: (callerData['avatarIndex'] as num?)?.toInt() ?? 1,
-            pricePerMin: 3.0,
+            pricePerMin: widget.isFreeIntroCall ? 0.0 : 3.0,
             isCaller: false,
             callerCoinBalance: (callerData['coinBalance'] as num?)?.toInt() ?? 0,
             onCallEnded: widget.onCallEnded,
+            callDatabaseURL: widget.callDatabaseURL,
+            isFreeIntroCall: widget.isFreeIntroCall,
+            maxDurationSeconds: widget.isFreeIntroCall ? 60 : null,
           ),
         ),
       );
@@ -273,6 +284,33 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
                     fontSize: 18,
                   ),
                 ),
+
+                if (widget.isFreeIntroCall)
+                  Container(
+                    margin: const EdgeInsets.only(top: 10),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: const Color(0xFF10B981), width: 1.2),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.card_giftcard_rounded, size: 14, color: Color(0xFF10B981)),
+                        SizedBox(width: 6),
+                        Text(
+                          '1-Min Free Intro Call',
+                          style: TextStyle(
+                            color: Color(0xFF10B981),
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
 
                 const Spacer(),
 

@@ -10,6 +10,7 @@ import '../services/call_service.dart';
 import '../services/local_chat_database.dart';
 import '../services/block_service.dart';
 import '../services/user_database_service.dart';
+import '../services/new_male_service.dart';
 import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
 
 class ActiveCallPage extends StatefulWidget {
@@ -24,6 +25,9 @@ class ActiveCallPage extends StatefulWidget {
   final int avatarIndex;
   final VoidCallback? onCallEnded;
   final int? callerCoinBalance;
+  final String? callDatabaseURL;
+  final bool isFreeIntroCall;
+  final int? maxDurationSeconds;
 
   const ActiveCallPage({
     super.key,
@@ -38,6 +42,9 @@ class ActiveCallPage extends StatefulWidget {
     this.avatarIndex = 1,
     this.onCallEnded,
     this.callerCoinBalance,
+    this.callDatabaseURL,
+    this.isFreeIntroCall = false,
+    this.maxDurationSeconds,
   });
 
   @override
@@ -56,6 +63,9 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
   bool _isSpeakerOn = false;
   bool _isHangingUp = false;
 
+  late bool _isFreeIntroCall;
+  int _maxDurationSeconds = 60;
+
   // Tier-based expert earning rate (resolved from Firestore on connect)
   double _expertEarningRate = 1.0; // default Bronze
   bool _tierResolved = false;
@@ -66,7 +76,9 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
   void initState() {
     super.initState();
     _roomId = widget.callRoomId;
-    _callService = widget.preStartedCallService ?? CallService();
+    _isFreeIntroCall = widget.isFreeIntroCall;
+    _maxDurationSeconds = widget.maxDurationSeconds ?? 60;
+    _callService = widget.preStartedCallService ?? CallService(databaseURL: widget.callDatabaseURL);
     
     if (widget.callerCoinBalance != null && widget.callerCoinBalance! > 0) {
       _callerCoinBalance = widget.callerCoinBalance;
@@ -79,11 +91,12 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
     _initRenderersAndCall();
 
     if (widget.isCaller) {
-      _ringingTimer = Timer(const Duration(seconds: 7), () {
+      final ringingSeconds = _isFreeIntroCall ? 35 : 7;
+      _ringingTimer = Timer(Duration(seconds: ringingSeconds), () {
         if (mounted && !_isConnected && !_isHangingUp) {
           _triggerHangup();
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Expert did not pick up. Please Try again.')),
+            SnackBar(content: Text(_isFreeIntroCall ? 'User did not pick up. Please try again.' : 'Expert did not pick up. Please Try again.')),
           );
         }
       });
@@ -193,16 +206,24 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
 
       if (widget.callRoomId != null) {
         try {
+          final callDbUrl = widget.callDatabaseURL ?? 'https://zegochat-c44b0.asia-southeast1.firebasedatabase.app';
           final FirebaseDatabase database = FirebaseDatabase.instanceFor(
             app: FirebaseDatabase.instance.app,
-            databaseURL: 'https://zegochat-c44b0.asia-southeast1.firebasedatabase.app',
+            databaseURL: callDbUrl,
           );
           final callDoc = await database.ref('calls/${widget.callRoomId}').get();
           if (callDoc.exists) {
             final data = Map<String, dynamic>.from(callDoc.value as Map);
             actualCallerId = data['callerId'] ?? actualCallerId;
             actualExpertId = data['receiverId'] ?? actualExpertId;
-            debugPrint('[_resolveRemoteData] Fetched from calls - expert: $actualExpertId, caller: $actualCallerId');
+            if (data['isFreeIntroCall'] == true) {
+              _isFreeIntroCall = true;
+              if (mounted) setState(() {});
+            }
+            if (data['maxDurationSeconds'] != null) {
+              _maxDurationSeconds = (data['maxDurationSeconds'] as num).toInt();
+            }
+            debugPrint('[_resolveRemoteData] Fetched from calls - expert: $actualExpertId, caller: $actualCallerId, isFree: $_isFreeIntroCall');
             if (data['callerCoins'] != null && _callerCoinBalance == null) {
               final c = (data['callerCoins'] as num).toInt();
               if (mounted) {
@@ -371,6 +392,14 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
         _duration++;
       });
 
+      // Free Intro Call: strictly enforce 1 minute (60s) cap and auto-disconnect
+      if (_isFreeIntroCall) {
+        if (_duration >= _maxDurationSeconds && !_isHangingUp) {
+          _triggerHangup();
+        }
+        return; // Zero coin deduction for intro call
+      }
+
       // Female auto-hangup guard if duration exceeds caller's affordable time
       if (!widget.isCaller) {
         final balance = _callerCoinBalance ?? widget.callerCoinBalance ?? 30;
@@ -444,6 +473,17 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
     final status = finalDuration > 0 ? 'ended' : 'missed';
     final timestamp = DateTime.now().millisecondsSinceEpoch;
     final logId = 'log_${_roomId ?? timestamp}';
+
+    // If free intro call, record consumption in new database
+    if (_isFreeIntroCall) {
+      final maleUid = widget.isCaller ? widget.receiverId : widget.receiverId;
+      final femaleUid = widget.isCaller ? widget.callerId : widget.callerId;
+      NewMaleService.instance.markFreeCallUsed(
+        maleUid: maleUid,
+        femaleUid: femaleUid,
+        durationSeconds: finalDuration,
+      );
+    }
     
     final logData = {
       'logId': logId,
@@ -802,6 +842,35 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
                         fontSize: 18,
                         fontFamily: 'monospace',
                         letterSpacing: 2.0,
+                      ),
+                    ),
+                  ],
+                  if (_isFreeIntroCall) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF43F5E).withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFFF43F5E), width: 1.2),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.timer_outlined, size: 16, color: Color(0xFFFF8599)),
+                          const SizedBox(width: 6),
+                          Text(
+                            _isConnected
+                                ? '1-Min Free: ${(60 - _duration).clamp(0, 60)}s left'
+                                : '1-Min Free Intro Call',
+                            style: const TextStyle(
+                              color: Color(0xFFFF8599),
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
