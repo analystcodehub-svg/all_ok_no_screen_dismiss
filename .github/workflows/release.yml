@@ -1,9 +1,10 @@
-name: Build & Release Flutter APK
+name: Build & Release Flutter APK & App Bundle
 
 on:
   push:
     branches:
       - master
+      - main
   workflow_dispatch:
 
 permissions:
@@ -11,7 +12,7 @@ permissions:
 
 jobs:
   build:
-    name: Build & Release APK
+    name: Build & Release APK & AAB
     runs-on: ubuntu-latest
 
     steps:
@@ -47,8 +48,19 @@ jobs:
       - name: Get Dependencies
         run: flutter pub get
 
-      - name: Build APK (Release for Physical Devices)
-        run: flutter build apk --release --target-platform android-arm,android-arm64
+      - name: Configure Keystore & Signing Key
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/upload-keystore.jks
+          cp android/upload-keystore.jks android/app/upload-keystore.jks
+          cat <<EOF > android/key.properties
+          storePassword=${{ secrets.KEYSTORE_PASSWORD }}
+          keyPassword=${{ secrets.KEY_PASSWORD }}
+          keyAlias=${{ secrets.KEY_ALIAS }}
+          storeFile=../upload-keystore.jks
+          EOF
+
+      - name: Build APK (Release)
+        run: flutter build apk --release
 
       - name: Build App Bundle (Release)
         run: flutter build appbundle --release
@@ -57,13 +69,24 @@ jobs:
         id: get_version
         run: |
           VERSION=$(grep '^version: ' pubspec.yaml | cut -d' ' -f2 | cut -d'+' -f1)
+          BUILD=$(grep '^version: ' pubspec.yaml | cut -d' ' -f2 | cut -d'+' -f2)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "build=$BUILD" >> $GITHUB_OUTPUT
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-build-v${{ steps.get_version.outputs.version }}+${{ steps.get_version.outputs.build }}
+          path: |
+            build/app/outputs/flutter-apk/app-release.apk
+            build/app/outputs/bundle/release/app-release.aab
+          retention-days: 30
 
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ steps.get_version.outputs.version }}
-          name: Release v${{ steps.get_version.outputs.version }}
+          tag_name: v${{ steps.get_version.outputs.version }}+${{ steps.get_version.outputs.build }}
+          name: Release v${{ steps.get_version.outputs.version }} (Build ${{ steps.get_version.outputs.build }})
           files: |
             build/app/outputs/flutter-apk/app-release.apk
             build/app/outputs/bundle/release/app-release.aab
