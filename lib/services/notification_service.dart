@@ -222,30 +222,8 @@ Future<void> _showCallkitIncoming(Map<String, dynamic> data) async {
     }
   }
 
-  // 2. Prevent "Ghost Ringing" without delaying the UI!
-  // We immediately show the CallKit UI, but we also attach a listener.
-  // If the RTDB connects and tells us the call is already ended/deleted, we kill the CallKit UI instantly.
   final dbUrl = data['dbUrl'] as String? ?? 'https://zegochat-c44b0.asia-southeast1.firebasedatabase.app';
   final isFreeIntro = data['isFreeIntroCall'] == 'true' || data['isFreeIntroCall'] == true;
-
-  StreamSubscription? ghostCheckSub;
-  if (callRoomId.isNotEmpty) {
-    ghostCheckSub = FirebaseDatabase.instanceFor(
-      app: Firebase.app(),
-      databaseURL: dbUrl,
-    ).ref('calls/$callRoomId').onValue.listen((event) {
-      if (!event.snapshot.exists || (event.snapshot.value as Map?)?['status'] == 'ended') {
-        debugPrint('[CallKit] Ghost call detected (ended/deleted). Auto-canceling CallKit.');
-        FlutterCallkitIncoming.endCall(uuid);
-        FlutterRingtonePlayer().stop();
-        ghostCheckSub?.cancel();
-      }
-    });
-    // Auto cancel the subscription after 20 seconds to prevent memory leaks
-    Future.delayed(const Duration(seconds: 20), () {
-      ghostCheckSub?.cancel();
-    });
-  }
 
   debugPrint('[CallKit] Proceeding to ring...');
   NotificationService.lastCallerName = callerName;
@@ -255,34 +233,35 @@ Future<void> _showCallkitIncoming(Map<String, dynamic> data) async {
   await prefs.setString('dbUrl_$callRoomId', dbUrl);
   await prefs.setBool('isFreeIntroCall_$callRoomId', isFreeIntro);
 
-  // Pre-fetch caller's balance from RTDB for immediate accurate countdown timer
+  // Pre-fetch caller's balance from RTDB in background without blocking CallKit display!
   if (callerId.isNotEmpty) {
-    try {
-      final coinSnap = await FirebaseDatabase.instanceFor(
-        app: Firebase.app(),
-        databaseURL: 'https://zegochat-c44b0-4cbfb.asia-southeast1.firebasedatabase.app',
-      ).ref('users/$callerId/coinBalance').get();
-      if (coinSnap.exists && coinSnap.value != null) {
-        final coins = (coinSnap.value as num).toInt();
-        await prefs.setInt('callerCoins_$callRoomId', coins);
-        debugPrint('[CallKit] Cached caller coins: $coins for $callRoomId');
+    Future(() async {
+      try {
+        final coinSnap = await FirebaseDatabase.instanceFor(
+          app: Firebase.app(),
+          databaseURL: 'https://zegochat-c44b0-4cbfb.asia-southeast1.firebasedatabase.app',
+        ).ref('users/$callerId/coinBalance').get();
+        if (coinSnap.exists && coinSnap.value != null) {
+          final coins = (coinSnap.value as num).toInt();
+          await prefs.setInt('callerCoins_$callRoomId', coins);
+          debugPrint('[CallKit] Cached caller coins: $coins for $callRoomId');
+        }
+      } catch (e) {
+        debugPrint('[CallKit] Error caching caller coins: $e');
       }
-    } catch (e) {
-      debugPrint('[CallKit] Error caching caller coins: $e');
-    }
 
-    // Also check calls room node on primary RTDB
-    try {
-      final roomSnap = await FirebaseDatabase.instanceFor(
-        app: Firebase.app(),
-        databaseURL: 'https://zegochat-c44b0.asia-southeast1.firebasedatabase.app',
-      ).ref('calls/$callRoomId/callerCoins').get();
-      if (roomSnap.exists && roomSnap.value != null) {
-        final coins = (roomSnap.value as num).toInt();
-        await prefs.setInt('callerCoins_$callRoomId', coins);
-        debugPrint('[CallKit] Cached caller coins from room: $coins for $callRoomId');
-      }
-    } catch (_) {}
+      try {
+        final roomSnap = await FirebaseDatabase.instanceFor(
+          app: Firebase.app(),
+          databaseURL: dbUrl,
+        ).ref('calls/$callRoomId/callerCoins').get();
+        if (roomSnap.exists && roomSnap.value != null) {
+          final coins = (roomSnap.value as num).toInt();
+          await prefs.setInt('callerCoins_$callRoomId', coins);
+          debugPrint('[CallKit] Cached caller coins from room: $coins for $callRoomId');
+        }
+      } catch (_) {}
+    });
   }
 
   // Explicitly play the ringtone using flutter_ringtone_player
@@ -298,12 +277,14 @@ Future<void> _showCallkitIncoming(Map<String, dynamic> data) async {
     id: uuid,
     nameCaller: callerName,
     appName: 'SajniRe',
-    handle: 'calling ....',
+    handle: isFreeIntro ? '1 Min Intro Call' : 'calling ....',
     type: 0,          
-    duration: 15000,  // auto-dismiss after 15s
+    duration: 35000,  // auto-dismiss after 35s
     extra: <String, dynamic>{
       'callRoomId': callRoomId,
       'callerName': callerName,
+      'dbUrl': dbUrl,
+      'isFreeIntroCall': isFreeIntro,
     },
     headers: <String, dynamic>{'platform': 'android'},
     android: const AndroidParams(
@@ -352,26 +333,31 @@ Future<void> _showCallkitIncoming(Map<String, dynamic> data) async {
     }
   });
 
+  // Listen for remote call termination using the CORRECT database instance!
   StreamSubscription? rtdbSub;
   if (callRoomId.isNotEmpty) {
-    rtdbSub = FirebaseDatabase.instance.ref('calls/$callRoomId').onValue.listen((event) {
-      if (event.snapshot.value == null) {
-        FlutterRingtonePlayer().stop();
-        FlutterCallkitIncoming.endAllCalls();
-        if (!completer.isCompleted) completer.complete();
-      } else {
-        final data = Map<String, dynamic>.from(event.snapshot.value as Map);
-        if (data['status'] == 'ended' || data['status'] == 'rejected_blocked') {
-          FlutterRingtonePlayer().stop();
-          FlutterCallkitIncoming.endAllCalls();
-          if (!completer.isCompleted) completer.complete();
+    rtdbSub = FirebaseDatabase.instanceFor(
+      app: Firebase.app(),
+      databaseURL: dbUrl,
+    ).ref('calls/$callRoomId').onValue.listen((event) {
+      if (event.snapshot.exists && event.snapshot.value != null) {
+        final val = event.snapshot.value;
+        if (val is Map) {
+          final data = Map<String, dynamic>.from(val);
+          final status = data['status'];
+          if (status == 'ended' || status == 'rejected_blocked' || status == 'rejected_already_used') {
+            debugPrint('[CallKit] Remote call ended with status: $status');
+            FlutterRingtonePlayer().stop();
+            FlutterCallkitIncoming.endAllCalls();
+            if (!completer.isCompleted) completer.complete();
+          }
         }
       }
     });
   }
 
-  // Failsafe timer: maximum 16 seconds
-  Timer(const Duration(seconds: 16), () {
+  // Failsafe timer: 36 seconds
+  Timer(const Duration(seconds: 36), () {
     FlutterRingtonePlayer().stop();
     if (!completer.isCompleted) completer.complete();
   });
@@ -436,6 +422,9 @@ class NotificationService {
 
     // 8. Listen to CallKit events (Accept / Decline from lock screen)
     _listenCallKitEvents();
+
+    // 9. Check if app was launched by accepting a CallKit call from killed state
+    await _checkKilledStateAcceptedCall();
   }
 
   // ── LOCAL NOTIFICATION SETUP ───────────────────────────────────────────
@@ -519,6 +508,26 @@ class NotificationService {
         debugPrint('[FCM] Firestore token sync error: $e');
       }
 
+      // 3. For males (users), ALSO sync token to zegochat-c44b0-1e689 intro calls pool & buckets!
+      if (collection == 'users') {
+        try {
+          final introDb = FirebaseDatabase.instanceFor(
+            app: Firebase.app(),
+            databaseURL: 'https://zegochat-c44b0-1e689.asia-southeast1.firebasedatabase.app',
+          );
+          await introDb.ref('new_males_pool/$userId/fcmToken').set(token);
+          
+          final poolSnap = await introDb.ref('new_males_pool/$userId/languageKey').get();
+          if (poolSnap.exists && poolSnap.value != null) {
+            final langKey = poolSnap.value.toString();
+            await introDb.ref('new_males_buckets/$langKey/$userId/fcmToken').set(token);
+          }
+          await introDb.ref('new_males_buckets/all/$userId/fcmToken').set(token);
+        } catch (e) {
+          debugPrint('[FCM] Intro DB token sync error: $e');
+        }
+      }
+
       debugPrint('[FCM] Token saved → $collection/$userId');
 
       // Auto-refresh when token rotates
@@ -533,6 +542,22 @@ class NotificationService {
             'fcmToken': t,
           }, SetOptions(merge: true));
         } catch (_) {}
+
+        if (collection == 'users') {
+          try {
+            final introDb = FirebaseDatabase.instanceFor(
+              app: Firebase.app(),
+              databaseURL: 'https://zegochat-c44b0-1e689.asia-southeast1.firebasedatabase.app',
+            );
+            await introDb.ref('new_males_pool/$userId/fcmToken').set(t);
+            final poolSnap = await introDb.ref('new_males_pool/$userId/languageKey').get();
+            if (poolSnap.exists && poolSnap.value != null) {
+              final langKey = poolSnap.value.toString();
+              await introDb.ref('new_males_buckets/$langKey/$userId/fcmToken').set(t);
+            }
+            await introDb.ref('new_males_buckets/all/$userId/fcmToken').set(t);
+          } catch (_) {}
+        }
         debugPrint('[FCM] Token refreshed → $collection/$userId');
       });
     } catch (e) {
@@ -619,9 +644,80 @@ class NotificationService {
 
   // ── CALLKIT EVENT LISTENER ────────────────────────────────────────────
 
+  /// Checks if the app was launched by accepting an incoming call while killed.
+  Future<void> _checkKilledStateAcceptedCall() async {
+    // 1. Check Native MainActivity intent via MethodChannel
+    try {
+      const channel = MethodChannel('com.sajnire.app/auth');
+      final initialCallId = await channel.invokeMethod<String>('getInitialCallId');
+      if (initialCallId != null && initialCallId.isNotEmpty) {
+        debugPrint('[CallKit] Found initial accepted call from killed state via intent: $initialCallId');
+        _navigateToActiveCall(initialCallId);
+        return;
+      }
+    } catch (e) {
+      debugPrint('[CallKit] Error checking initialCallId: $e');
+    }
+
+    // 2. Check active calls in flutter_callkit_incoming
+    try {
+      final calls = await FlutterCallkitIncoming.activeCalls();
+      if (calls.isNotEmpty) {
+        debugPrint('[CallKit] Active calls on launch: $calls');
+        for (final c in calls) {
+          if (c.isAccepted && c.id.isNotEmpty) {
+            debugPrint('[CallKit] Navigating to active call from activeCalls: ${c.id}');
+            _navigateToActiveCall(c.id);
+            break;
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[CallKit] Error checking activeCalls: $e');
+    }
+  }
+
+  /// Centralized routing to ActiveCallPage on call acceptance.
+  /// Handles retries if navigatorKey is not yet mounted (e.g. killed state launch).
+  void _navigateToActiveCall(String callRoomId) async {
+    FlutterRingtonePlayer().stop();
+    final prefs = await SharedPreferences.getInstance();
+    final storedCallerName = prefs.getString('callerName_$callRoomId');
+    final resolvedName = storedCallerName ?? NotificationService.lastCallerName ?? 'Unknown';
+    final resolvedCallerId = prefs.getString('callerId_$callRoomId') ?? '';
+    final storedCallerCoins = prefs.getInt('callerCoins_$callRoomId');
+    final storedDbUrl = prefs.getString('dbUrl_$callRoomId');
+    final storedIsFreeIntro = prefs.getBool('isFreeIntroCall_$callRoomId') ?? false;
+
+    int retries = 0;
+    void pushRoute() {
+      final state = navigatorKey?.currentState;
+      if (state != null) {
+        state.pushNamed(
+          '/active-call',
+          arguments: <String, dynamic>{
+            'callRoomId': callRoomId,
+            'callerName': resolvedName,
+            'callerId': resolvedCallerId,
+            'callerCoins': storedCallerCoins,
+            'dbUrl': storedDbUrl,
+            'isFreeIntroCall': storedIsFreeIntro,
+            'maxDurationSeconds': 60,
+          },
+        );
+      } else {
+        if (retries < 30) {
+          retries++;
+          Future.delayed(const Duration(milliseconds: 200), pushRoute);
+        }
+      }
+    }
+    pushRoute();
+  }
+
   /// Listens to OS-level CallKit events.
   /// On Accept → navigates to ActiveCallPage.
-  /// On Decline → marks call as 'ended' in Firestore.
+  /// On Decline → marks call as 'ended' in RTDB.
   void _listenCallKitEvents() {
     // Fallback: Listen to Native MainActivity intent for "Accept"
     final channel = MethodChannel('com.sajnire.app/auth');
@@ -629,30 +725,8 @@ class NotificationService {
       if (call.method == 'onCallAcceptFallback') {
         final callRoomId = call.arguments as String?;
         debugPrint('[CallKit] Accepted via Fallback: $callRoomId');
-        FlutterRingtonePlayer().stop();
-        if (callRoomId != null) {
-          final prefs = await SharedPreferences.getInstance();
-          final storedCallerName = prefs.getString('callerName_$callRoomId');
-          final resolvedName = storedCallerName ?? NotificationService.lastCallerName ?? 'Unknown';
-          final resolvedCallerId = prefs.getString('callerId_$callRoomId') ?? '';
-          final storedCallerCoins = prefs.getInt('callerCoins_$callRoomId');
-
-          void pushRoute() {
-            if (navigatorKey?.currentState != null) {
-              navigatorKey!.currentState!.pushNamed(
-                '/active-call',
-                arguments: <String, dynamic>{
-                  'callRoomId': callRoomId,
-                  'callerName': resolvedName,
-                  'callerId': resolvedCallerId,
-                  'callerCoins': storedCallerCoins,
-                },
-              );
-            } else {
-              Future.delayed(const Duration(milliseconds: 200), pushRoute);
-            }
-          }
-          pushRoute();
+        if (callRoomId != null && callRoomId.isNotEmpty) {
+          _navigateToActiveCall(callRoomId);
         }
       }
     });
@@ -662,41 +736,11 @@ class NotificationService {
       debugPrint('[CallKit] Event: ${event.eventName}');
 
       if (event is CallEventActionCallAccept) {
-        FlutterRingtonePlayer().stop();
-        // The UUID we passed as CallKitParams.id equals the Firestore callRoomId
         final callRoomId = event.callKitParams.id;
         debugPrint('[CallKit] Accepted: $callRoomId');
-
-        // Navigate to active call screen
-        // If app was killed, navigatorKey.currentState might be null briefly.
-        // We poll for it to become ready before pushing.
-        final prefs = await SharedPreferences.getInstance();
-        final storedCallerName = prefs.getString('callerName_$callRoomId');
-        final resolvedName = storedCallerName ?? NotificationService.lastCallerName ?? 'Unknown';
-        final resolvedCallerId = prefs.getString('callerId_$callRoomId') ?? '';
-        final storedCallerCoins = prefs.getInt('callerCoins_$callRoomId');
-        final storedDbUrl = prefs.getString('dbUrl_$callRoomId');
-        final storedIsFreeIntro = prefs.getBool('isFreeIntroCall_$callRoomId') ?? false;
-
-        void pushRoute() {
-          if (navigatorKey?.currentState != null) {
-            navigatorKey!.currentState!.pushNamed(
-              '/active-call',
-              arguments: <String, dynamic>{
-                'callRoomId': callRoomId,
-                'callerName': resolvedName,
-                'callerId': resolvedCallerId,
-                'callerCoins': storedCallerCoins,
-                'dbUrl': storedDbUrl,
-                'isFreeIntroCall': storedIsFreeIntro,
-                'maxDurationSeconds': 60,
-              },
-            );
-          } else {
-            Future.delayed(const Duration(milliseconds: 200), pushRoute);
-          }
+        if (callRoomId.isNotEmpty) {
+          _navigateToActiveCall(callRoomId);
         }
-        pushRoute();
       } else if (event is CallEventActionCallDecline) {
         FlutterRingtonePlayer().stop();
         final callRoomId = event.callKitParams.id;
@@ -714,13 +758,13 @@ class NotificationService {
         }
       } else if (event is CallEventActionCallTimeout) {
         final callRoomId = event.id;
-        debugPrint('[CallKit] Call timed out.');
+        debugPrint('[CallKit] Call timed out: $callRoomId');
         
         // End call properly via CallService to release locks
         if (callRoomId.isNotEmpty) {
-           final prefs = await SharedPreferences.getInstance();
-           final storedDbUrl = prefs.getString('dbUrl_$callRoomId');
-           await CallService(databaseURL: storedDbUrl).endCall(callRoomId);
+          final prefs = await SharedPreferences.getInstance();
+          final storedDbUrl = prefs.getString('dbUrl_$callRoomId');
+          await CallService(databaseURL: storedDbUrl).endCall(callRoomId);
         }
         await FlutterCallkitIncoming.endAllCalls();
       }

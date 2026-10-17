@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../providers/app_state.dart';
 import '../models/female_expert.dart';
@@ -399,14 +400,26 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
 
     // Sync male user to new_males_pool & language buckets on new RTDB for female discovery
     final maleLang = appState.primaryLanguage.isNotEmpty ? appState.primaryLanguage : 'Hindi';
-    NewMaleService.instance.registerOrUpdateMale(
-      uid: myUid,
-      nickname: appState.nickname,
-      avatarUrl: '',
-      avatarIndex: appState.avatarIndex,
-      language: maleLang,
-      isOnline: true,
-    );
+    FirebaseMessaging.instance.getToken().then((token) {
+      NewMaleService.instance.registerOrUpdateMale(
+        uid: myUid,
+        nickname: appState.nickname,
+        avatarUrl: '',
+        avatarIndex: appState.avatarIndex,
+        language: maleLang,
+        fcmToken: token,
+        isOnline: true,
+      );
+    }).catchError((_) {
+      NewMaleService.instance.registerOrUpdateMale(
+        uid: myUid,
+        nickname: appState.nickname,
+        avatarUrl: '',
+        avatarIndex: appState.avatarIndex,
+        language: maleLang,
+        isOnline: true,
+      );
+    });
     NewMaleService.instance.setMaleOfflineOnDisconnect(myUid, language: maleLang);
 
     // Listen to real-time wallet balance changes

@@ -48,13 +48,33 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    private var initialCallRoomId: String? = null
+
+    private fun extractCallRoomId(intent: Intent?): String? {
+        if (intent == null) return null
+        val action = intent.action ?: ""
+        if (action.endsWith(".ACTION_CALL_ACCEPT") || action == "com.hiennv.flutter_callkit_incoming.ACTION_CALL_ACCEPT") {
+            val data = intent.getBundleExtra("EXTRA_CALLKIT_CALL_DATA")
+            return data?.getString("EXTRA_CALLKIT_ID") ?: intent.getStringExtra("EXTRA_CALLKIT_ID")
+        }
+        return null
+    }
+
+    override fun onCreate(savedInstanceState: android.os.Bundle?) {
+        super.onCreate(savedInstanceState)
+        initialCallRoomId = extractCallRoomId(intent)
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         // Create channels FIRST before Flutter engine starts
         createNotificationChannels()
         super.configureFlutterEngine(flutterEngine)
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
-            if (call.method == "requestPhoneHint") {
+            if (call.method == "getInitialCallId") {
+                result.success(initialCallRoomId)
+                initialCallRoomId = null
+            } else if (call.method == "requestPhoneHint") {
                 // Return immediately if there is already a pending request
                 if (pendingResult != null) {
                     result.error("ALREADY_ACTIVE", "A phone hint request is already active", null)
@@ -109,14 +129,9 @@ class MainActivity : FlutterActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        // Catch CallKit accept action!
-        if (intent.action == "com.sajnire.app.com.hiennv.flutter_callkit_incoming.ACTION_CALL_ACCEPT" ||
-            intent.action == "com.hiennv.flutter_callkit_incoming.ACTION_CALL_ACCEPT") {
-            
-            // AppUtils uses EXTRA_CALLKIT_CALL_DATA
-            val data = intent.getBundleExtra("EXTRA_CALLKIT_CALL_DATA")
-            val callRoomId = data?.getString("EXTRA_CALLKIT_ID")
-            
+        setIntent(intent)
+        val callRoomId = extractCallRoomId(intent)
+        if (!callRoomId.isNullOrEmpty()) {
             flutterEngine?.dartExecutor?.binaryMessenger?.let { messenger ->
                 MethodChannel(messenger, CHANNEL).invokeMethod("onCallAcceptFallback", callRoomId)
             }
