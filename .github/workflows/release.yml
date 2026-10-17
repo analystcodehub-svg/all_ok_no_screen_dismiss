@@ -1,4 +1,4 @@
-name: Build & Release Flutter APK & App Bundle
+name: Build & Release Flutter APK
 
 on:
   push:
@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   build:
-    name: Build & Release APK & AAB
+    name: Build & Release APK
     runs-on: ubuntu-latest
 
     steps:
@@ -62,9 +62,6 @@ jobs:
       - name: Build APK (Release)
         run: flutter build apk --release
 
-      - name: Build App Bundle (Release)
-        run: flutter build appbundle --release
-
       - name: Extract Version from pubspec.yaml
         id: get_version
         run: |
@@ -73,13 +70,11 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "build=$BUILD" >> $GITHUB_OUTPUT
 
-      - name: Upload Build Artifacts
+      - name: Upload Release APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: release-build-v${{ steps.get_version.outputs.version }}+${{ steps.get_version.outputs.build }}
-          path: |
-            build/app/outputs/flutter-apk/app-release.apk
-            build/app/outputs/bundle/release/app-release.aab
+          name: release-apk-v${{ steps.get_version.outputs.version }}+${{ steps.get_version.outputs.build }}
+          path: build/app/outputs/flutter-apk/app-release.apk
           retention-days: 30
 
       - name: Create or Update GitHub Release
@@ -89,7 +84,6 @@ jobs:
           name: Release v${{ steps.get_version.outputs.version }} (Build ${{ steps.get_version.outputs.build }})
           files: |
             build/app/outputs/flutter-apk/app-release.apk
-            build/app/outputs/bundle/release/app-release.aab
           draft: false
           prerelease: false
           generate_release_notes: true
