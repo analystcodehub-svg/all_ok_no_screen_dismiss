@@ -132,7 +132,14 @@ class _WalletRechargeScreenState extends State<WalletRechargeScreen> {
       // 1. Credit coins in RTDB using atomic transaction
       await UserDatabaseService.instance.addUserCoins(myUid, _totalCoinsCredited);
 
-      // 2. Save recharge history in Firestore as strictly requested
+      // 2. Fetch fresh user data from RTDB to guarantee 100% accurate balance sync (prevents double-addition)
+      final updatedData = await UserDatabaseService.instance.getUser(myUid);
+      if (updatedData != null && updatedData['coinBalance'] != null) {
+        final freshCoins = (updatedData['coinBalance'] as num).toInt();
+        appState.setCoinBalance(freshCoins);
+      }
+
+      // 3. Save recharge history in Firestore as strictly requested
       final rechargeDocRef = FirebaseFirestore.instance.collection('recharge_history').doc(txnId);
       await rechargeDocRef.set({
         'buyer_name': myUid,
@@ -145,12 +152,18 @@ class _WalletRechargeScreenState extends State<WalletRechargeScreen> {
         'txnId': txnId,
       });
 
-      // 4. Update local provider state
-      appState.setCoinBalance(appState.coinBalance + _totalCoinsCredited);
-
       if (mounted) {
         setState(() => _isLoading = false);
-        _showPaymentSuccessDialog(_payableAmount, _totalCoinsCredited);
+        // Directly pop recharge screen back to previous screen (remove green dialog popup)
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Payment Successful! ₹${_payableAmount.toStringAsFixed(0)} added to wallet.'),
+            backgroundColor: const Color(0xFF16A34A),
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 3),
+          ),
+        );
       }
     } catch (e) {
       debugPrint("Error syncing wallet recharge: $e");
@@ -259,82 +272,6 @@ class _WalletRechargeScreenState extends State<WalletRechargeScreen> {
     );
   }
 
-  void _showPaymentSuccessDialog(double amount, int coins) {
-    if (!mounted) return;
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        backgroundColor: Colors.white,
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 72,
-                height: 72,
-                decoration: const BoxDecoration(
-                  color: Color(0xFFDCFCE7),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.check_circle_rounded,
-                  color: Color(0xFF16A34A),
-                  size: 48,
-                ),
-              ),
-              const SizedBox(height: 20),
-              const Text(
-                'Payment Successful!',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF0F172A),
-                ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                '₹${amount.toStringAsFixed(0)} successfully added to your wallet.',
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 15,
-                  color: Color(0xFF64748B),
-                  height: 1.5,
-                ),
-              ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.pop(ctx);
-                    Navigator.pop(context);
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF16A34A),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: const Text(
-                    'Done',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 
   void _showSnackBar(String message, {bool isError = false}) {
     if (!mounted) return;
