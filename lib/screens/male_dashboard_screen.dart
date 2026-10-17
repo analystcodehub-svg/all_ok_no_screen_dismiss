@@ -397,14 +397,17 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
       },
     );
 
-    // Sync male user to new_males_pool on new RTDB for female discovery
+    // Sync male user to new_males_pool & language buckets on new RTDB for female discovery
+    final maleLang = appState.primaryLanguage.isNotEmpty ? appState.primaryLanguage : 'Hindi';
     NewMaleService.instance.registerOrUpdateMale(
       uid: myUid,
       nickname: appState.nickname,
       avatarUrl: '',
       avatarIndex: appState.avatarIndex,
+      language: maleLang,
       isOnline: true,
     );
+    NewMaleService.instance.setMaleOfflineOnDisconnect(myUid, language: maleLang);
 
     // Listen to real-time wallet balance changes
     _walletSubscription?.cancel();

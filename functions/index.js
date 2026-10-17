@@ -554,6 +554,8 @@ exports.onFemaleIntroCallInitiated = functions.region("asia-south1").database
       callerName: callerName || "Female Host",
       callerAvatar: callerAvatar || "",
       receiverId: receiverId,
+      callerLanguage: callData.callerLanguage || "",
+      receiverLanguage: callData.receiverLanguage || "",
       dbUrl: "https://zegochat-c44b0-1e689.asia-southeast1.firebasedatabase.app",
       isFreeIntroCall: "true",
       maxDurationSeconds: "60",

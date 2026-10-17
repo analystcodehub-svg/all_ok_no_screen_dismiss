@@ -27,11 +27,17 @@ class _ChatListScreenState extends State<ChatListScreen> {
   @override
   void initState() {
     super.initState();
-    _refreshNewMales();
+    final appState = context.read<AppState>();
+    _refreshNewMales(appState.primaryLanguage);
   }
 
-  void _refreshNewMales() {
-    _newMalesFuture = NewMaleService.instance.fetchNewMalesWithFallback(limit: 20);
+  void _refreshNewMales([String? lang]) {
+    final appState = context.read<AppState>();
+    final effectiveLang = lang ?? appState.primaryLanguage;
+    _newMalesFuture = NewMaleService.instance.fetchNewMalesWithFallback(
+      femaleLanguage: effectiveLang.isNotEmpty ? effectiveLang : 'Hindi',
+      limit: 20,
+    );
   }
 
   Future<List<Map<String, dynamic>>> _fetchEnrichedChats(String myUid, bool isCurrentMale) async {
@@ -408,6 +414,30 @@ class _ChatListScreenState extends State<ChatListScreen> {
                       ),
                     ),
                   ),
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEFF6FF),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFFDBEAFE)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.language_rounded, size: 10, color: Color(0xFF2563EB)),
+                        const SizedBox(width: 3),
+                        Text(
+                          appState.primaryLanguage.isNotEmpty ? appState.primaryLanguage : 'All',
+                          style: const TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF2563EB),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
               InkWell(
@@ -449,7 +479,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
           ),
           const SizedBox(height: 10),
           SizedBox(
-            height: 98,
+            height: 104,
             child: FutureBuilder<List<Map<String, dynamic>>>(
               future: _newMalesFuture,
               builder: (context, snapshot) {
@@ -551,34 +581,55 @@ class _ChatListScreenState extends State<ChatListScreen> {
                             ),
                             const SizedBox(height: 5),
                             SizedBox(
-                              width: 58,
+                              width: 62,
                               child: Text(
                                 nickname,
                                 textAlign: TextAlign.center,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
-                                  fontSize: 12,
+                                  fontSize: 11,
                                   fontWeight: FontWeight.w600,
                                   color: AppColors.textDark,
                                 ),
                               ),
                             ),
                             const SizedBox(height: 2),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFF3F4F6),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: const Text(
-                                '1m Free',
-                                style: TextStyle(
-                                  fontSize: 9,
-                                  color: Color(0xFF6B7280),
-                                  fontWeight: FontWeight.bold,
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFEFF6FF),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    user['language'] as String? ?? 'Hindi',
+                                    style: const TextStyle(
+                                      fontSize: 8,
+                                      color: Color(0xFF2563EB),
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
                                 ),
-                              ),
+                                const SizedBox(width: 3),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF3F4F6),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: const Text(
+                                    '1m',
+                                    style: TextStyle(
+                                      fontSize: 8,
+                                      color: Color(0xFF6B7280),
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
@@ -648,6 +699,8 @@ class _ChatListScreenState extends State<ChatListScreen> {
           'callerName': appState.nickname.isNotEmpty ? appState.nickname : 'Female Expert',
           'callerAvatar': 'assets/avatars/female_${appState.avatarIndex}.png',
           'callerAvatarIndex': appState.avatarIndex,
+          'callerLanguage': appState.primaryLanguage.isNotEmpty ? appState.primaryLanguage : 'Hindi',
+          'receiverLanguage': maleUser['language'] ?? 'Hindi',
           'receiverFcmToken': maleUser['fcmToken'] ?? '',
           'dbUrl': NewMaleService.newDbUrl,
         },
@@ -741,10 +794,10 @@ class _ChatListScreenState extends State<ChatListScreen> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                const Text(
-                  'Connecting you with a new male user for a 1-minute intro call...',
+                Text(
+                  'Connecting you with an active user speaking ${appState.primaryLanguage.isNotEmpty ? appState.primaryLanguage : 'your language'} for a 1-minute intro call...',
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 13, color: AppColors.textGrey),
+                  style: const TextStyle(fontSize: 13, color: AppColors.textGrey),
                 ),
                 const SizedBox(height: 20),
                 const CircularProgressIndicator(color: Color(0xFFE11D48)),
@@ -762,7 +815,11 @@ class _ChatListScreenState extends State<ChatListScreen> {
 
     try {
       final blocked = BlockService.instance.blockedUids;
-      final randomMale = await NewMaleService.instance.pickRandomMale(blocked);
+      final femaleLang = appState.primaryLanguage.isNotEmpty ? appState.primaryLanguage : 'Hindi';
+      final randomMale = await NewMaleService.instance.pickRandomMale(
+        blocked,
+        femaleLanguage: femaleLang,
+      );
       if (!mounted) return;
       Navigator.of(context, rootNavigator: true).pop(); // Dismiss search dialog
 
