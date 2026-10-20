@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import '../providers/app_state.dart';
 import '../theme/app_theme.dart';
 import 'phone_auth_screen.dart';
-import '../services/call_service.dart';
 import '../services/matchmaking_service.dart';
 import '../services/local_chat_database.dart';
 import '../widgets/local_avatar_widget.dart';
@@ -24,10 +23,8 @@ class FemaleExpertDashboard extends StatefulWidget {
 
 class _FemaleExpertDashboardState extends State<FemaleExpertDashboard> with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   late AnimationController _pulseController;
-  final CallService _callService = CallService();
   late final MatchmakingService _matchingService;
-  StreamSubscription? _incomingCallSubscription;
-  final bool _isInCall = false; // guard against re-starting listener during active call
+  bool _isInCall = false; // guard against re-starting listener during active call
 
   @override
   void initState() {
@@ -49,9 +46,6 @@ class _FemaleExpertDashboardState extends State<FemaleExpertDashboard> with Widg
       final currentUserId = appState.mobileNumber.isNotEmpty ? appState.mobileNumber : appState.uid;
       LocalChatDatabase.instance.syncCallLogsFromFirestore(currentUserId);
 
-      if (appState.isOnline) {
-        _startIncomingCallListener(appState.uid);
-      }
       if (appState.uid.isNotEmpty) {
         HybridChatService.instance.initListeners(appState.uid);
       }
@@ -75,7 +69,6 @@ class _FemaleExpertDashboardState extends State<FemaleExpertDashboard> with Widg
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _stopIncomingCallListener();
     _pulseController.dispose();
     super.dispose();
   }
@@ -90,21 +83,6 @@ class _FemaleExpertDashboardState extends State<FemaleExpertDashboard> with Widg
         _updateOnlineStatus(true);
       }
     }
-  }
-
-  void _startIncomingCallListener(String expertId) {
-    _incomingCallSubscription?.cancel();
-    _incomingCallSubscription = _callService.listenForIncomingCalls(
-      expertId: expertId,
-      onCallReceived: (roomId, callerId) {
-        // Native CallKit (shown via FCM) handles the incoming call UI directly
-      },
-    );
-  }
-
-  void _stopIncomingCallListener() {
-    _incomingCallSubscription?.cancel();
-    _incomingCallSubscription = null;
   }
 
   Future<void> _updateOnlineStatus(bool value) async {
@@ -128,13 +106,11 @@ class _FemaleExpertDashboardState extends State<FemaleExpertDashboard> with Widg
     if (!mounted) return;
 
     if (value) {
-      _startIncomingCallListener(expertId);
       // Ask for auto-start permission when they go online, so they receive background calls.
       AutoStartHelper.checkAndRequestAutoStart(context);
       // Keep app alive in background while online
       ForegroundTaskService.startService();
     } else {
-      _stopIncomingCallListener();
       // Stop background service when offline to save battery
       ForegroundTaskService.stopService();
     }
@@ -156,7 +132,6 @@ class _FemaleExpertDashboardState extends State<FemaleExpertDashboard> with Widg
       });
 
     }
-    _stopIncomingCallListener();
     appState.reset();
     Navigator.pushAndRemoveUntil(
       context,

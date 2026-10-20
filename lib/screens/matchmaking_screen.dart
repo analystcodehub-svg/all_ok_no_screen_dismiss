@@ -211,11 +211,17 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> with SingleTicker
 
     try {
       final maleCoins = mounted ? context.read<AppState>().coinBalance : null;
+      final maleNick = mounted ? context.read<AppState>().nickname : 'User';
+      final maleAvatarIdx = mounted ? context.read<AppState>().avatarIndex : 1;
       final callRoomId = await _callService.startCall(
         expertId: matchedExpertUid,
         callerId: callerUid,
         callerCoins: maleCoins,
         pricePerMin: 3.0,
+        extraRoomData: {
+          'callerName': maleNick.isNotEmpty ? maleNick : 'User',
+          'callerAvatarIndex': maleAvatarIdx,
+        },
         onRemoteStream: (stream) {},
         onCallEnded: () {},
       );

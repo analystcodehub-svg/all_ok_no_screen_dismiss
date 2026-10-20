@@ -1,12 +1,15 @@
 package com.sajnire.app
 
 import android.app.Activity
+import android.app.KeyguardManager
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.content.IntentSender
 import android.os.Build
+import android.view.WindowManager
 import com.google.android.gms.auth.api.identity.GetPhoneNumberHintIntentRequest
 import com.google.android.gms.auth.api.identity.Identity
 import io.flutter.embedding.android.FlutterActivity
@@ -35,7 +38,7 @@ class MainActivity : FlutterActivity() {
             }
             manager.createNotificationChannel(messagesChannel)
 
-            // Calls channel — used for incoming call notifications
+            // Calls channel — used for incoming call notifications (WhatsApp style)
             val callsChannel = NotificationChannel(
                 "calls_channel",
                 "Incoming Calls",
@@ -43,6 +46,8 @@ class MainActivity : FlutterActivity() {
             ).apply {
                 description = "Incoming call notifications"
                 enableVibration(true)
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                setBypassDnd(true)
             }
             manager.createNotificationChannel(callsChannel)
         }
@@ -60,8 +65,26 @@ class MainActivity : FlutterActivity() {
         return null
     }
 
+    private fun turnScreenOnAndShowWhenLocked() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(true)
+            setTurnScreenOn(true)
+            val keyguardManager = getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
+            keyguardManager?.requestDismissKeyguard(this, null)
+        } else {
+            @Suppress("DEPRECATION")
+            window.addFlags(
+                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
+                WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
+                WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
+            )
+        }
+    }
+
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
         super.onCreate(savedInstanceState)
+        turnScreenOnAndShowWhenLocked()
         initialCallRoomId = extractCallRoomId(intent)
     }
 
@@ -130,6 +153,7 @@ class MainActivity : FlutterActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        turnScreenOnAndShowWhenLocked()
         val callRoomId = extractCallRoomId(intent)
         if (!callRoomId.isNullOrEmpty()) {
             flutterEngine?.dartExecutor?.binaryMessenger?.let { messenger ->

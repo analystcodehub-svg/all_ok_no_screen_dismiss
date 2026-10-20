@@ -2,6 +2,8 @@ import "../utils/permission_helper.dart";
 import "package:flutter/services.dart";
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'active_call_page.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -11,7 +13,6 @@ import '../providers/app_state.dart';
 import '../models/female_expert.dart';
 import 'wallet_recharge_screen.dart';
 import 'matchmaking_screen.dart';
-import 'incoming_call_screen.dart';
 import 'profile_screen.dart';
 import '../widgets/local_avatar_widget.dart';
 import '../services/call_service.dart';
@@ -33,7 +34,9 @@ class MaleCallerDashboard extends StatefulWidget {
   State<MaleCallerDashboard> createState() => _MaleCallerDashboardState();
 }
 
-class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
+class _MaleCallerDashboardState extends State<MaleCallerDashboard> with WidgetsBindingObserver {
+  bool _isNotificationPermissionGranted = true;
+  bool _isIncomingCallActive = false;
   // Removed unused _callService
 
   // Navigation & filter states
@@ -114,6 +117,8 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _checkNotificationPermission();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       // Ensure we have a valid Firebase Auth session (anonymous) so Firestore
       // rules (request.auth != null) are satisfied before any reads.
@@ -155,7 +160,25 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
     });
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _checkNotificationPermission();
+    }
+  }
 
+  Future<void> _checkNotificationPermission() async {
+    try {
+      final isGranted = await Permission.notification.isGranted;
+      if (mounted && _isNotificationPermissionGranted != isGranted) {
+        setState(() {
+          _isNotificationPermissionGranted = isGranted;
+        });
+      }
+    } catch (e) {
+      debugPrint('[MALE_DASH] checkNotificationPermission error: $e');
+    }
+  }
 
   void _showFreeMessagesPopup() {
     showDialog(
@@ -363,16 +386,10 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
     _incomingCallSubscription = CallService().listenForIncomingCalls(
       expertId: myUid, // Male user receives the call
       onCallReceived: (roomId, callerId) {
-        if (!mounted) return;
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => IncomingCallScreen(
-              callRoomId: roomId,
-              callerId: callerId,
-            ),
-          ),
-        );
+        // Foreground user receives immediate in-app incoming call screen
+        if (mounted) {
+          _openIncomingCallScreen(roomId, callerId, isIntro: false);
+        }
       },
     );
 
@@ -383,43 +400,39 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
     ).listenForIncomingCalls(
       expertId: myUid,
       onCallReceived: (roomId, callerId) {
-        if (!mounted) return;
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => IncomingCallScreen(
-              callRoomId: roomId,
-              callerId: callerId,
-              callDatabaseURL: NewMaleService.newDbUrl,
-              isFreeIntroCall: true,
-            ),
-          ),
-        );
+        // Foreground user receives immediate in-app incoming call screen
+        if (mounted) {
+          _openIncomingCallScreen(roomId, callerId, isIntro: true);
+        }
       },
     );
 
     // Sync male user to new_males_pool & language buckets on new RTDB for female discovery
     final maleLang = appState.primaryLanguage.isNotEmpty ? appState.primaryLanguage : 'Hindi';
-    FirebaseMessaging.instance.getToken().then((token) {
-      NewMaleService.instance.registerOrUpdateMale(
-        uid: myUid,
-        nickname: appState.nickname,
-        avatarUrl: '',
-        avatarIndex: appState.avatarIndex,
-        language: maleLang,
-        fcmToken: token,
-        isOnline: true,
-      );
-    }).catchError((_) {
-      NewMaleService.instance.registerOrUpdateMale(
-        uid: myUid,
-        nickname: appState.nickname,
-        avatarUrl: '',
-        avatarIndex: appState.avatarIndex,
-        language: maleLang,
-        isOnline: true,
-      );
-    });
+    if (appState.coinBalance > 0) {
+      NewMaleService.instance.markRecharged(myUid, language: maleLang);
+    } else {
+      FirebaseMessaging.instance.getToken().then((token) {
+        NewMaleService.instance.registerOrUpdateMale(
+          uid: myUid,
+          nickname: appState.nickname,
+          avatarUrl: '',
+          avatarIndex: appState.avatarIndex,
+          language: maleLang,
+          fcmToken: token,
+          isOnline: true,
+        );
+      }).catchError((_) {
+        NewMaleService.instance.registerOrUpdateMale(
+          uid: myUid,
+          nickname: appState.nickname,
+          avatarUrl: '',
+          avatarIndex: appState.avatarIndex,
+          language: maleLang,
+          isOnline: true,
+        );
+      });
+    }
     NewMaleService.instance.setMaleOfflineOnDisconnect(myUid, language: maleLang);
 
     // Listen to real-time wallet balance changes
@@ -432,12 +445,16 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
       if (event.snapshot.exists && event.snapshot.value != null && mounted) {
         final coins = (event.snapshot.value as num).toInt();
         context.read<AppState>().setCoinBalance(coins);
+        if (coins > 0) {
+          NewMaleService.instance.markRecharged(myUid, language: maleLang);
+        }
       }
     });
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     // We don't dispose the singleton, just let it run or implement a cleanup method if needed.
     // HybridChatService.instance.dispose();
     _chatUpdatesSubscription?.cancel();
@@ -748,6 +765,191 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
     );
   }
 
+  Widget _buildNotificationWarningBanner() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFBEB), // Warm amber 50
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFFDE68A), width: 1.5), // Amber 200
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFF59E0B).withValues(alpha: 0.08),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: const BoxDecoration(
+              color: Color(0xFFFEF3C7),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.notifications_off_rounded,
+              color: Color(0xFFD97706),
+              size: 24,
+            ),
+          ),
+          const SizedBox(width: 12),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'कॉल नोटिफिकेशन बंद हैं!',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF92400E),
+                  ),
+                ),
+                SizedBox(height: 2),
+                Text(
+                  'लड़कियों की incoming calls मिस न हों, नोटिफिकेशन ऑन करें।',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFFB45309),
+                    height: 1.25,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          ElevatedButton(
+            onPressed: () async {
+              final status = await Permission.notification.request();
+              if (status.isGranted) {
+                if (mounted) setState(() => _isNotificationPermissionGranted = true);
+              } else {
+                openAppSettings();
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFD97706),
+              foregroundColor: Colors.white,
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+              textStyle: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            child: const Text('चालू करें'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<Map<String, dynamic>> _fetchCallerInfo(String callerId, {String? roomId, String? dbUrl}) async {
+    // 1. Try checking room data first from RTDB (contains exact callerName e.g. "heena")
+    if (roomId != null && roomId.isNotEmpty) {
+      try {
+        final rtdb = FirebaseDatabase.instanceFor(
+          app: FirebaseDatabase.instance.app,
+          databaseURL: dbUrl ?? 'https://zegochat-c44b0.asia-southeast1.firebasedatabase.app',
+        );
+        final rSnap = await rtdb.ref('calls/$roomId').get();
+        if (rSnap.exists && rSnap.value != null) {
+          final rData = Map<String, dynamic>.from(rSnap.value as Map);
+          final cName = rData['callerName']?.toString().trim();
+          if (cName != null && cName.isNotEmpty && cName != 'null') {
+            return {
+              'name': cName,
+              'avatarUrl': rData['callerAvatar'] as String?,
+              'avatarIndex': (rData['callerAvatarIndex'] as num?)?.toInt() ?? 1,
+            };
+          }
+        }
+      } catch (_) {}
+    }
+
+    try {
+      final cachedProfile = await LocalChatDatabase.instance.getUserProfile(callerId);
+      if (cachedProfile != null) {
+        return {
+          'name': cachedProfile['name'] as String? ?? 'सजनी',
+          'avatarUrl': cachedProfile['avatarUrl'] as String?,
+          'avatarIndex': (cachedProfile['avatarIndex'] as num?)?.toInt() ?? 1,
+        };
+      }
+      final expertData = await UserDatabaseService.instance.getExpert(callerId);
+      if (expertData != null) {
+        final name = expertData['nickname'] ?? expertData['name'] ?? 'सजनी';
+        final avatarUrl = expertData['profileImageUrl'] ?? expertData['avatarUrl'];
+        final avatarIndex = (expertData['avatarIndex'] as num?)?.toInt() ?? 1;
+        await LocalChatDatabase.instance.saveUserProfile({
+          'uid': callerId,
+          'name': name,
+          'avatarUrl': avatarUrl,
+          'avatarIndex': avatarIndex,
+          'role': 'expert',
+          'timestamp': DateTime.now().millisecondsSinceEpoch,
+        });
+        return {
+          'name': name,
+          'avatarUrl': avatarUrl,
+          'avatarIndex': avatarIndex,
+        };
+      }
+    } catch (e) {
+      debugPrint('[IN_APP_CALL] _fetchCallerInfo error: $e');
+    }
+    return {
+      'name': 'सजनी',
+      'avatarUrl': null,
+      'avatarIndex': 1,
+    };
+  }
+
+  void _openIncomingCallScreen(String roomId, String callerId, {required bool isIntro}) async {
+    if (_isIncomingCallActive) return;
+    _isIncomingCallActive = true;
+
+    final dbUrl = isIntro ? NewMaleService.newDbUrl : 'https://zegochat-c44b0.asia-southeast1.firebasedatabase.app';
+    final callerInfo = await _fetchCallerInfo(callerId, roomId: roomId, dbUrl: dbUrl);
+    if (!mounted) {
+      _isIncomingCallActive = false;
+      return;
+    }
+
+    final callerName = callerInfo['name'] as String? ?? 'सजनी';
+    final callerAvatarUrl = callerInfo['avatarUrl'] as String?;
+    final callerAvatarIndex = (callerInfo['avatarIndex'] as num?)?.toInt() ?? 1;
+    final myUid = context.read<AppState>().uid;
+
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ActiveCallPage(
+          callRoomId: roomId,
+          callerId: callerId,
+          receiverId: myUid,
+          nickname: callerName,
+          avatarUrl: callerAvatarUrl,
+          avatarIndex: callerAvatarIndex,
+          isCaller: false,
+          pricePerMin: 0.0,
+          isFreeIntroCall: isIntro,
+          callDatabaseURL: isIntro ? NewMaleService.newDbUrl : null,
+          autoAccept: false,
+        ),
+      ),
+    );
+
+    _isIncomingCallActive = false;
+  }
+
   // Home Tab view (Redesigned 60-70% similar)
   Widget _buildHomeTab() {
     final appState = context.watch<AppState>();
@@ -828,6 +1030,9 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> {
                 ],
               ),
             ),
+
+            if (!_isNotificationPermissionGranted)
+              _buildNotificationWarningBanner(),
 
             // Wallet Recharge Banner
             GestureDetector(

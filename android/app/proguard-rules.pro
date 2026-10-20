@@ -1,4 +1,2 @@
 -keep class com.google.android.apps.nbu.paisa.inapp.client.api.** { *; }
 -dontwarn com.google.android.apps.nbu.paisa.inapp.client.api.**
--keep class com.payu.** { *; }
--dontwarn com.payu.**

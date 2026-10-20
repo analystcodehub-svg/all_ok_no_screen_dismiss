@@ -57,7 +57,7 @@ class TermsConditionScreen extends StatelessWidget {
             ),
 
             _buildSection('4. Wallet & Payments',
-              '• In-app coins are purchased via the wallet recharge feature using PayU or Google Play.\n'
+              '• In-app coins are purchased via the wallet recharge feature using Google Play.\n'
               '• 1 Rupee = 10 Coins. Coins can only be used within the SajniRe app.\n'
               '• Wallet balances are non-transferable and have no cash value outside the app.\n'
               '• We are not responsible for failed payments due to third-party payment gateway issues.',

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 
@@ -192,20 +193,31 @@ class _SajniReAppState extends State<SajniReApp> with WidgetsBindingObserver {
               ? passedCallerId 
               : args['callerName'] as String;
 
+          final isFree = args['isFreeIntroCall'] == true || args['isFreeIntroCall'] == 'true';
+          final resolvedDbUrl = args['dbUrl'] as String? ??
+              (isFree ? 'https://zegochat-c44b0-1e689.asia-southeast1.firebasedatabase.app' : null);
+
+          final receiverUid = appState.uid.isNotEmpty 
+              ? appState.uid 
+              : (FirebaseAuth.instance.currentUser?.uid ?? '');
+
+          final autoAccept = args['autoAccept'] == true || args['autoAccept'] == 'true';
+
           return ActiveCallPage(
             callRoomId: args['callRoomId'] as String,
-            receiverId: appState.uid,
+            receiverId: receiverUid,
             callerId:   resolvedCallerId,
             nickname:   args['callerName'] as String,
-            pricePerMin: (args['isFreeIntroCall'] == true || args['isFreeIntroCall'] == 'true')
+            pricePerMin: isFree
                 ? 0.0
                 : ((args['pricePerMin'] as num?)?.toDouble() ?? 3.0),
             isCaller: false,     // Receiver is accepting
             callerCoinBalance: args['callerCoins'] as int?,
-            callDatabaseURL: args['dbUrl'] as String?,
-            isFreeIntroCall: args['isFreeIntroCall'] == true || args['isFreeIntroCall'] == 'true',
+            callDatabaseURL: resolvedDbUrl,
+            isFreeIntroCall: isFree,
             maxDurationSeconds: (args['maxDurationSeconds'] as num?)?.toInt() ??
-                ((args['isFreeIntroCall'] == true || args['isFreeIntroCall'] == 'true') ? 60 : null),
+                (isFree ? 60 : null),
+            autoAccept: autoAccept,
           );
         },
         '/chat': (context) {

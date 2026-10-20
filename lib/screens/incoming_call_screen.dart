@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:vibration/vibration.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
 import '../providers/app_state.dart';
 import '../services/call_service.dart';
 import 'active_call_page.dart';
@@ -40,29 +41,20 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
   Timer? _vibrateTimer;
 
   String get _effectiveDatabaseUrl =>
-      widget.callDatabaseURL ?? 'https://zegochat-c44b0.asia-southeast1.firebasedatabase.app';
+      widget.callDatabaseURL ??
+      (widget.isFreeIntroCall
+          ? 'https://zegochat-c44b0-1e689.asia-southeast1.firebasedatabase.app'
+          : 'https://zegochat-c44b0.asia-southeast1.firebasedatabase.app');
 
   Future<Map<String, dynamic>> _fetchCallerData() async {
     Map<String, dynamic> result = {
-      'nickname': 'User',
+      'nickname': widget.isFreeIntroCall ? 'Female Expert' : 'User',
       'avatarUrl': null,
       'avatarIndex': 1,
       'coinBalance': 0,
     };
     try {
-      final data = await UserDatabaseService.instance
-          .getUser(widget.callerId)
-          .timeout(const Duration(seconds: 2));
-      if (data != null) {
-        if (data['nickname'] != null && data['nickname'].toString().isNotEmpty) {
-          result['nickname'] = data['nickname'].toString();
-        }
-        result['avatarUrl'] = data['profileImageUrl'] ?? data['avatarUrl'];
-        result['avatarIndex'] = (data['avatarIndex'] as num?)?.toInt() ?? 1;
-        result['coinBalance'] = (data['coinBalance'] as num?)?.toInt() ?? 0;
-      }
-
-      // Check if room has exact callerCoins
+      // 1. Check room data on the active call database URL first (contains exact callerName & avatar)
       try {
         final rtdb = FirebaseDatabase.instanceFor(
           app: FirebaseDatabase.instance.app,
@@ -71,11 +63,63 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
         final roomSnap = await rtdb.ref('calls/${widget.callRoomId}').get();
         if (roomSnap.exists && roomSnap.value != null) {
           final rData = Map<String, dynamic>.from(roomSnap.value as Map);
+          final roomCallerName = rData['callerName']?.toString().trim();
+          if (roomCallerName != null && roomCallerName.isNotEmpty && roomCallerName != 'null') {
+            result['nickname'] = roomCallerName;
+          }
+          if (rData['callerAvatar'] != null) {
+            result['avatarUrl'] = rData['callerAvatar'].toString();
+          }
+          if (rData['callerAvatarIndex'] != null) {
+            result['avatarIndex'] = (rData['callerAvatarIndex'] as num).toInt();
+          }
           if (rData['callerCoins'] != null) {
             result['coinBalance'] = (rData['callerCoins'] as num).toInt();
           }
         }
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('[IncomingCall] Error fetching room data: $e');
+      }
+
+      // 2. Try checking user profile first (male caller)
+      if (result['nickname'] == 'User' || result['nickname'] == 'Female Expert') {
+        try {
+          final data = await UserDatabaseService.instance
+              .getUser(widget.callerId)
+              .timeout(const Duration(seconds: 2));
+          if (data != null) {
+            if (data['nickname'] != null && data['nickname'].toString().isNotEmpty) {
+              result['nickname'] = data['nickname'].toString();
+            }
+            if (result['avatarUrl'] == null) {
+              result['avatarUrl'] = data['profileImageUrl'] ?? data['avatarUrl'];
+            }
+            result['avatarIndex'] = (data['avatarIndex'] as num?)?.toInt() ?? 1;
+            if (result['coinBalance'] == 0) {
+              result['coinBalance'] = (data['coinBalance'] as num?)?.toInt() ?? 0;
+            }
+          }
+        } catch (_) {}
+      }
+
+      // 3. Fallback to expert profile (if caller is an expert)
+      if (result['nickname'] == 'Female Expert' || result['nickname'] == 'User') {
+        try {
+          final expertData = await UserDatabaseService.instance
+              .getExpert(widget.callerId)
+              .timeout(const Duration(seconds: 1));
+          if (expertData != null) {
+            final eName = expertData['nickname'] ?? expertData['name'] ?? expertData['displayName'];
+            if (eName != null && eName.toString().trim().isNotEmpty) {
+              result['nickname'] = eName.toString().trim();
+            }
+            if (result['avatarUrl'] == null) {
+              result['avatarUrl'] = expertData['profileImageUrl'] ?? expertData['avatarUrl'];
+            }
+            result['avatarIndex'] = (expertData['avatarIndex'] as num?)?.toInt() ?? 1;
+          }
+        } catch (_) {}
+      }
     } catch (e) {
       debugPrint("Error fetching caller data: $e");
     }
@@ -85,7 +129,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
   @override
   void initState() {
     super.initState();
-    _callService = CallService(databaseURL: widget.callDatabaseURL);
+    _callService = CallService(databaseURL: _effectiveDatabaseUrl);
     _callerDataFuture = _fetchCallerData();
     
     // Start playing system ringtone and vibration when the screen opens
@@ -138,12 +182,13 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
         .ref('calls/${widget.callRoomId}')
         .onValue
         .listen((event) {
-      if (event.snapshot.value == null) {
+      if (!event.snapshot.exists || event.snapshot.value == null) {
         _handleCallEndedRemotely();
         return;
       }
       final data = Map<String, dynamic>.from(event.snapshot.value as Map);
-      if (data['status'] == 'ended') {
+      final status = data['status']?.toString();
+      if (status == 'ended' || status == 'cancelled' || status == 'missed' || status == 'rejected_blocked') {
         _handleCallEndedRemotely();
       }
     });
@@ -153,6 +198,10 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
     if (_isDismissing) return;
     _isDismissing = true;
     
+    _vibrateTimer?.cancel();
+    FlutterRingtonePlayer().stop();
+    FlutterCallkitIncoming.endAllCalls();
+
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Missed Call: Caller disconnected')),
@@ -165,6 +214,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
   void dispose() {
     _vibrateTimer?.cancel();
     FlutterRingtonePlayer().stop();
+    FlutterCallkitIncoming.endAllCalls();
     _callSub?.cancel();
     _pulseController.dispose();
     super.dispose();
@@ -182,6 +232,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
     
     _vibrateTimer?.cancel();
     FlutterRingtonePlayer().stop();
+    FlutterCallkitIncoming.endAllCalls();
     
     if (mounted) {
       Navigator.pushReplacement(
@@ -213,6 +264,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
     
     _vibrateTimer?.cancel();
     FlutterRingtonePlayer().stop();
+    FlutterCallkitIncoming.endAllCalls();
     
     final appState = context.read<AppState>();
     final currentUserId = appState.uid;

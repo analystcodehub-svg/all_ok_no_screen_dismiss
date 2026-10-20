@@ -28,17 +28,23 @@ class CallService {
   // Dynamic listeners that can be updated after startCall/acceptCall
   Function(MediaStream stream)? onRemoteStreamListener;
   Function()? onCallEndedListener;
+  Function()? onRingingListener;
+  String? lastCallStatus;
 
   /// Update the active call callbacks dynamically
   void updateListeners({
     Function(MediaStream stream)? onRemoteStream,
     Function()? onCallEnded,
+    Function()? onRinging,
   }) {
     if (onRemoteStream != null) {
       onRemoteStreamListener = onRemoteStream;
     }
     if (onCallEnded != null) {
       onCallEndedListener = onCallEnded;
+    }
+    if (onRinging != null) {
+      onRingingListener = onRinging;
     }
   }
 
@@ -118,12 +124,14 @@ class CallService {
     required String callerId,
     required Function(MediaStream stream) onRemoteStream,
     required Function() onCallEnded,
+    Function()? onRinging,
     int? callerCoins,
     double pricePerMin = 3.0,
     Map<String, dynamic>? extraRoomData,
   }) async {
     onRemoteStreamListener = onRemoteStream;
     onCallEndedListener = onCallEnded;
+    onRingingListener = onRinging;
     try {
       // 1 + 2. Initialize local audio and peer connection IN PARALLEL
       // (independent steps; the call doc — and therefore the FCM ring on the
@@ -216,7 +224,17 @@ class CallService {
         }
 
         final data = Map<String, dynamic>.from(event.snapshot.value as Map);
-        if (data['status'] == 'ended' || data['status'] == 'rejected_blocked') {
+        final status = data['status'] as String?;
+        if (status == 'ringing') {
+          onRingingListener?.call();
+        }
+        if (status == 'ended' ||
+            status == 'rejected_blocked' ||
+            status == 'rejected_offline' ||
+            status == 'rejected' ||
+            status == 'busy') {
+          debugPrint('[CallService] Room $roomId terminal status: $status');
+          lastCallStatus = status;
           onCallEndedListener?.call();
           return;
         }
@@ -393,7 +411,12 @@ class CallService {
 
       // 9. Subscribe to call document updates to monitor ended state
       final roomSub = roomRef.child('status').onValue.listen((event) {
-        if (event.snapshot.value == null || event.snapshot.value == 'ended') {
+        final val = event.snapshot.value?.toString();
+        if (event.snapshot.value == null ||
+            val == 'ended' ||
+            val == 'rejected' ||
+            val == 'rejected_offline' ||
+            val == 'rejected_blocked') {
           onCallEndedListener?.call();
         }
       });
@@ -475,6 +498,8 @@ class CallService {
 
     // Close peer connection
     if (_peerConnection != null) {
+      _peerConnection!.onIceConnectionState = null;
+      _peerConnection!.onConnectionState = null;
       await _peerConnection!.close();
       _peerConnection = null;
     }

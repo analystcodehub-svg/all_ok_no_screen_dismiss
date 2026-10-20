@@ -30,7 +30,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
             _buildSection('1. Information We Collect',
               '• Phone Number: Used for account creation and login via OTP verification.\n'
               '• Nickname & Profile Data: Your chosen display name, gender, language preference, and avatar selected during onboarding.\n'
-              '• Payment Data: Wallet recharge amount, transaction ID, and payment gateway used (PayU/Google Play). We do NOT store card numbers or UPI PINs.\n'
+              '• Payment Data: Wallet recharge amount, transaction ID, and payment gateway used (Google Play). We do NOT store card numbers or UPI PINs.\n'
               '• Call & Chat Logs: Duration of calls, call timestamps, and chat message metadata (not the content of messages). Messages are temporarily routed via Firebase Realtime Database and are NOT permanently stored on our servers.\n'
               '• Microphone Usage: Required to enable live audio calling features. Audio is transmitted in real-time and NOT recorded or stored by us.\n'
               '• Device Information: Device model, OS version, and app version for troubleshooting and improving performance.\n'
@@ -49,7 +49,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
 
             _buildSection('3. Data Sharing',
               'We do NOT sell or rent your personal data. We may share data only in these cases:\n\n'
-              '• Payment Processors: PayU and Google Play receive transaction data necessary to process payments.\n'
+              '• Payment Processors: Google Play receives transaction data necessary to process payments.\n'
               '• Firebase (Google): We use Firebase for authentication, real-time database, push notifications, and cloud storage.\n'
               '• Legal Compliance: We may disclose data if required by law, court order, or government authority.',
             ),
@@ -82,7 +82,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
             ),
 
             _buildSection('8. Security',
-              'We implement industry-standard security measures including HTTPS encryption, Firebase Security Rules, and secure payment processing via PayU. However, no system is 100% secure. We urge you to keep your phone secure.',
+              'We implement industry-standard security measures including HTTPS encryption, Firebase Security Rules, and secure payment processing via Google Play Billing. However, no system is 100% secure. We urge you to keep your phone secure.',
             ),
 
             _buildSection('9. Changes to This Policy',

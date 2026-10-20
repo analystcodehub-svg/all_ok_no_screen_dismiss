@@ -18,6 +18,7 @@ import 'package:flutter_callkit_incoming/entities/android_params.dart';
 import 'package:flutter_callkit_incoming/entities/ios_params.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_ringtone_player/flutter_ringtone_player.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_callkit_incoming/entities/call_event.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -184,6 +185,145 @@ Future<void> showChatNotification(Map<String, dynamic> data) async {
   );
 }
 
+@pragma('vm:entry-point')
+void notificationTapBackground(NotificationResponse details) async {
+  WidgetsFlutterBinding.ensureInitialized();
+  try {
+    if (Firebase.apps.isEmpty) {
+      await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+    }
+  } catch (_) {}
+
+  if (details.payload != null) {
+    try {
+      final data = jsonDecode(details.payload!) as Map<String, dynamic>;
+      final callRoomId = data['callRoomId'] as String? ?? '';
+      final dbUrl = data['dbUrl'] as String?;
+
+      if (details.actionId == 'action_decline') {
+        FlutterRingtonePlayer().stop();
+        FlutterCallkitIncoming.endAllCalls();
+        if (callRoomId.isNotEmpty) {
+          FlutterLocalNotificationsPlugin().cancel(id: callRoomId.hashCode.abs());
+          CallService(databaseURL: dbUrl).endCall(callRoomId);
+        }
+      } else if (details.actionId == 'action_accept') {
+        FlutterRingtonePlayer().stop();
+        FlutterCallkitIncoming.endAllCalls();
+        if (callRoomId.isNotEmpty) {
+          FlutterLocalNotificationsPlugin().cancel(id: callRoomId.hashCode.abs());
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setBool('autoAccept_$callRoomId', true);
+        }
+      }
+    } catch (_) {}
+  }
+}
+
+// ─── CALL NOTIFICATION WITH ACTIONS (WhatsApp Style Accept / Decline) ──────
+
+Future<void> showCallNotificationWithActions(
+  Map<String, dynamic> data,
+  String callerName, {
+  bool isMale = false,
+  bool notificationsEnabled = true,
+}) async {
+  try {
+    final plugin = FlutterLocalNotificationsPlugin();
+    const androidSettings = AndroidInitializationSettings('@drawable/ic_notification');
+    const iosSettings = DarwinInitializationSettings();
+    await plugin.initialize(
+      settings: const InitializationSettings(android: androidSettings, iOS: iosSettings),
+      onDidReceiveNotificationResponse: (details) {
+        if (details.payload != null) {
+          try {
+            final d = jsonDecode(details.payload!) as Map<String, dynamic>;
+            final callRoomId = d['callRoomId'] as String? ?? '';
+            final dbUrl = d['dbUrl'] as String?;
+            if (details.actionId == 'action_accept') {
+              FlutterRingtonePlayer().stop();
+              FlutterCallkitIncoming.endAllCalls();
+              if (callRoomId.isNotEmpty) {
+                plugin.cancel(id: callRoomId.hashCode.abs());
+                NotificationService.instance._navigateToActiveCall(callRoomId, autoAccept: true);
+              }
+            } else if (details.actionId == 'action_decline') {
+              FlutterRingtonePlayer().stop();
+              FlutterCallkitIncoming.endAllCalls();
+              if (callRoomId.isNotEmpty) {
+                plugin.cancel(id: callRoomId.hashCode.abs());
+                CallService(databaseURL: dbUrl).endCall(callRoomId);
+              }
+            } else {
+              // Tapped notification body
+              FlutterRingtonePlayer().stop();
+              FlutterCallkitIncoming.endAllCalls();
+              if (callRoomId.isNotEmpty) {
+                plugin.cancel(id: callRoomId.hashCode.abs());
+                NotificationService.instance._navigateToActiveCall(callRoomId, autoAccept: false);
+              }
+            }
+          } catch (_) {}
+        }
+      },
+      onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
+    );
+
+    final callRoomId = data['callRoomId'] ?? '';
+    final isFreeIntro = data['isFreeIntroCall'] == 'true' || data['isFreeIntroCall'] == true;
+
+    final androidDetails = AndroidNotificationDetails(
+      'calls_channel',
+      'Incoming Calls',
+      channelDescription: 'Incoming voice call notifications',
+      importance: Importance.max,
+      priority: Priority.high,
+      category: AndroidNotificationCategory.call,
+      fullScreenIntent: true,
+      ongoing: true,
+      autoCancel: false,
+      largeIcon: const DrawableResourceAndroidBitmap('ic_female_avatar'),
+      color: const Color(0xFF10B981),
+      actions: <AndroidNotificationAction>[
+        const AndroidNotificationAction(
+          'action_accept',
+          'Accept',
+          titleColor: Color(0xFF10B981),
+          showsUserInterface: true,
+          cancelNotification: true,
+        ),
+        const AndroidNotificationAction(
+          'action_decline',
+          'Decline',
+          titleColor: Color(0xFFEF4444),
+          showsUserInterface: false,
+          cancelNotification: true,
+        ),
+      ],
+    );
+
+    final details = NotificationDetails(
+      android: androidDetails,
+      iOS: const DarwinNotificationDetails(
+        presentAlert: true,
+        presentSound: true,
+      ),
+    );
+
+    final notifId = callRoomId.hashCode.abs();
+    await plugin.show(
+      id: notifId,
+      title: callerName,
+      body: isFreeIntro ? 'Incoming Voice Call • 1 Min Free Intro' : 'Incoming Audio Call...',
+      notificationDetails: details,
+      payload: jsonEncode(data),
+    );
+    debugPrint('[Notification] Displayed calling notification for $callerName (isMale: $isMale)');
+  } catch (e) {
+    debugPrint('[Notification] Error showing call notification: $e');
+  }
+}
+
 // ─── CALLKIT HELPER (top-level, callable from background isolate) ──────────
 
 Future<void> _showCallkitIncoming(Map<String, dynamic> data) async {
@@ -192,19 +332,52 @@ Future<void> _showCallkitIncoming(Map<String, dynamic> data) async {
   String callerName   = data['callerName']  ?? 'Unknown Caller';
   final callRoomId   = data['callRoomId']  ?? '';
   final callerId     = data['callerId']    ?? '';
+  final dbUrl        = data['dbUrl'] as String? ?? 'https://zegochat-c44b0.asia-southeast1.firebasedatabase.app';
+  final isFreeIntro  = data['isFreeIntroCall'] == 'true' || data['isFreeIntroCall'] == true;
 
   // Resolve caller nickname if callerName is empty, equals callerId, or looks like a raw Firebase UID
   if (callerId.isNotEmpty && (callerName.isEmpty || callerName == callerId || callerName == 'Unknown Caller' || (callerName.length >= 20 && !callerName.contains(' ')))) {
+    // 1. Try reading callerName directly from active call room
     try {
       final snap = await FirebaseDatabase.instanceFor(
         app: Firebase.app(),
-        databaseURL: 'https://zegochat-c44b0-4cbfb.asia-southeast1.firebasedatabase.app',
-      ).ref('users/$callerId/nickname').get();
+        databaseURL: dbUrl,
+      ).ref('calls/$callRoomId/callerName').get();
       if (snap.exists && snap.value != null && snap.value.toString().isNotEmpty) {
         callerName = snap.value.toString();
       }
-    } catch (e) {
-      debugPrint('[CallKit] Error resolving caller nickname from RTDB: $e');
+    } catch (_) {}
+
+    // 2. Try experts/$callerId/nickname (female caller is an expert)
+    if (callerName.isEmpty || callerName == callerId || callerName == 'Unknown Caller' || (callerName.length >= 20 && !callerName.contains(' '))) {
+      try {
+        final expSnap = await FirebaseDatabase.instanceFor(
+          app: Firebase.app(),
+          databaseURL: 'https://zegochat-c44b0-4cbfb.asia-southeast1.firebasedatabase.app',
+        ).ref('experts/$callerId/nickname').get();
+        if (expSnap.exists && expSnap.value != null && expSnap.value.toString().isNotEmpty) {
+          callerName = expSnap.value.toString();
+        }
+      } catch (_) {}
+    }
+
+    // 3. Try users/$callerId/nickname
+    if (callerName.isEmpty || callerName == callerId || callerName == 'Unknown Caller' || (callerName.length >= 20 && !callerName.contains(' '))) {
+      try {
+        final snap = await FirebaseDatabase.instanceFor(
+          app: Firebase.app(),
+          databaseURL: 'https://zegochat-c44b0-4cbfb.asia-southeast1.firebasedatabase.app',
+        ).ref('users/$callerId/nickname').get();
+        if (snap.exists && snap.value != null && snap.value.toString().isNotEmpty) {
+          callerName = snap.value.toString();
+        }
+      } catch (e) {
+        debugPrint('[CallKit] Error resolving caller nickname from RTDB: $e');
+      }
+    }
+
+    if (callerName.isEmpty || callerName == callerId || callerName == 'Unknown Caller' || (callerName.length >= 20 && !callerName.contains(' '))) {
+      callerName = isFreeIntro ? 'Female Host' : 'Incoming Call';
     }
   }
 
@@ -222,16 +395,49 @@ Future<void> _showCallkitIncoming(Map<String, dynamic> data) async {
     }
   }
 
-  final dbUrl = data['dbUrl'] as String? ?? 'https://zegochat-c44b0.asia-southeast1.firebasedatabase.app';
-  final isFreeIntro = data['isFreeIntroCall'] == 'true' || data['isFreeIntroCall'] == true;
-
   debugPrint('[CallKit] Proceeding to ring...');
+
+  // Mark call as ringing in RTDB so female caller knows the notification arrived and switches to 15s ringing screen
+  if (callRoomId.isNotEmpty) {
+    try {
+      final roomRef = FirebaseDatabase.instanceFor(
+        app: Firebase.app(),
+        databaseURL: dbUrl,
+      ).ref('calls/$callRoomId');
+
+      roomRef.child('status').get().then((currentSnap) {
+        final currentStatus = currentSnap.value?.toString();
+        if (currentStatus == null || currentStatus == 'calling' || currentStatus == 'dialing') {
+          roomRef.update({
+            'status': 'ringing',
+            'ringDeliveredAt': ServerValue.timestamp,
+          });
+          debugPrint('[CallKit] Notification delivered to recipient! Updated status to ringing for room: $callRoomId on $dbUrl');
+        } else {
+          debugPrint('[CallKit] Skip setting ringing, current room status is: $currentStatus');
+        }
+      }).catchError((e) {
+        debugPrint('[CallKit] Error checking/updating room status: $e');
+      });
+    } catch (e) {
+      debugPrint('[CallKit] Failed to set ringing status in room: $e');
+    }
+  }
+
   NotificationService.lastCallerName = callerName;
   final prefs = await SharedPreferences.getInstance();
   await prefs.setString('callerName_$callRoomId', callerName);
   await prefs.setString('callerId_$callRoomId', callerId);
   await prefs.setString('dbUrl_$callRoomId', dbUrl);
   await prefs.setBool('isFreeIntroCall_$callRoomId', isFreeIntro);
+
+  // 1. Check if this call is already actively being displayed via full-screen IncomingCallScreen
+  // If so, exit IMMEDIATELY to prevent playing a 2nd duplicate ringtone or showing duplicate UI!
+  final isAlreadyHandled = prefs.getBool('is_in_incoming_call_$callRoomId') ?? false;
+  if (isAlreadyHandled) {
+    debugPrint('[CallKit] Call $callRoomId is already active in IncomingCallScreen, skipping CallKit display and duplicate ringtone.');
+    return;
+  }
 
   // Pre-fetch caller's balance from RTDB in background without blocking CallKit display!
   if (callerId.isNotEmpty) {
@@ -263,15 +469,6 @@ Future<void> _showCallkitIncoming(Map<String, dynamic> data) async {
       } catch (_) {}
     });
   }
-
-  // Explicitly play the ringtone using flutter_ringtone_player
-  FlutterRingtonePlayer().play(
-    android: AndroidSounds.ringtone,
-    ios: IosSounds.glass,
-    looping: true,
-    volume: 1.0,
-    asAlarm: true,
-  );
 
   final params = CallKitParams(
     id: uuid,
@@ -317,7 +514,56 @@ Future<void> _showCallkitIncoming(Map<String, dynamic> data) async {
     ),
   );
 
-  await FlutterCallkitIncoming.showCallkitIncoming(params);
+  final userRole = prefs.getString('userRole') ?? '';
+  final isMale = userRole == 'male' || isFreeIntro;
+
+  // Check if system notifications are enabled on this device
+  bool notificationsEnabled = true;
+  try {
+    final localNotif = FlutterLocalNotificationsPlugin();
+    final androidPlugin = localNotif.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+    final enabled = await androidPlugin?.areNotificationsEnabled();
+    if (enabled != null) {
+      notificationsEnabled = enabled;
+    } else {
+      notificationsEnabled = await Permission.notification.isGranted;
+    }
+  } catch (e) {
+    debugPrint('[CallKit] Error checking notification permission: $e');
+    try {
+      notificationsEnabled = await Permission.notification.isGranted;
+    } catch (_) {}
+  }
+  debugPrint('[CallKit] isMale: $isMale, notificationsEnabled: $notificationsEnabled');
+
+  // Smart Fallback Logic:
+  // - If notifications are ON: male screen shows ONLY calling notification banner (no full display takeover).
+  // - If notifications are OFF / blocked: Smart Fallback triggers full-screen CallKit display so the user doesn't miss the call!
+  // - Female experts: ALWAYS full-screen display (never notification).
+  final shouldShowCallKit = !isMale || !notificationsEnabled;
+
+  if (shouldShowCallKit) {
+    debugPrint('[CallKit] Showing full-screen CallKit display (female or notifications disabled fallback)');
+    FlutterRingtonePlayer().play(
+      android: AndroidSounds.ringtone,
+      ios: IosSounds.glass,
+      looping: true,
+      volume: 1.0,
+      asAlarm: true,
+    );
+    await FlutterCallkitIncoming.showCallkitIncoming(params);
+  }
+
+  // Show calling notification with Accept and Decline actions ONLY for male users!
+  // Female experts must NEVER see the call on notification (always full-screen display).
+  if (isMale) {
+    await showCallNotificationWithActions(
+      data,
+      callerName,
+      isMale: isMale,
+      notificationsEnabled: notificationsEnabled,
+    );
+  }
 
   // Keep background isolate alive until call ends or times out
   final completer = Completer<void>();
@@ -329,6 +575,7 @@ Future<void> _showCallkitIncoming(Map<String, dynamic> data) async {
         event is CallEventActionCallTimeout ||
         event is CallEventActionCallEnded) {
       FlutterRingtonePlayer().stop();
+      FlutterLocalNotificationsPlugin().cancel(id: callRoomId.hashCode.abs());
       if (!completer.isCompleted) completer.complete();
     }
   });
@@ -340,17 +587,25 @@ Future<void> _showCallkitIncoming(Map<String, dynamic> data) async {
       app: Firebase.app(),
       databaseURL: dbUrl,
     ).ref('calls/$callRoomId').onValue.listen((event) {
-      if (event.snapshot.exists && event.snapshot.value != null) {
-        final val = event.snapshot.value;
-        if (val is Map) {
-          final data = Map<String, dynamic>.from(val);
-          final status = data['status'];
-          if (status == 'ended' || status == 'rejected_blocked' || status == 'rejected_already_used') {
-            debugPrint('[CallKit] Remote call ended with status: $status');
-            FlutterRingtonePlayer().stop();
-            FlutterCallkitIncoming.endAllCalls();
-            if (!completer.isCompleted) completer.complete();
-          }
+      // 1. If caller hangs up before answering, the node is deleted (value == null). Stop ringtone immediately!
+      if (!event.snapshot.exists || event.snapshot.value == null) {
+        debugPrint('[CallKit] Remote call room was removed by caller. Stopping ringtone immediately.');
+        FlutterRingtonePlayer().stop();
+        FlutterLocalNotificationsPlugin().cancel(id: callRoomId.hashCode.abs());
+        FlutterCallkitIncoming.endAllCalls();
+        if (!completer.isCompleted) completer.complete();
+        return;
+      }
+      final val = event.snapshot.value;
+      if (val is Map) {
+        final data = Map<String, dynamic>.from(val);
+        final status = data['status']?.toString();
+        if (status == 'ended' || status == 'cancelled' || status == 'missed' || status == 'rejected_blocked' || status == 'rejected_already_used') {
+          debugPrint('[CallKit] Remote call ended with status: $status. Stopping ringtone immediately.');
+          FlutterRingtonePlayer().stop();
+          FlutterLocalNotificationsPlugin().cancel(id: callRoomId.hashCode.abs());
+          FlutterCallkitIncoming.endAllCalls();
+          if (!completer.isCompleted) completer.complete();
         }
       }
     });
@@ -437,10 +692,34 @@ class NotificationService {
       ),
       onDidReceiveNotificationResponse: (details) {
         if (details.payload != null) {
-          final data = jsonDecode(details.payload!) as Map<String, dynamic>;
-          _routeFromNotification(data);
+          try {
+            final data = jsonDecode(details.payload!) as Map<String, dynamic>;
+            final callRoomId = data['callRoomId'] as String? ?? '';
+            final dbUrl = data['dbUrl'] as String?;
+
+            if (details.actionId == 'action_accept') {
+              FlutterRingtonePlayer().stop();
+              FlutterCallkitIncoming.endAllCalls();
+              if (callRoomId.isNotEmpty) {
+                _localNotifications.cancel(id: callRoomId.hashCode.abs());
+                _navigateToActiveCall(callRoomId, autoAccept: true);
+              }
+            } else if (details.actionId == 'action_decline') {
+              FlutterRingtonePlayer().stop();
+              FlutterCallkitIncoming.endAllCalls();
+              if (callRoomId.isNotEmpty) {
+                _localNotifications.cancel(id: callRoomId.hashCode.abs());
+                CallService(databaseURL: dbUrl).endCall(callRoomId);
+              }
+            } else {
+              _routeFromNotification(data);
+            }
+          } catch (e) {
+            debugPrint('[Notification] Error handling response: $e');
+          }
         }
       },
+      onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
     );
 
     // Create Android channels
@@ -515,6 +794,7 @@ class NotificationService {
             app: Firebase.app(),
             databaseURL: 'https://zegochat-c44b0-1e689.asia-southeast1.firebasedatabase.app',
           );
+          await introDb.ref('male_users/$userId/fcmToken').set(token);
           await introDb.ref('new_males_pool/$userId/fcmToken').set(token);
           
           final poolSnap = await introDb.ref('new_males_pool/$userId/languageKey').get();
@@ -549,6 +829,7 @@ class NotificationService {
               app: Firebase.app(),
               databaseURL: 'https://zegochat-c44b0-1e689.asia-southeast1.firebasedatabase.app',
             );
+            await introDb.ref('male_users/$userId/fcmToken').set(t);
             await introDb.ref('new_males_pool/$userId/fcmToken').set(t);
             final poolSnap = await introDb.ref('new_males_pool/$userId/languageKey').get();
             if (poolSnap.exists && poolSnap.value != null) {
@@ -576,7 +857,7 @@ class NotificationService {
     // We trust the backend and just process the notification.
 
     if (type == 'call') {
-      // The app is in the foreground. User requested native CallKit UI here too.
+      debugPrint('[FCM] Foreground call received, displaying Native CallKit screen directly.');
       await _showCallkitIncoming(data);
     } else if (type == 'message') {
       // User requested not to show heads-up notifications when the app is in the foreground.
@@ -593,6 +874,17 @@ class NotificationService {
   }
 
   void _routeFromNotification(Map<String, dynamic> data) async {
+    if (data['type'] == 'call') {
+      final callRoomId = data['callRoomId'] as String? ?? '';
+      if (callRoomId.isNotEmpty) {
+        FlutterRingtonePlayer().stop();
+        FlutterCallkitIncoming.endAllCalls();
+        _localNotifications.cancel(id: callRoomId.hashCode.abs());
+        _navigateToActiveCall(callRoomId, autoAccept: false);
+      }
+      return;
+    }
+
     if (data['type'] == 'message') {
       final senderId = data['senderId'] ?? '';
       String senderName = data['senderName'] ?? 'User';
@@ -652,7 +944,7 @@ class NotificationService {
       final initialCallId = await channel.invokeMethod<String>('getInitialCallId');
       if (initialCallId != null && initialCallId.isNotEmpty) {
         debugPrint('[CallKit] Found initial accepted call from killed state via intent: $initialCallId');
-        _navigateToActiveCall(initialCallId);
+        _navigateToActiveCall(initialCallId, autoAccept: true);
         return;
       }
     } catch (e) {
@@ -667,27 +959,79 @@ class NotificationService {
         for (final c in calls) {
           if (c.isAccepted && c.id.isNotEmpty) {
             debugPrint('[CallKit] Navigating to active call from activeCalls: ${c.id}');
-            _navigateToActiveCall(c.id);
-            break;
+            _navigateToActiveCall(c.id, autoAccept: true);
+            return;
           }
         }
       }
     } catch (e) {
       debugPrint('[CallKit] Error checking activeCalls: $e');
     }
+
+    // 3. Check Local Notification launch details (if user tapped Accept on notification when killed)
+    try {
+      final launchDetails = await _localNotifications.getNotificationAppLaunchDetails();
+      if (launchDetails != null && launchDetails.didNotificationLaunchApp) {
+        final response = launchDetails.notificationResponse;
+        if (response != null && response.payload != null) {
+          final data = jsonDecode(response.payload!) as Map<String, dynamic>;
+          final callRoomId = data['callRoomId'] as String? ?? '';
+          if (callRoomId.isNotEmpty) {
+            final isAccept = response.actionId == 'action_accept';
+            debugPrint('[Notification] Found initial call from local notification launch: $callRoomId (autoAccept: $isAccept)');
+            _navigateToActiveCall(callRoomId, autoAccept: isAccept);
+            return;
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[Notification] Error checking launchDetails: $e');
+    }
   }
 
   /// Centralized routing to ActiveCallPage on call acceptance.
   /// Handles retries if navigatorKey is not yet mounted (e.g. killed state launch).
-  void _navigateToActiveCall(String callRoomId) async {
+  void _navigateToActiveCall(String callRoomId, {bool autoAccept = false}) async {
     FlutterRingtonePlayer().stop();
     final prefs = await SharedPreferences.getInstance();
+    final prefAutoAccept = prefs.getBool('autoAccept_$callRoomId') ?? false;
+    final shouldAutoAccept = autoAccept || prefAutoAccept;
+    if (prefAutoAccept) {
+      await prefs.remove('autoAccept_$callRoomId');
+    }
+
     final storedCallerName = prefs.getString('callerName_$callRoomId');
-    final resolvedName = storedCallerName ?? NotificationService.lastCallerName ?? 'Unknown';
-    final resolvedCallerId = prefs.getString('callerId_$callRoomId') ?? '';
+    String resolvedCallerId = prefs.getString('callerId_$callRoomId') ?? '';
+    String resolvedName = storedCallerName ?? NotificationService.lastCallerName ?? 'Female Expert';
     final storedCallerCoins = prefs.getInt('callerCoins_$callRoomId');
-    final storedDbUrl = prefs.getString('dbUrl_$callRoomId');
-    final storedIsFreeIntro = prefs.getBool('isFreeIntroCall_$callRoomId') ?? false;
+    String? storedDbUrl = prefs.getString('dbUrl_$callRoomId');
+    bool storedIsFreeIntro = prefs.getBool('isFreeIntroCall_$callRoomId') ?? false;
+
+    // Failsafe for killed state: if dbUrl or callerId was not found in cache, verify if room exists on 1e689
+    if (storedDbUrl == null || storedDbUrl.isEmpty || resolvedCallerId.isEmpty) {
+      try {
+        final introSnap = await FirebaseDatabase.instanceFor(
+          app: Firebase.app(),
+          databaseURL: 'https://zegochat-c44b0-1e689.asia-southeast1.firebasedatabase.app',
+        ).ref('calls/$callRoomId').get();
+        if (introSnap.exists && introSnap.value != null) {
+          storedDbUrl = 'https://zegochat-c44b0-1e689.asia-southeast1.firebasedatabase.app';
+          storedIsFreeIntro = true;
+          if (introSnap.value is Map) {
+            final roomData = Map<String, dynamic>.from(introSnap.value as Map);
+            if (resolvedCallerId.isEmpty && roomData['callerId'] != null) {
+              resolvedCallerId = roomData['callerId'].toString();
+            }
+            if ((resolvedName == 'Unknown' || resolvedName == 'Female Expert') && roomData['callerName'] != null) {
+              resolvedName = roomData['callerName'].toString();
+            }
+          }
+          debugPrint('[CallKit] Failsafe resolved 1e689 database for room: $callRoomId (caller: $resolvedCallerId)');
+        }
+      } catch (e) {
+        debugPrint('[CallKit] Error checking intro db failsafe: $e');
+      }
+    }
 
     int retries = 0;
     void pushRoute() {
@@ -703,6 +1047,7 @@ class NotificationService {
             'dbUrl': storedDbUrl,
             'isFreeIntroCall': storedIsFreeIntro,
             'maxDurationSeconds': 60,
+            'autoAccept': shouldAutoAccept,
           },
         );
       } else {
@@ -726,7 +1071,7 @@ class NotificationService {
         final callRoomId = call.arguments as String?;
         debugPrint('[CallKit] Accepted via Fallback: $callRoomId');
         if (callRoomId != null && callRoomId.isNotEmpty) {
-          _navigateToActiveCall(callRoomId);
+          _navigateToActiveCall(callRoomId, autoAccept: true);
         }
       }
     });
@@ -739,7 +1084,7 @@ class NotificationService {
         final callRoomId = event.callKitParams.id;
         debugPrint('[CallKit] Accepted: $callRoomId');
         if (callRoomId.isNotEmpty) {
-          _navigateToActiveCall(callRoomId);
+          _navigateToActiveCall(callRoomId, autoAccept: true);
         }
       } else if (event is CallEventActionCallDecline) {
         FlutterRingtonePlayer().stop();

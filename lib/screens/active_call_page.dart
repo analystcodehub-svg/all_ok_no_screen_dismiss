@@ -12,6 +12,8 @@ import '../services/block_service.dart';
 import '../services/user_database_service.dart';
 import '../services/new_male_service.dart';
 import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
+import 'package:flutter_ringtone_player/flutter_ringtone_player.dart';
+import 'package:vibration/vibration.dart';
 
 class ActiveCallPage extends StatefulWidget {
   final String? callRoomId; // Supplied for receiver/expert, generated for caller
@@ -28,6 +30,8 @@ class ActiveCallPage extends StatefulWidget {
   final String? callDatabaseURL;
   final bool isFreeIntroCall;
   final int? maxDurationSeconds;
+  final String? callerLanguage;
+  final bool autoAccept;
 
   const ActiveCallPage({
     super.key,
@@ -45,19 +49,26 @@ class ActiveCallPage extends StatefulWidget {
     this.callDatabaseURL,
     this.isFreeIntroCall = false,
     this.maxDurationSeconds,
+    this.callerLanguage,
+    this.autoAccept = false,
   });
 
   @override
   State<ActiveCallPage> createState() => _ActiveCallPageState();
 }
 
-class _ActiveCallPageState extends State<ActiveCallPage> {
+class _ActiveCallPageState extends State<ActiveCallPage> with TickerProviderStateMixin {
   late final CallService _callService;
   bool _isConnected = false;
+  bool _callAccepted = false;
   String? _roomId;
   int _duration = 0;
   Timer? _timer;
   Timer? _ringingTimer;
+  Timer? _availabilityTimer;
+  Timer? _availabilityTicker;
+  Timer? _countdownTicker;
+  int _availabilityCountdown = 4;
 
   bool _isMuted = false;
   bool _isSpeakerOn = false;
@@ -65,20 +76,54 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
 
   late bool _isFreeIntroCall;
   int _maxDurationSeconds = 60;
+  late String _displayName;
+  String? _displayAvatarUrl;
+  int _displayAvatarIndex = 1;
+  bool _callAttendedRecorded = false;
+
+  // Dynamic candidate matchmaking state for intro calls
+  late String _currentReceiverId;
+  final Set<String> _triedReceiverUids = {};
+  int _fallbackAttempts = 0;
+  bool _isSwitchingCandidate = false;
+  String _statusMessage = 'Searching availability...';
+
+  // Availability checking state (4 seconds round animation)
+  bool _isAvailabilityChecking = false;
+  int _ringingCountdown = 15;
+  late AnimationController _rippleController;
 
   // Tier-based expert earning rate (resolved from Firestore on connect)
   double _expertEarningRate = 1.0; // default Bronze
   bool _tierResolved = false;
   int? _callerCoinBalance;
   StreamSubscription? _balanceSub;
+  StreamSubscription<DatabaseEvent>? _roomStatusSub;
+  Timer? _vibrateTimer;
 
   @override
   void initState() {
     super.initState();
+    _currentReceiverId = widget.receiverId;
+    _triedReceiverUids.add(widget.receiverId);
     _roomId = widget.callRoomId;
     _isFreeIntroCall = widget.isFreeIntroCall;
     _maxDurationSeconds = widget.maxDurationSeconds ?? 60;
-    _callService = widget.preStartedCallService ?? CallService(databaseURL: widget.callDatabaseURL);
+    _displayName = widget.nickname;
+    _displayAvatarUrl = widget.avatarUrl;
+    _displayAvatarIndex = widget.avatarIndex;
+    _statusMessage = 'Searching availability for $_displayName...';
+
+    _rippleController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1800),
+    )..repeat();
+
+    final effectiveDbUrl = widget.callDatabaseURL ??
+        (widget.isFreeIntroCall
+            ? 'https://zegochat-c44b0-1e689.asia-southeast1.firebasedatabase.app'
+            : 'https://zegochat-c44b0.asia-southeast1.firebasedatabase.app');
+    _callService = widget.preStartedCallService ?? CallService(databaseURL: effectiveDbUrl);
     
     if (widget.callerCoinBalance != null && widget.callerCoinBalance! > 0) {
       _callerCoinBalance = widget.callerCoinBalance;
@@ -86,21 +131,172 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
 
     if (!widget.isCaller) {
       _resolveRemoteData();
+      _callAccepted = widget.autoAccept;
+      if (!widget.autoAccept) {
+        _statusMessage = 'Incoming Call...';
+        FlutterRingtonePlayer().play(
+          android: AndroidSounds.ringtone,
+          ios: IosSounds.glass,
+          looping: true,
+          volume: 1.0,
+          asAlarm: true,
+        );
+        _vibrateTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+          Vibration.vibrate(duration: 1000);
+        });
+      }
     }
     
+    if (_isFreeIntroCall && widget.isCaller) {
+      _isAvailabilityChecking = true;
+      _availabilityCountdown = 4;
+    }
+
     _initRenderersAndCall();
 
-    if (widget.isCaller) {
-      final ringingSeconds = _isFreeIntroCall ? 35 : 7;
-      _ringingTimer = Timer(Duration(seconds: ringingSeconds), () {
-        if (mounted && !_isConnected && !_isHangingUp) {
-          _triggerHangup();
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(_isFreeIntroCall ? 'User did not pick up. Please try again.' : 'Expert did not pick up. Please Try again.')),
-          );
+    if (_roomId != null && _roomId!.isNotEmpty) {
+      _subscribeToRoomStatus(_roomId!);
+    }
+
+    if (_isFreeIntroCall && widget.isCaller) {
+      // Step 1: Show 4-second round animation searching availability
+      _startAvailabilityCheck();
+    } else if (widget.isCaller) {
+      _startRingingTimeout(7);
+    }
+  }
+
+  void _subscribeToRoomStatus(String roomId) {
+    _roomStatusSub?.cancel();
+    final effectiveDbUrl = widget.callDatabaseURL ??
+        (widget.isFreeIntroCall
+            ? 'https://zegochat-c44b0-1e689.asia-southeast1.firebasedatabase.app'
+            : 'https://zegochat-c44b0.asia-southeast1.firebasedatabase.app');
+
+    _roomStatusSub = FirebaseDatabase.instanceFor(
+      app: FirebaseDatabase.instance.app,
+      databaseURL: effectiveDbUrl,
+    ).ref('calls/$roomId/status').onValue.listen((event) {
+      if (!mounted || _isHangingUp) return;
+      if (event.snapshot.exists && event.snapshot.value != null) {
+        final status = event.snapshot.value.toString();
+        debugPrint('[ActiveCallPage] calls/$roomId status updated: $status');
+        if (status == 'ringing') {
+          _onRemoteRingingReceived();
+        } else if (status == 'ended' || status == 'rejected' || status == 'rejected_blocked') {
+          FlutterRingtonePlayer().stop();
+          _vibrateTimer?.cancel();
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Call cancelled by caller')),
+            );
+            _hangupLocal();
+          }
+        }
+      }
+    });
+  }
+
+  void _onRemoteRingingReceived() {
+    if (!mounted || _isConnected || _isHangingUp) return;
+
+    // If availability search is still in progress, let the 4-second animation complete
+    // before transitioning to the 15s ringing screen.
+    if (_isAvailabilityChecking && _availabilityCountdown > 0) {
+      debugPrint('[ActiveCallPage] Remote ringing confirmed during availability check. Will transition after 4s animation.');
+      return;
+    }
+
+    if (!_isAvailabilityChecking && _ringingTimer != null && _ringingTimer!.isActive) {
+      return;
+    }
+
+    debugPrint('[ActiveCallPage] Switching from 4s availability to 15s ringing countdown.');
+    _availabilityTimer?.cancel();
+    _availabilityTicker?.cancel();
+
+    setState(() {
+      _isAvailabilityChecking = false;
+      _statusMessage = 'Ringing $_displayName...';
+    });
+
+    _startRingingCountdownAndTimeout(15);
+  }
+
+  void _startAvailabilityCheck() {
+    _availabilityTimer?.cancel();
+    _availabilityTicker?.cancel();
+    _ringingTimer?.cancel();
+    _countdownTicker?.cancel();
+
+    setState(() {
+      _isAvailabilityChecking = true;
+      _availabilityCountdown = 4;
+      _statusMessage = 'Searching availability for $_displayName...';
+    });
+
+    _availabilityTicker = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted || _isConnected || _isHangingUp || !_isAvailabilityChecking) {
+        timer.cancel();
+        return;
+      }
+      setState(() {
+        if (_availabilityCountdown > 1) {
+          _availabilityCountdown--;
+        } else {
+          timer.cancel();
         }
       });
-    }
+    });
+
+    _availabilityTimer = Timer(const Duration(seconds: 4), () {
+      _availabilityTicker?.cancel();
+      if (!mounted || _isConnected || _isHangingUp) return;
+
+      debugPrint('[ActiveCallPage] 4s availability search finished for $_displayName. Transitioning to 15s ringing screen...');
+      setState(() {
+        _isAvailabilityChecking = false;
+        _availabilityCountdown = 0;
+      });
+      _onRemoteRingingReceived();
+    });
+  }
+
+  void _startRingingCountdownAndTimeout(int seconds) {
+    _ringingTimer?.cancel();
+    _countdownTicker?.cancel();
+    _ringingCountdown = seconds;
+
+    _countdownTicker = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted || _isConnected || _isHangingUp) {
+        timer.cancel();
+        return;
+      }
+      setState(() {
+        if (_ringingCountdown > 0) {
+          _ringingCountdown--;
+        } else {
+          timer.cancel();
+        }
+      });
+    });
+
+    _ringingTimer = Timer(Duration(seconds: seconds), () {
+      if (mounted && !_isConnected && !_isHangingUp) {
+        debugPrint('[ActiveCallPage] 15s ringing timed out. Connecting to other user...');
+        _handleUnreachableOrTimeout(reason: 'timeout');
+      }
+    });
+  }
+
+  void _startRingingTimeout(int seconds) {
+    _ringingTimer?.cancel();
+    _ringingTimer = Timer(Duration(seconds: seconds), () {
+      if (mounted && !_isConnected && !_isHangingUp) {
+        debugPrint('[ActiveCallPage] Ringing timed out after ${seconds}s.');
+        _handleUnreachableOrTimeout(reason: 'timeout');
+      }
+    });
   }
 
   Future<void> _initRenderersAndCall() async {
@@ -124,32 +320,8 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
       }
 
       if (!widget.isCaller) {
-        await _callService.acceptCall(
-          callRoomId: widget.callRoomId!,
-          onRemoteStream: (stream) {
-            if (mounted) {
-              setState(() {
-                _isConnected = true;
-                _isSpeakerOn = true;
-              });
-              Future.delayed(const Duration(milliseconds: 500), () {
-                Helper.setSpeakerphoneOn(true);
-              });
-              _ringingTimer?.cancel();
-              _startCallTimer();
-            }
-          },
-          onCallEnded: _hangupLocal,
-        );
-
-        if (mounted) {
-          setState(() {
-            if (_callService.remoteStream != null) {
-              _isConnected = true;
-              _isSpeakerOn = true;
-              _startCallTimer();
-            }
-          });
+        if (_callAccepted) {
+          await _acceptIncomingCall();
         }
         return;
       }
@@ -157,30 +329,58 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
       if (widget.isCaller) {
         try {
           final maleCoins = mounted ? context.read<AppState>().coinBalance : null;
+          final femaleLang = widget.callerLanguage ??
+              (mounted ? context.read<AppState>().primaryLanguage : null) ??
+              'Hindi';
+          final femaleNick = mounted ? context.read<AppState>().nickname : 'Female Expert';
+          final femaleAvatarIndex = mounted ? context.read<AppState>().avatarIndex : 1;
+
+          Map<String, dynamic>? extra;
+          if (_isFreeIntroCall) {
+            extra = {
+              'isFreeIntroCall': true,
+              'maxDurationSeconds': _maxDurationSeconds,
+              'callerName': femaleNick.isNotEmpty ? femaleNick : 'Female Expert',
+              'callerAvatar': 'assets/avatars/female_$femaleAvatarIndex.png',
+              'callerAvatarIndex': femaleAvatarIndex,
+              'callerLanguage': femaleLang,
+              'dbUrl': NewMaleService.newDbUrl,
+            };
+          }
+
           final generatedRoomId = await _callService.startCall(
             expertId: widget.receiverId,
             callerId: widget.callerId,
             callerCoins: maleCoins,
             pricePerMin: widget.pricePerMin,
+            extraRoomData: extra,
             onRemoteStream: (stream) {
               if (mounted) {
+                _availabilityTimer?.cancel();
+                _availabilityTicker?.cancel();
+                _ringingTimer?.cancel();
+                _countdownTicker?.cancel();
                 setState(() {
                   _isConnected = true;
+                  _isAvailabilityChecking = false;
                   _isSpeakerOn = true;
+                  _statusMessage = 'Connected';
                 });
                 Future.delayed(const Duration(milliseconds: 500), () {
                   Helper.setSpeakerphoneOn(true);
                 });
-                _ringingTimer?.cancel();
                 _startCallTimer();
+                _handleCallAttended();
               }
             },
-            onCallEnded: _hangupLocal,
+            onCallEnded: _onCallEndedCallback,
+            onRinging: _onRemoteRingingReceived,
           );
           if (mounted) {
             setState(() {
               _roomId = generatedRoomId;
             });
+            _subscribeToRoomStatus(generatedRoomId);
           } else {
             _callService.endCall(generatedRoomId);
           }
@@ -206,12 +406,29 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
 
       if (widget.callRoomId != null) {
         try {
-          final callDbUrl = widget.callDatabaseURL ?? 'https://zegochat-c44b0.asia-southeast1.firebasedatabase.app';
-          final FirebaseDatabase database = FirebaseDatabase.instanceFor(
+          String callDbUrl = widget.callDatabaseURL ??
+              (_isFreeIntroCall
+                  ? 'https://zegochat-c44b0-1e689.asia-southeast1.firebasedatabase.app'
+                  : 'https://zegochat-c44b0.asia-southeast1.firebasedatabase.app');
+          FirebaseDatabase database = FirebaseDatabase.instanceFor(
             app: FirebaseDatabase.instance.app,
             databaseURL: callDbUrl,
           );
-          final callDoc = await database.ref('calls/${widget.callRoomId}').get();
+          var callDoc = await database.ref('calls/${widget.callRoomId}').get();
+          if (!callDoc.exists && callDbUrl != 'https://zegochat-c44b0-1e689.asia-southeast1.firebasedatabase.app') {
+            final fallbackDb = FirebaseDatabase.instanceFor(
+              app: FirebaseDatabase.instance.app,
+              databaseURL: 'https://zegochat-c44b0-1e689.asia-southeast1.firebasedatabase.app',
+            );
+            final fallbackDoc = await fallbackDb.ref('calls/${widget.callRoomId}').get();
+            if (fallbackDoc.exists) {
+              callDoc = fallbackDoc;
+              database = fallbackDb;
+              callDbUrl = 'https://zegochat-c44b0-1e689.asia-southeast1.firebasedatabase.app';
+              _isFreeIntroCall = true;
+              if (mounted) setState(() {});
+            }
+          }
           if (callDoc.exists) {
             final data = Map<String, dynamic>.from(callDoc.value as Map);
             actualCallerId = data['callerId'] ?? actualCallerId;
@@ -232,9 +449,51 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
                 });
               }
             }
+
+            // Resolve female caller display name & avatar if current user is receiving the call
+            if (!widget.isCaller) {
+              final roomCallerName = data['callerName'] as String?;
+              if (roomCallerName != null && roomCallerName.isNotEmpty && roomCallerName != 'User') {
+                _displayName = roomCallerName;
+              }
+              final roomAvatar = data['callerAvatar'] as String?;
+              if (roomAvatar != null && roomAvatar.isNotEmpty) {
+                _displayAvatarUrl = roomAvatar;
+              }
+              if (data['callerAvatarIndex'] != null) {
+                _displayAvatarIndex = (data['callerAvatarIndex'] as num).toInt();
+              }
+            }
+            if (mounted) setState(() {});
           }
         } catch (e) {
           debugPrint('[_resolveRemoteData] Error fetching callDoc: $e');
+        }
+      }
+
+      // Fallback: If female caller name is still unknown/User, resolve from local profile cache or RTDB
+      if (!widget.isCaller && (_displayName.isEmpty || _displayName == 'User' || _displayName == actualCallerId)) {
+        try {
+          final cached = await LocalChatDatabase.instance.getUserProfile(actualCallerId);
+          if (cached != null && cached['name'] != null && cached['name'].toString().isNotEmpty) {
+            _displayName = cached['name'].toString();
+            if (cached['avatarUrl'] != null) _displayAvatarUrl = cached['avatarUrl'].toString();
+            if (cached['avatarIndex'] != null) _displayAvatarIndex = (cached['avatarIndex'] as num).toInt();
+            if (mounted) setState(() {});
+          } else {
+            final expertData = await UserDatabaseService.instance.getExpert(actualCallerId);
+            if (expertData != null) {
+              final eName = (expertData['nickname'] ?? expertData['name'])?.toString().trim() ?? '';
+              if (eName.isNotEmpty) {
+                _displayName = eName;
+                _displayAvatarUrl = expertData['profileImageUrl'] ?? expertData['avatarUrl'];
+                _displayAvatarIndex = (expertData['avatarIndex'] as num?)?.toInt() ?? 1;
+                if (mounted) setState(() {});
+              }
+            }
+          }
+        } catch (e) {
+          debugPrint('[_resolveRemoteData] Error resolving caller profile: $e');
         }
       }
 
@@ -288,24 +547,221 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
     }
   }
 
+  void _handleCallAttended() {
+    if (_callAttendedRecorded) return;
+    // Only mark attended if call is actually connected and audio streamed for at least 5 seconds
+    if (!_isConnected || _duration < 5) return;
+    _callAttendedRecorded = true;
+
+    if (_isFreeIntroCall) {
+      // In female intro call: Male is receiver, Female is caller
+      final maleUid = _currentReceiverId;
+      final femaleUid = widget.callerId;
+      final fName = _displayName.isNotEmpty ? _displayName : widget.nickname;
+
+      NewMaleService.instance.markCallAttended(
+        maleUid: maleUid,
+        femaleUid: femaleUid,
+        femaleName: fName,
+        durationSeconds: _duration,
+      );
+      debugPrint('[ActiveCallPage] Male $maleUid attended call with $fName ($_duration s). Removed from bucket.');
+    }
+  }
+
+  void _onCallEndedCallback() {
+    if (!_isConnected && widget.isCaller && _isFreeIntroCall && !_isHangingUp) {
+      final lastStatus = _callService.lastCallStatus;
+      debugPrint('[ActiveCallPage] Call ended before connection (status: $lastStatus). Triggering auto-matchmaking fallback...');
+      _handleUnreachableOrTimeout(reason: lastStatus ?? 'unreachable');
+    } else {
+      _hangupLocal();
+    }
+  }
+
+  Future<void> _handleUnreachableOrTimeout({required String reason}) async {
+    if (_isHangingUp || _isConnected || _isSwitchingCandidate) return;
+
+    // Mark current male as unreachable/offline in isolated pool
+    NewMaleService.instance.markMaleUnreachable(_currentReceiverId);
+
+    // Only auto-reroute for intro calls (up to 3 candidate attempts)
+    if (_isFreeIntroCall && widget.isCaller && _fallbackAttempts < 3) {
+      _fallbackAttempts++;
+      final prevName = _displayName;
+      setState(() {
+        _isSwitchingCandidate = true;
+        _statusMessage = '$prevName unreachable. Connecting to next user...';
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    '$prevName unreachable. Connecting to next user...',
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+            duration: const Duration(seconds: 3),
+            backgroundColor: const Color(0xFFE11D48),
+          ),
+        );
+      }
+
+      // Dispose current room and WebRTC state
+      _availabilityTimer?.cancel();
+      _availabilityTicker?.cancel();
+      _ringingTimer?.cancel();
+      _countdownTicker?.cancel();
+      _roomStatusSub?.cancel();
+      if (_roomId != null) {
+        _callService.endCall(_roomId!);
+      }
+      await _callService.disposeCall();
+
+      // Find next eligible candidate speaking female's language
+      final femaleLang = widget.callerLanguage ??
+          (mounted ? context.read<AppState>().primaryLanguage : null) ??
+          'Hindi';
+
+      final nextMale = await NewMaleService.instance.pickRandomMale(
+        _triedReceiverUids,
+        femaleLanguage: femaleLang,
+      );
+
+      if (!mounted || _isHangingUp) return;
+
+      if (nextMale != null) {
+        final nextUid = nextMale['uid'] as String;
+        _triedReceiverUids.add(nextUid);
+
+        setState(() {
+          _currentReceiverId = nextUid;
+          _displayName = nextMale['nickname'] as String? ?? 'User';
+          _displayAvatarUrl = nextMale['avatarUrl'] as String?;
+          _displayAvatarIndex = (nextMale['avatarIndex'] as num?)?.toInt() ?? 1;
+          _isSwitchingCandidate = false;
+          _isAvailabilityChecking = true;
+          _availabilityCountdown = 4;
+          _statusMessage = 'Searching availability for $_displayName...';
+        });
+
+        _startAvailabilityCheck();
+
+        // Retrieve fresh FCM token
+        String receiverFcmToken = (nextMale['fcmToken'] as String?)?.trim() ?? '';
+        if (receiverFcmToken.isEmpty) {
+          try {
+            final tSnap = await NewMaleService.instance.maleUsersRef.child(nextUid).child('fcmToken').get();
+            if (tSnap.exists && tSnap.value != null) {
+              receiverFcmToken = tSnap.value.toString().trim();
+            }
+          } catch (_) {}
+        }
+
+        try {
+          final femaleNick = mounted ? context.read<AppState>().nickname : 'Female Expert';
+          final femaleAvatarIndex = mounted ? context.read<AppState>().avatarIndex : 1;
+
+          final newRoomId = await _callService.startCall(
+            expertId: nextUid,
+            callerId: widget.callerId,
+            callerCoins: 0,
+            pricePerMin: 0.0,
+            extraRoomData: {
+              'isFreeIntroCall': true,
+              'maxDurationSeconds': 60,
+              'callerName': femaleNick.isNotEmpty ? femaleNick : 'Female Expert',
+              'callerAvatar': 'assets/avatars/female_$femaleAvatarIndex.png',
+              'callerAvatarIndex': femaleAvatarIndex,
+              'callerLanguage': femaleLang,
+              'receiverLanguage': nextMale['language'] ?? 'Hindi',
+              'receiverFcmToken': receiverFcmToken,
+              'dbUrl': NewMaleService.newDbUrl,
+            },
+            onRemoteStream: (stream) {
+              if (mounted) {
+                _availabilityTimer?.cancel();
+                _availabilityTicker?.cancel();
+                _ringingTimer?.cancel();
+                _countdownTicker?.cancel();
+                setState(() {
+                  _isConnected = true;
+                  _isAvailabilityChecking = false;
+                  _isSpeakerOn = true;
+                  _statusMessage = 'Connected';
+                });
+                Future.delayed(const Duration(milliseconds: 500), () {
+                  Helper.setSpeakerphoneOn(true);
+                });
+                _startCallTimer();
+                _handleCallAttended();
+              }
+            },
+            onCallEnded: _onCallEndedCallback,
+            onRinging: _onRemoteRingingReceived,
+          );
+
+          if (mounted) {
+            setState(() {
+              _roomId = newRoomId;
+            });
+            _subscribeToRoomStatus(newRoomId);
+          }
+          return;
+        } catch (e) {
+          debugPrint('[ActiveCallPage] Error dialing fallback candidate $nextUid: $e');
+        }
+      }
+    }
+
+    if (mounted && !_isHangingUp) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No other users available right now. Please try again later.'),
+          duration: Duration(seconds: 3),
+        ),
+      );
+      _triggerHangup();
+    }
+  }
+
   Future<void> _initCall() async {
     if (widget.preStartedCallService != null) {
       // Call is already pre-started by MatchingService
       _callService.updateListeners(
         onRemoteStream: (stream) {
           if (mounted) {
+            _availabilityTimer?.cancel();
+            _availabilityTicker?.cancel();
+            _ringingTimer?.cancel();
+            _countdownTicker?.cancel();
             setState(() {
               _isConnected = true;
+              _isAvailabilityChecking = false;
               _isSpeakerOn = true;
+              _statusMessage = 'Connected';
             });
             Future.delayed(const Duration(milliseconds: 500), () {
               Helper.setSpeakerphoneOn(true);
             });
-            _ringingTimer?.cancel();
             _startCallTimer();
+            _handleCallAttended();
           }
         },
-        onCallEnded: _hangupLocal,
+        onCallEnded: _onCallEndedCallback,
+        onRinging: _onRemoteRingingReceived,
       );
 
       if (mounted) {
@@ -313,7 +769,9 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
           if (_callService.remoteStream != null) {
             _isConnected = true;
             _isSpeakerOn = true;
+            _statusMessage = 'Connected';
             _startCallTimer();
+            _handleCallAttended();
           }
         });
       }
@@ -322,25 +780,33 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
 
     if (widget.isCaller) {
       try {
+        final maleNick = context.read<AppState>().nickname;
+        final maleAvatarIdx = context.read<AppState>().avatarIndex;
         final generatedRoomId = await _callService.startCall(
           expertId: widget.receiverId,
           callerId: widget.callerId,
           callerCoins: context.read<AppState>().coinBalance,
           pricePerMin: widget.pricePerMin,
+          extraRoomData: {
+            'callerName': maleNick.isNotEmpty ? maleNick : 'User',
+            'callerAvatarIndex': maleAvatarIdx,
+          },
           onRemoteStream: (stream) {
             if (mounted) {
               setState(() {
                 _isConnected = true;
                 _isSpeakerOn = true;
+                _statusMessage = 'Connected';
               });
               Future.delayed(const Duration(milliseconds: 500), () {
                 Helper.setSpeakerphoneOn(true);
               });
               _ringingTimer?.cancel();
               _startCallTimer();
+              _handleCallAttended();
             }
           },
-          onCallEnded: _hangupLocal,
+          onCallEnded: _onCallEndedCallback,
         );
         if (mounted) {
           setState(() {
@@ -356,30 +822,49 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
         }
       }
     } else {
-      try {
-        await _callService.acceptCall(
-          callRoomId: _roomId!,
-          onRemoteStream: (stream) {
-            if (mounted) {
-              setState(() {
-                _isConnected = true;
-                _isSpeakerOn = true;
-              });
-              Future.delayed(const Duration(milliseconds: 500), () {
-                Helper.setSpeakerphoneOn(true);
-              });
-              _startCallTimer();
-            }
-          },
-          onCallEnded: _hangupLocal,
+      await _acceptIncomingCall();
+    }
+  }
+
+  Future<void> _acceptIncomingCall() async {
+    FlutterRingtonePlayer().stop();
+    _vibrateTimer?.cancel();
+    setState(() {
+      _callAccepted = true;
+      _statusMessage = 'Connecting...';
+    });
+
+    try {
+      if (_roomId == null || _roomId!.isEmpty) {
+        debugPrint('[ActiveCallPage] Cannot accept call: _roomId is null or empty');
+        return;
+      }
+      await _callService.acceptCall(
+        callRoomId: _roomId!,
+        onRemoteStream: (stream) {
+          if (mounted) {
+            FlutterRingtonePlayer().stop();
+            setState(() {
+              _isConnected = true;
+              _isSpeakerOn = true;
+              _statusMessage = 'Connected';
+            });
+            Future.delayed(const Duration(milliseconds: 500), () {
+              Helper.setSpeakerphoneOn(true);
+            });
+            _startCallTimer();
+            _handleCallAttended();
+          }
+        },
+        onCallEnded: _hangupLocal,
+      );
+    } catch (e) {
+      debugPrint('[ActiveCallPage] Error accepting call: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to connect incoming call: $e')),
         );
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to connect incoming call: $e')),
-          );
-          Navigator.pop(context);
-        }
+        _hangupLocal();
       }
     }
   }
@@ -394,6 +879,9 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
 
       // Free Intro Call: strictly enforce 1 minute (60s) cap and auto-disconnect
       if (_isFreeIntroCall) {
+        if (_duration == 5) {
+          _handleCallAttended();
+        }
         if (_duration >= _maxDurationSeconds && !_isHangingUp) {
           _triggerHangup();
         }
@@ -449,6 +937,12 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
   }
 
   void _triggerHangup() {
+    _isHangingUp = true;
+    _availabilityTimer?.cancel();
+    _availabilityTicker?.cancel();
+    _ringingTimer?.cancel();
+    _countdownTicker?.cancel();
+    _roomStatusSub?.cancel();
     if (_roomId != null) {
       _callService.endCall(_roomId!);
     }
@@ -456,7 +950,9 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
   }
 
   void _hangupLocal() {
-    if (_isHangingUp) return;
+    FlutterRingtonePlayer().stop();
+    _vibrateTimer?.cancel();
+    if (_isHangingUp && _timer == null && _duration > 0) return;
     _isHangingUp = true;
     
     // Clear CallKit Native Notifications
@@ -464,7 +960,7 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
     
     // Unlock both parties safely (unlockUserFromCall checks experts collection internally)
     _callService.unlockUserFromCall(widget.callerId);
-    _callService.unlockUserFromCall(widget.receiverId);
+    _callService.unlockUserFromCall(_currentReceiverId);
     
     _timer?.cancel();
     _ringingTimer?.cancel();
@@ -474,22 +970,39 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
     final timestamp = DateTime.now().millisecondsSinceEpoch;
     final logId = 'log_${_roomId ?? timestamp}';
 
-    // If free intro call, record consumption in new database
-    if (_isFreeIntroCall) {
-      final maleUid = widget.isCaller ? widget.receiverId : widget.receiverId;
-      final femaleUid = widget.isCaller ? widget.callerId : widget.callerId;
+    // If free intro call, record consumption in new database ONLY if call was actually connected and attended!
+    if (_isFreeIntroCall && _isConnected && finalDuration >= 5) {
+      final maleUid = _currentReceiverId;
+      final femaleUid = widget.callerId;
       NewMaleService.instance.markFreeCallUsed(
         maleUid: maleUid,
         femaleUid: femaleUid,
         durationSeconds: finalDuration,
       );
+    } else if (_isFreeIntroCall && (!_isConnected || finalDuration < 5)) {
+      NewMaleService.instance.newMalesPoolRef.child(_currentReceiverId).update({
+        'callStatus': 'available',
+      }).catchError((_) {});
     }
     
+    final String resolvedOtherName = _displayName.isNotEmpty ? _displayName : widget.nickname;
+    final otherUid = widget.isCaller ? _currentReceiverId : widget.callerId;
+
+    // Save profile into local SQLite so male user sees female in Recent Calls screen
+    LocalChatDatabase.instance.saveUserProfile({
+      'uid': otherUid,
+      'name': resolvedOtherName,
+      'avatarUrl': _displayAvatarUrl ?? widget.avatarUrl ?? '',
+      'avatarIndex': _displayAvatarIndex,
+      'role': widget.isCaller ? 'user' : 'expert',
+      'timestamp': timestamp,
+    });
+
     final logData = {
       'logId': logId,
       'callerId': widget.callerId,
-      'receiverId': widget.receiverId,
-      'otherUserName': widget.nickname,
+      'receiverId': _currentReceiverId,
+      'otherUserName': resolvedOtherName,
       'durationSeconds': finalDuration,
       'status': status,
       'timestamp': timestamp,
@@ -593,11 +1106,12 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final logId = 'log_${_roomId ?? timestamp}';
       
+      final String resolvedOtherName = _displayName.isNotEmpty ? _displayName : widget.nickname;
       final logData = {
         'logId': logId,
         'callerId': widget.callerId,
         'receiverId': widget.receiverId,
-        'otherUserName': widget.nickname,
+        'otherUserName': resolvedOtherName,
         'durationSeconds': _duration,
         'status': status,
         'timestamp': timestamp,
@@ -674,8 +1188,15 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
 
   @override
   void dispose() {
+    FlutterRingtonePlayer().stop();
+    _vibrateTimer?.cancel();
     _timer?.cancel();
     _ringingTimer?.cancel();
+    _availabilityTimer?.cancel();
+    _availabilityTicker?.cancel();
+    _countdownTicker?.cancel();
+    _roomStatusSub?.cancel();
+    _rippleController.dispose();
     _balanceSub?.cancel();
     _callService.disposeCall();
     super.dispose();
@@ -683,6 +1204,19 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isAvailabilityChecking && !_isConnected) {
+      return WillPopScope(
+        onWillPop: () async {
+          _triggerHangup();
+          return false;
+        },
+        child: Scaffold(
+          backgroundColor: const Color(0xFF0F172A),
+          body: _buildAvailabilityCheckingView(),
+        ),
+      );
+    }
+
     return WillPopScope(
       onWillPop: () async {
         _triggerHangup();
@@ -708,7 +1242,7 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
                       await UserDatabaseService.instance.submitReport({
                         'reporterId': reporterId,
                         'reportedId': reportedId,
-                        'reportedName': widget.nickname,
+                        'reportedName': _displayName.isNotEmpty ? _displayName : widget.nickname,
                         'reason': 'Inappropriate behavior on call',
                       });
                       if (context.mounted) {
@@ -816,7 +1350,7 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
                   const SizedBox(height: 20),
 
                   Text(
-                    widget.nickname,
+                    _displayName.isNotEmpty ? _displayName : widget.nickname,
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 26,
@@ -826,13 +1360,44 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    _isConnected ? 'Connected' : 'Calling...',
+                    _isConnected
+                        ? 'Connected'
+                        : (!widget.isCaller
+                            ? (_callAccepted ? 'Connecting...' : 'Incoming Call...')
+                            : (_isFreeIntroCall ? 'Ringing $_displayName... (${_ringingCountdown}s)' : _statusMessage)),
+                    textAlign: TextAlign.center,
                     style: TextStyle(
-                      color: _isConnected ? const Color(0xFF34D399) : Colors.white60,
+                      color: _isConnected ? const Color(0xFF34D399) : Colors.white,
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
+                  if (!_isConnected && _isFreeIntroCall) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF3B82F6).withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFF3B82F6).withValues(alpha: 0.5), width: 1.0),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.timer_outlined, size: 14, color: Color(0xFF60A5FA)),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Connecting to next user in ${_ringingCountdown}s if unanswered',
+                            style: const TextStyle(
+                              color: Color(0xFF93C5FD),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   if (_isConnected) ...[
                     const SizedBox(height: 4),
                     Text(
@@ -877,48 +1442,181 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
                 ],
               ),
 
-              // Action controls for microphone & speaker outputs
-              Column(
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      _buildCallActionCircle(
-                        icon: _isMuted ? Icons.mic_off_rounded : Icons.mic_rounded,
-                        label: _isMuted ? 'Mic On' : 'Mic Off',
-                        isActive: _isMuted,
-                        onTap: _toggleMute,
-                      ),
-                      _buildCallActionCircle(
-                        icon: _isSpeakerOn ? Icons.volume_up_rounded : Icons.volume_down_rounded,
-                        label: 'Speaker',
-                        isActive: _isSpeakerOn,
-                        onTap: _toggleSpeaker,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 50),
-                  
-                  // End call button
-                  GestureDetector(
-                    onTap: _triggerHangup,
-                    child: Container(
-                      width: 76,
-                      height: 76,
-                      decoration: const BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.red,
-                      ),
-                      child: const Icon(
-                        Icons.call_end_rounded,
-                        color: Colors.white,
-                        size: 36,
+              // Action controls for incoming call vs connected call
+              if (!widget.isCaller && !_isConnected)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 24.0),
+                  child: _callAccepted
+                      ? Column(
+                          children: [
+                            const SizedBox(
+                              width: 36,
+                              height: 36,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 3,
+                                color: Color(0xFF34D399),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            const Text(
+                              'Connecting audio...',
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 36),
+                            GestureDetector(
+                              onTap: _triggerHangup,
+                              child: Column(
+                                children: [
+                                  Container(
+                                    width: 68,
+                                    height: 68,
+                                    decoration: const BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: Colors.red,
+                                    ),
+                                    child: const Icon(
+                                      Icons.call_end_rounded,
+                                      color: Colors.white,
+                                      size: 32,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  const Text('Cancel',
+                                      style: TextStyle(color: Colors.white70, fontSize: 13)),
+                                ],
+                              ),
+                            ),
+                          ],
+                        )
+                      : Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: [
+                            // Decline Button (Red)
+                            GestureDetector(
+                              onTap: _triggerHangup,
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Container(
+                                    width: 76,
+                                    height: 76,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: Colors.red.shade600,
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.red.withValues(alpha: 0.45),
+                                          blurRadius: 18,
+                                          spreadRadius: 2,
+                                        ),
+                                      ],
+                                    ),
+                                    child: const Icon(
+                                      Icons.call_end_rounded,
+                                      color: Colors.white,
+                                      size: 38,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  const Text(
+                                    'Decline',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                            // Accept Button (Green)
+                            GestureDetector(
+                              onTap: _acceptIncomingCall,
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Container(
+                                    width: 76,
+                                    height: 76,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: const Color(0xFF22C55E),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: const Color(0xFF22C55E).withValues(alpha: 0.55),
+                                          blurRadius: 18,
+                                          spreadRadius: 2,
+                                        ),
+                                      ],
+                                    ),
+                                    child: const Icon(
+                                      Icons.call_rounded,
+                                      color: Colors.white,
+                                      size: 38,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  const Text(
+                                    'Accept',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                )
+              else
+                Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        _buildCallActionCircle(
+                          icon: _isMuted ? Icons.mic_off_rounded : Icons.mic_rounded,
+                          label: _isMuted ? 'Mic On' : 'Mic Off',
+                          isActive: _isMuted,
+                          onTap: _toggleMute,
+                        ),
+                        _buildCallActionCircle(
+                          icon: _isSpeakerOn ? Icons.volume_up_rounded : Icons.volume_down_rounded,
+                          label: 'Speaker',
+                          isActive: _isSpeakerOn,
+                          onTap: _toggleSpeaker,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 50),
+                    
+                    // End call button
+                    GestureDetector(
+                      onTap: _triggerHangup,
+                      child: Container(
+                        width: 76,
+                        height: 76,
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.red,
+                        ),
+                        child: const Icon(
+                          Icons.call_end_rounded,
+                          color: Colors.white,
+                          size: 36,
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 30),
-                ],
-              ),
+                    const SizedBox(height: 30),
+                  ],
+                ),
             ],
           ),
         ),
@@ -991,6 +1689,250 @@ class _ActiveCallPageState extends State<ActiveCallPage> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildAvailabilityCheckingView() {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            // Top Header
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white70, size: 20),
+                  onPressed: _triggerHangup,
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFFE11D48), Color(0xFF9333EA)],
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.bolt, color: Colors.amber, size: 16),
+                      SizedBox(width: 4),
+                      Text(
+                        '1-MIN FREE INTRO',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 0.8,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 40),
+              ],
+            ),
+
+            // Center Radar Animation & User Info
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _buildRadarAnimation(),
+                  const SizedBox(height: 32),
+                  Text(
+                    _displayName.isNotEmpty ? _displayName : widget.nickname,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 26,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE11D48).withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(
+                        color: const Color(0xFFE11D48).withValues(alpha: 0.4),
+                        width: 1.2,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Color(0xFFFB7185),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Text(
+                          'Searching availability (${_availabilityCountdown}s)...',
+                          style: const TextStyle(
+                            color: Color(0xFFFB7185),
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 20.0),
+                    child: Text(
+                      'If user is offline or unreachable, auto-connecting to another user',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white54,
+                        fontSize: 12,
+                        letterSpacing: 0.2,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Bottom Cancel Control
+            Column(
+              children: [
+                GestureDetector(
+                  onTap: _triggerHangup,
+                  child: Container(
+                    width: 72,
+                    height: 72,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: const Color(0xFFE11D48),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFFE11D48).withValues(alpha: 0.4),
+                          blurRadius: 20,
+                          spreadRadius: 2,
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.close_rounded,
+                      color: Colors.white,
+                      size: 36,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Cancel',
+                  style: TextStyle(
+                    color: Colors.white60,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRadarAnimation() {
+    return AnimatedBuilder(
+      animation: _rippleController,
+      builder: (context, child) {
+        return SizedBox(
+          width: 260,
+          height: 260,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              // Concentric ripple rings (3 waves)
+              ...List.generate(3, (index) {
+                final offset = index * 0.33;
+                final progress = (_rippleController.value + offset) % 1.0;
+                final size = 110.0 + (progress * 150.0);
+                final opacity = (1.0 - progress).clamp(0.0, 1.0);
+
+                return Container(
+                  width: size,
+                  height: size,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: const Color(0xFFE11D48).withValues(alpha: opacity * 0.7),
+                      width: 2.0,
+                    ),
+                    color: const Color(0xFFE11D48).withValues(alpha: opacity * 0.08),
+                  ),
+                );
+              }),
+
+              // Center Circular Avatar
+              Container(
+                width: 110,
+                height: 110,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: const Color(0xFFE11D48),
+                    width: 3.0,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFFE11D48).withValues(alpha: 0.5),
+                      blurRadius: 24,
+                      spreadRadius: 4,
+                    ),
+                  ],
+                ),
+                child: ClipOval(
+                  child: Image.asset(
+                    'assets/male_avatar.png',
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) => Container(
+                      color: const Color(0xFF1E293B),
+                      child: const Icon(Icons.person, color: Colors.white, size: 54),
+                    ),
+                  ),
+                ),
+              ),
+
+              // Small pulsating radar scan ping dot
+              Positioned(
+                top: 40,
+                right: 40,
+                child: Container(
+                  width: 12,
+                  height: 12,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.greenAccent,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.greenAccent.withValues(alpha: 0.8),
+                        blurRadius: 8,
+                        spreadRadius: 2,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

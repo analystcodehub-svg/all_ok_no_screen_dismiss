@@ -31,7 +31,7 @@ class RefundCancellationScreen extends StatelessWidget {
               'All wallet recharges made through SajniRe are final and non-refundable under normal circumstances.\n\n'
               '• Once coins are added to your SajniRe wallet, they cannot be converted back to cash or transferred to a bank account.\n'
               '• Coins have no monetary value outside the SajniRe platform.\n'
-              '• This policy applies to all payment methods including PayU, PhonePe, GPay, Paytm, and Google Play.',
+              '• This policy applies to all in-app purchases via Google Play.',
             ),
 
             _buildSection('2. Exception — Payment Deducted but Coins Not Credited',

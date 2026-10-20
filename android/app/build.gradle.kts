@@ -54,16 +54,28 @@ android {
         versionName = flutter.versionName
     }
 
+    val isBuildingBundle = gradle.startParameter.taskNames.any { it.contains("bundle", ignoreCase = true) }
+
     buildTypes {
         release {
-            isMinifyEnabled = true
-            isShrinkResources = true
+            isMinifyEnabled = isBuildingBundle
+            isShrinkResources = isBuildingBundle
             if (keystorePropertiesFile.exists()) {
                 signingConfig = signingConfigs.getByName("release")
             } else {
                 signingConfig = signingConfigs.getByName("debug")
             }
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            if (isBuildingBundle) {
+                proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            }
+        }
+        debug {
+            isMinifyEnabled = false
+            isShrinkResources = false
+            isCrunchPngs = false
+            if (keystorePropertiesFile.exists()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 

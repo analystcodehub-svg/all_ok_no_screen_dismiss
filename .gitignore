@@ -44,5 +44,15 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 openjdk-17.0.2_linux-x64_bin.tar.gz
+# Keystore and secrets
+*.jks
+*.keystore
+key.properties
+
+# Android binaries
+*.apk
+*.aab
+
 # Widget Preview related
 .widget_preview/
+

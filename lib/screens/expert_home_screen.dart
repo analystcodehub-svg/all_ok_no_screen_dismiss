@@ -9,7 +9,6 @@ import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../providers/app_state.dart';
 import '../theme/app_colors.dart';
-import '../services/call_service.dart';
 import '../services/matchmaking_service.dart';
 import 'upgrade_program_screen.dart';
 import 'withdraw_screen.dart';
@@ -36,9 +35,7 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
   double _redeemableBalance = 0.0;
   bool _isLoadingStats = true;
 
-  final CallService _callService = CallService();
   late final MatchmakingService _matchingService;
-  StreamSubscription? _incomingCallSubscription;
   StreamSubscription? _chatDbSubscription;
   StreamSubscription? _expertStatsSubscription;
 
@@ -184,9 +181,6 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
     final appState = context.read<AppState>();
       setState(() => _isAudioOn = appState.isOnline);
       final String expertId = appState.uid;
-      if (appState.isOnline) {
-        _startIncomingCallListener(expertId);
-      }
       
       // Initialize Chat Listeners for Female Expert
       if (expertId.isNotEmpty) {
@@ -199,7 +193,6 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     // HybridChatService.instance.dispose();
-    _incomingCallSubscription?.cancel();
     _chatDbSubscription?.cancel();
     _expertStatsSubscription?.cancel();
     _pulseController.dispose();
@@ -353,24 +346,12 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
       debugPrint('[STATUS] expertId is EMPTY — skipping Firestore update!');
     }
     if (value) {
-      _startIncomingCallListener(expertId);
       // Keep app alive in background while expert is online
       ForegroundTaskService.startService();
     } else {
-      _incomingCallSubscription?.cancel();
       // Stop keeping the app alive if expert goes offline
       ForegroundTaskService.stopService();
     }
-  }
-
-  void _startIncomingCallListener(String expertId) {
-    _incomingCallSubscription?.cancel();
-    _incomingCallSubscription = _callService.listenForIncomingCalls(
-      expertId: expertId,
-      onCallReceived: (roomId, callerId) {
-        // Native CallKit (shown via FCM) handles the incoming call UI directly
-      },
-    );
   }
 
 
@@ -504,6 +485,9 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
+    if (_isAudioOn != appState.isOnline) {
+      _isAudioOn = appState.isOnline;
+    }
     // Use nickname from AppState — the actual registered name, not "Expert"
     final String displayName = appState.nickname.isNotEmpty
         ? appState.nickname

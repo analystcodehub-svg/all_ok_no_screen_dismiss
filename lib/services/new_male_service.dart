@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/foundation.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'user_database_service.dart';
 
 /// Dedicated service managing the 1-minute free intro calling system from female to new male users.
@@ -26,7 +27,10 @@ class NewMaleService {
     databaseURL: newDbUrl,
   );
 
-  /// Master pool of all new males
+  /// Master profile record of all male users on this isolated database
+  DatabaseReference get maleUsersRef => db.ref('male_users');
+
+  /// Master pool of all eligible new males
   DatabaseReference get newMalesPoolRef => db.ref('new_males_pool');
 
   /// Language-partitioned buckets of new males: `new_males_buckets/{languageKey}/{uid}`
@@ -47,17 +51,66 @@ class NewMaleService {
     return clean.isEmpty ? 'hindi' : clean;
   }
 
-  /// Check whether a male user is eligible for the single-time 1-minute intro call.
+  /// Check whether a male user is eligible for the single-time 1-minute intro call:
+  /// Must NOT have recharged, must NOT have attended a female call, and must NOT have used free intro record.
   Future<bool> isEligible(String maleUid) async {
     if (maleUid.isEmpty) return false;
     try {
+      // 1. Check free intro record
       final snap = await freeIntroCallsRef.child(maleUid).get();
       if (snap.exists && snap.value != null) {
         final data = Map<String, dynamic>.from(snap.value as Map);
         if (data['used'] == true) {
-          return false;
+          final duration = (data['durationSeconds'] as num?)?.toInt() ?? 0;
+          if (duration >= 5) {
+            return false;
+          } else {
+            // Self-healing: previous call attempt was never answered or dropped (< 5s), restore eligibility
+            freeIntroCallsRef.child(maleUid).remove().catchError((_) {});
+            maleUsersRef.child(maleUid).update({
+              'hasAttendedCall': false,
+              'isEligible': true,
+            }).catchError((_) {});
+          }
         }
       }
+
+      // 2. Check male user profile status on new RTDB
+      final userSnap = await maleUsersRef.child(maleUid).get();
+      if (userSnap.exists && userSnap.value != null) {
+        final uData = Map<String, dynamic>.from(userSnap.value as Map);
+        if (uData['hasRecharged'] == true) return false;
+        if (uData['hasAttendedCall'] == true) {
+          final duration = (uData['durationSeconds'] as num?)?.toInt() ?? 0;
+          if (duration >= 5) return false;
+        }
+        if (uData['isEligible'] == false) {
+          final duration = (uData['durationSeconds'] as num?)?.toInt() ?? 0;
+          if (duration >= 5 || uData['hasRecharged'] == true) return false;
+        }
+        final coins = (uData['coins'] as num? ?? uData['coinBalance'] as num? ?? 0).toInt();
+        if (coins > 0) return false;
+      }
+
+      // 3. Check user_call_logs: user must NOT have had connected calls (duration >= 5s)
+      try {
+        final logsSnap = await UserDatabaseService.instance.userCallLogsRef.child(maleUid).limitToLast(5).get();
+        if (logsSnap.exists && logsSnap.value != null) {
+          final logsMap = logsSnap.value;
+          if (logsMap is Map) {
+            for (var val in logsMap.values) {
+              if (val is Map) {
+                final duration = (val['durationSeconds'] as num?)?.toInt() ?? 0;
+                final status = val['status']?.toString();
+                if (duration >= 5 || status == 'connected') {
+                  return false;
+                }
+              }
+            }
+          }
+        }
+      } catch (_) {}
+
       return true;
     } catch (e) {
       debugPrint('[NewMaleService] Error checking eligibility for $maleUid: $e');
@@ -65,32 +118,105 @@ class NewMaleService {
     }
   }
 
-  /// Mark the 1-minute free intro call as used so the male user cannot receive another free call.
+  /// Mark the male user as having attended the female call.
+  /// Instantly removes him from all language buckets and marks him permanently ineligible for free calls.
+  Future<void> markCallAttended({
+    required String maleUid,
+    required String femaleUid,
+    String? femaleName,
+    int durationSeconds = 0,
+    String? language,
+  }) async {
+    if (maleUid.isEmpty) return;
+    try {
+      await maleUsersRef.child(maleUid).update({
+        'hasAttendedCall': true,
+        'isEligible': false,
+        'attendedAt': ServerValue.timestamp,
+        'lastFemaleUid': femaleUid,
+        'lastFemaleName': femaleName ?? 'Female Expert',
+        'durationSeconds': durationSeconds,
+      });
+
+      await freeIntroCallsRef.child(maleUid).set({
+        'used': true,
+        'usedAt': ServerValue.timestamp,
+        'femaleId': femaleUid,
+        'femaleName': femaleName ?? 'Female Expert',
+        'durationSeconds': durationSeconds,
+      });
+
+      // Remove from active discovery pool and language buckets immediately
+      await newMalesPoolRef.child(maleUid).remove();
+      if (language != null && language.isNotEmpty) {
+        await newMalesBucketsRef.child(bucketKeyFor(language)).child(maleUid).remove();
+      } else {
+        try {
+          final uSnap = await maleUsersRef.child(maleUid).get();
+          if (uSnap.exists && uSnap.value is Map) {
+            final uMap = Map<String, dynamic>.from(uSnap.value as Map);
+            final lKey = uMap['languageKey'] as String? ?? bucketKeyFor(uMap['language'] as String?);
+            if (lKey.isNotEmpty) {
+              await newMalesBucketsRef.child(lKey).child(maleUid).remove();
+            }
+          }
+        } catch (_) {}
+      }
+      await newMalesBucketsRef.child('all').child(maleUid).remove();
+      debugPrint('[NewMaleService] Immediately removed $maleUid from bucket (call was attended).');
+    } catch (e) {
+      debugPrint('[NewMaleService] Error marking call attended: $e');
+    }
+  }
+
+  /// Mark the male user as having recharged his wallet.
+  /// Instantly removes him from buckets so he is not called for free intro calls.
+  Future<void> markRecharged(String maleUid, {String? language}) async {
+    if (maleUid.isEmpty) return;
+    try {
+      await maleUsersRef.child(maleUid).update({
+        'hasRecharged': true,
+        'isEligible': false,
+        'rechargedAt': ServerValue.timestamp,
+      });
+
+      await newMalesPoolRef.child(maleUid).remove();
+      if (language != null && language.isNotEmpty) {
+        await newMalesBucketsRef.child(bucketKeyFor(language)).child(maleUid).remove();
+      } else {
+        try {
+          final uSnap = await maleUsersRef.child(maleUid).get();
+          if (uSnap.exists && uSnap.value is Map) {
+            final uMap = Map<String, dynamic>.from(uSnap.value as Map);
+            final lKey = uMap['languageKey'] as String? ?? bucketKeyFor(uMap['language'] as String?);
+            if (lKey.isNotEmpty) {
+              await newMalesBucketsRef.child(lKey).child(maleUid).remove();
+            }
+          }
+        } catch (_) {}
+      }
+      await newMalesBucketsRef.child('all').child(maleUid).remove();
+      debugPrint('[NewMaleService] Immediately removed $maleUid from bucket (wallet recharged).');
+    } catch (e) {
+      debugPrint('[NewMaleService] Error marking recharged: $e');
+    }
+  }
+
+  /// Legacy helper for call completion
   Future<void> markFreeCallUsed({
     required String maleUid,
     required String femaleUid,
     required int durationSeconds,
     String? language,
+    String? femaleName,
   }) async {
-    if (maleUid.isEmpty) return;
-    try {
-      await freeIntroCallsRef.child(maleUid).set({
-        'used': true,
-        'usedAt': ServerValue.timestamp,
-        'femaleId': femaleUid,
-        'durationSeconds': durationSeconds,
-      });
-
-      // Remove from discovery pool and language buckets so they no longer appear
-      await newMalesPoolRef.child(maleUid).remove();
-      if (language != null && language.isNotEmpty) {
-        await newMalesBucketsRef.child(bucketKeyFor(language)).child(maleUid).remove();
-      }
-      await newMalesBucketsRef.child('all').child(maleUid).remove();
-      debugPrint('[NewMaleService] Marked free call used for $maleUid by female $femaleUid');
-    } catch (e) {
-      debugPrint('[NewMaleService] Error marking free call used: $e');
-    }
+    await markCallAttended(
+      maleUid: maleUid,
+      femaleUid: femaleUid,
+      femaleName: femaleName,
+      durationSeconds: durationSeconds,
+      language: language,
+    );
   }
 
   /// Register or update male user in the new_males_pool and language buckets on the new RTDB instance.
@@ -124,6 +250,20 @@ class NewMaleService {
         'lastSeen': ServerValue.timestamp,
       };
 
+      // 0. Write to master male profile record on isolated RTDB
+      await maleUsersRef.child(uid).update({
+        'uid': uid,
+        'nickname': nickname.isNotEmpty ? nickname : 'User',
+        'avatarUrl': avatarUrl ?? '',
+        'avatarIndex': avatarIndex,
+        'language': language.isNotEmpty ? language : 'Hindi',
+        'languageKey': langKey,
+        'fcmToken': fcmToken ?? '',
+        'isOnline': isOnline,
+        'lastSeen': ServerValue.timestamp,
+        'isEligible': true,
+      });
+
       // 1. Write to master pool
       await newMalesPoolRef.child(uid).update(data);
 
@@ -156,26 +296,88 @@ class NewMaleService {
     }
   }
 
-  /// Real-time stream of up to [limit] new male users in a specific language bucket (or all).
+  /// Real-time stream of up to [limit] (default: 50) new male users from the bucket pool.
+  /// - Automatically removes users in real-time when removed from the pool (call completed, recharged, offline).
+  /// - Excludes users who completed 1-min free intro (hasAttendedCall / used == true).
+  /// - Excludes users who are currently busy or in an active call (callStatus == 'busy' or 'ringing').
+  /// - Randomizes the available pool (up to 2000 users) and returns the top [limit] users.
   Stream<List<Map<String, dynamic>>> streamNewMales({
     String? femaleLanguage,
-    int limit = 20,
+    int limit = 50,
+    int? randomSeed,
   }) {
-    final langKey = femaleLanguage != null ? bucketKeyFor(femaleLanguage) : 'all';
-    final ref = newMalesBucketsRef.child(langKey).limitToLast(limit);
-    return ref.onValue.map((event) {
-      final List<Map<String, dynamic>> list = [];
+    final targetLangKey = femaleLanguage != null && femaleLanguage.isNotEmpty
+        ? bucketKeyFor(femaleLanguage)
+        : null;
+
+    final poolQuery = newMalesPoolRef.limitToLast(2000);
+
+    return poolQuery.onValue.asyncMap((event) async {
+      final List<Map<String, dynamic>> candidates = [];
+
       if (event.snapshot.exists && event.snapshot.value != null) {
-        final map = Map<String, dynamic>.from(event.snapshot.value as Map);
-        map.forEach((k, v) {
-          if (v is Map) {
-            final item = Map<String, dynamic>.from(v);
-            item['uid'] = k;
-            list.add(item);
+        final rawMap = event.snapshot.value;
+        if (rawMap is Map) {
+          final entries = rawMap.entries.toList();
+          for (var entry in entries) {
+            final uid = entry.key?.toString() ?? '';
+            if (uid.isEmpty) continue;
+            if (entry.value is! Map) continue;
+
+            final user = Map<String, dynamic>.from(entry.value as Map);
+            user['uid'] = uid;
+
+            // 1. Exclude if user has completed intro call or attended call
+            if (user['hasAttendedCall'] == true || user['isEligible'] == false) {
+              continue;
+            }
+
+            // 2. Exclude if currently in call or busy
+            final callStatus = user['callStatus']?.toString().toLowerCase();
+            if (callStatus == 'busy' || callStatus == 'ringing' || callStatus == 'locked') {
+              continue;
+            }
+
+            // 3. Exclude if recharged
+            if (user['hasRecharged'] == true) {
+              continue;
+            }
+
+            candidates.add(user);
           }
-        });
+        }
       }
-      return list.reversed.toList();
+
+      // If pool has fewer than 10 candidates, seed in background asynchronously
+      if (candidates.length < 10) {
+        fetchNewMalesWithFallback(femaleLanguage: femaleLanguage, limit: 50).catchError((_) => <Map<String, dynamic>>[]);
+      }
+
+      if (candidates.isEmpty) {
+        return <Map<String, dynamic>>[];
+      }
+
+      // 4. Randomize across the full pool
+      final rand = randomSeed != null ? Random(randomSeed) : Random();
+      candidates.shuffle(rand);
+
+      // 5. Prioritize language matching if specified, while maintaining random distribution
+      if (targetLangKey != null && targetLangKey.isNotEmpty) {
+        final matches = candidates.where((c) {
+          final lKey = (c['languageKey'] ?? bucketKeyFor(c['language'] as String?))?.toString();
+          return lKey == targetLangKey;
+        }).toList();
+
+        final others = candidates.where((c) {
+          final lKey = (c['languageKey'] ?? bucketKeyFor(c['language'] as String?))?.toString();
+          return lKey != targetLangKey;
+        }).toList();
+
+        final combined = [...matches, ...others];
+        return combined.take(limit).toList();
+      }
+
+      return candidates.take(limit).toList();
     });
   }
 
@@ -235,10 +437,10 @@ class NewMaleService {
       }
     }
 
-    // 3. Fallback auto-seeding from existing users in UserDatabaseService
+    // 3. Fallback from male_users records strictly on this isolated database (1e689)
     if (result.length < limit) {
       try {
-        final existingSnap = await UserDatabaseService.instance.usersRef
+        final existingSnap = await maleUsersRef
             .limitToLast(limit * 4)
             .get();
 
@@ -254,19 +456,19 @@ class NewMaleService {
 
             if (entry.value is Map) {
               final uData = Map<String, dynamic>.from(entry.value as Map);
-              final userLang = (uData['primaryLanguage'] ?? uData['language'] ?? uData['languages'] ?? 'Hindi').toString();
+              final userLang = (uData['language'] ?? uData['primaryLanguage'] ?? 'Hindi').toString();
               final userLangKey = bucketKeyFor(userLang);
 
               final item = <String, dynamic>{
                 'uid': uid,
-                'nickname': uData['nickname'] ?? uData['name'] ?? 'User',
-                'avatarUrl': uData['profileImageUrl'] ?? uData['avatarUrl'] ?? '',
+                'nickname': uData['nickname'] ?? 'User',
+                'avatarUrl': uData['avatarUrl'] ?? '',
                 'avatarIndex': (uData['avatarIndex'] as num?)?.toInt() ?? 1,
                 'language': userLang,
                 'languageKey': userLangKey,
                 'fcmToken': uData['fcmToken'] ?? '',
-                'isOnline': true,
-                'lastSeen': DateTime.now().millisecondsSinceEpoch,
+                'isOnline': uData['isOnline'] ?? true,
+                'lastSeen': uData['lastSeen'] ?? DateTime.now().millisecondsSinceEpoch,
               };
               result.add(item);
 
@@ -282,21 +484,138 @@ class NewMaleService {
       }
     }
 
-    // Sort so exact language matches appear first, followed by others
-    if (targetLangKey != null && targetLangKey.isNotEmpty) {
-      result.sort((a, b) {
-        final aMatch = bucketKeyFor(a['language'] as String?) == targetLangKey;
-        final bMatch = bucketKeyFor(b['language'] as String?) == targetLangKey;
-        if (aMatch && !bMatch) return -1;
-        if (!aMatch && bMatch) return 1;
-        return 0;
-      });
+    // 4. Supplementary Fallback: Master users from 4cbfb RTDB
+    if (result.length < limit) {
+      try {
+        final masterSnap = await UserDatabaseService.instance.usersRef.limitToLast(limit * 3).get();
+        if (masterSnap.exists && masterSnap.value != null) {
+          final usersMap = Map<String, dynamic>.from(masterSnap.value as Map);
+          for (var entry in usersMap.entries) {
+            if (result.length >= limit) break;
+            final uid = entry.key;
+            if (result.any((u) => u['uid'] == uid)) continue;
+
+            final isElig = await isEligible(uid);
+            if (!isElig) continue;
+
+            if (entry.value is Map) {
+              final uData = Map<String, dynamic>.from(entry.value as Map);
+              if (uData['gender'] != null && uData['gender'] != 'male') continue;
+              final userLang = (uData['language'] ?? uData['primaryLanguage'] ?? 'Hindi').toString();
+              final userLangKey = bucketKeyFor(userLang);
+
+              final item = <String, dynamic>{
+                'uid': uid,
+                'nickname': uData['nickname'] ?? uData['name'] ?? 'User',
+                'avatarUrl': uData['avatarUrl'] ?? '',
+                'avatarIndex': (uData['avatarIndex'] as num?)?.toInt() ?? 1,
+                'language': userLang,
+                'languageKey': userLangKey,
+                'fcmToken': uData['fcmToken'] ?? '',
+                'isOnline': uData['isOnline'] ?? true,
+                'lastSeen': uData['lastSeen'] ?? DateTime.now().millisecondsSinceEpoch,
+              };
+              result.add(item);
+
+              // Seed into master pool and buckets on new RTDB (1e689) asynchronously
+              maleUsersRef.child(uid).set(item).catchError((_) {});
+              newMalesPoolRef.child(uid).set(item).catchError((_) {});
+              newMalesBucketsRef.child(userLangKey).child(uid).set(item).catchError((_) {});
+              newMalesBucketsRef.child('all').child(uid).set(item).catchError((_) {});
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('[NewMaleService] Master database fallback error: $e');
+      }
     }
+
+    // 5. Supplementary Fallback: Firestore 'users' collection
+    if (result.length < limit) {
+      try {
+        final querySnap = await FirebaseFirestore.instance.collection('users').limit(limit * 2).get();
+        for (var doc in querySnap.docs) {
+          if (result.length >= limit) break;
+          final uid = doc.id;
+          if (result.any((u) => u['uid'] == uid)) continue;
+
+          final uData = doc.data();
+          if (uData['role'] == 'expert' || uData['gender'] == 'Female') continue;
+
+          final isElig = await isEligible(uid);
+          if (!isElig) continue;
+
+          final userLang = (uData['language'] ?? uData['primaryLanguage'] ?? 'Hindi').toString();
+          final userLangKey = bucketKeyFor(userLang);
+
+          final item = <String, dynamic>{
+            'uid': uid,
+            'nickname': uData['nickname'] ?? uData['name'] ?? uData['displayName'] ?? 'User',
+            'avatarUrl': uData['avatarUrl'] ?? '',
+            'avatarIndex': (uData['avatarIndex'] as num?)?.toInt() ?? 1,
+            'language': userLang,
+            'languageKey': userLangKey,
+            'fcmToken': uData['fcmToken'] ?? '',
+            'isOnline': uData['isOnline'] ?? false,
+            'lastSeen': DateTime.now().millisecondsSinceEpoch,
+          };
+          result.add(item);
+        }
+      } catch (e) {
+        debugPrint('[NewMaleService] Firestore users fallback error: $e');
+      }
+    }
+
+    // Sort: Online users first, users with FCM token first, then language match, then most recently seen
+    result.sort((a, b) {
+      final aOnline = a['isOnline'] == true ? 1 : 0;
+      final bOnline = b['isOnline'] == true ? 1 : 0;
+      if (aOnline != bOnline) return bOnline.compareTo(aOnline);
+
+      final aHasFcm = (a['fcmToken']?.toString().trim().isNotEmpty ?? false) ? 1 : 0;
+      final bHasFcm = (b['fcmToken']?.toString().trim().isNotEmpty ?? false) ? 1 : 0;
+      if (aHasFcm != bHasFcm) return bHasFcm.compareTo(aHasFcm);
+
+      if (targetLangKey != null && targetLangKey.isNotEmpty) {
+        final aMatch = bucketKeyFor(a['language'] as String?) == targetLangKey ? 1 : 0;
+        final bMatch = bucketKeyFor(b['language'] as String?) == targetLangKey ? 1 : 0;
+        if (aMatch != bMatch) return bMatch.compareTo(aMatch);
+      }
+
+      final aLastSeen = (a['lastSeen'] as num?)?.toInt() ?? 0;
+      final bLastSeen = (b['lastSeen'] as num?)?.toInt() ?? 0;
+      return bLastSeen.compareTo(aLastSeen);
+    });
 
     return result;
   }
 
   /// Pick a random eligible male matching the female's language bucket (with fallback to all).
+  /// Mark a male user as unreachable (airplane mode, uninstalled, offline)
+  /// so that subsequent matchmaking calls skip him in favor of online users.
+  Future<void> markMaleUnreachable(String maleUid, {String? language}) async {
+    if (maleUid.isEmpty) return;
+    try {
+      final updates = {
+        'isOnline': false,
+        'lastSeen': ServerValue.timestamp,
+        'unreachableAt': ServerValue.timestamp,
+      };
+      await maleUsersRef.child(maleUid).update(updates);
+      await newMalesPoolRef.child(maleUid).update(updates);
+      await newMalesBucketsRef.child('all').child(maleUid).update(updates);
+      if (language != null && language.isNotEmpty) {
+        await newMalesBucketsRef.child(bucketKeyFor(language)).child(maleUid).update(updates);
+      }
+      debugPrint('[NewMaleService] Marked $maleUid unreachable/offline.');
+    } catch (e) {
+      debugPrint('[NewMaleService] Error marking male unreachable: $e');
+    }
+  }
+
+  /// Pick a random eligible male matching the female's language bucket (with fallback to all).
+  /// Excludes any UIDs in [excludedUids] (e.g. uninstalled or unreachable males),
+  /// ensures candidates have valid FCM tokens, and prioritizes active online users.
   Future<Map<String, dynamic>?> pickRandomMale(
     Iterable<String> excludedUids, {
     String? femaleLanguage,
@@ -317,15 +636,20 @@ class NewMaleService {
             if (entry.value is Map) {
               final item = Map<String, dynamic>.from(entry.value as Map);
               item['uid'] = uid;
+              final fcmToken = (item['fcmToken'] as String?)?.trim() ?? '';
+              if (fcmToken.isEmpty) continue; // Exclude users who cannot receive calls
               if (await isEligible(uid)) {
                 candidates.add(item);
               }
             }
           }
           if (candidates.isNotEmpty) {
+            // Prioritize active online users!
+            final onlineList = candidates.where((c) => c['isOnline'] == true).toList();
+            final pool = onlineList.isNotEmpty ? onlineList : candidates;
             final rand = Random();
-            final picked = candidates[rand.nextInt(candidates.length)];
-            debugPrint('[NewMaleService] Picked language-matched candidate: ${picked['uid']} ($targetLangKey)');
+            final picked = pool[rand.nextInt(pool.length)];
+            debugPrint('[NewMaleService] Picked language-matched candidate: ${picked['uid']} ($targetLangKey, online: ${picked['isOnline']})');
             return picked;
           }
         }
@@ -339,10 +663,26 @@ class NewMaleService {
       femaleLanguage: femaleLanguage,
       limit: 20,
     );
-    final eligibleFallback = fallbackList.where((m) => !excludedSet.contains(m['uid'])).toList();
+    final eligibleFallback = fallbackList.where((m) {
+      final uid = m['uid']?.toString() ?? '';
+      final fcmToken = (m['fcmToken'] as String?)?.trim() ?? '';
+      return uid.isNotEmpty && !excludedSet.contains(uid) && fcmToken.isNotEmpty;
+    }).toList();
     if (eligibleFallback.isEmpty) return null;
 
+    // Prioritize candidates who are online
+    final onlinePool = eligibleFallback.where((m) => m['isOnline'] == true).toList();
+    final candidatePool = onlinePool.isNotEmpty ? onlinePool : eligibleFallback;
+
+    // Prioritize candidates matching female's language key if any
+    final exactMatches = candidatePool.where(
+      (m) => targetLangKey != null && bucketKeyFor(m['language'] as String?) == targetLangKey,
+    ).toList();
+    final finalPool = exactMatches.isNotEmpty ? exactMatches : candidatePool;
+
     final rand = Random();
-    return eligibleFallback[rand.nextInt(eligibleFallback.length)];
+    final picked = finalPool[rand.nextInt(finalPool.length)];
+    debugPrint('[NewMaleService] Picked fallback candidate: ${picked['uid']} (online: ${picked['isOnline']})');
+    return picked;
   }
 }

@@ -7,6 +7,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 import '../providers/app_state.dart';
 import '../services/user_database_service.dart';
+import '../services/new_male_service.dart';
 import 'payment_history_screen.dart';
 
 class RechargePackage {
@@ -151,6 +152,9 @@ class _WalletRechargeScreenState extends State<WalletRechargeScreen> {
         'timestamp': FieldValue.serverTimestamp(),
         'txnId': txnId,
       });
+
+      // Instantly mark male as recharged in isolated RTDB (1e689) so he is removed from free call bucket
+      NewMaleService.instance.markRecharged(myUid, language: appState.primaryLanguage);
 
       if (mounted) {
         setState(() => _isLoading = false);

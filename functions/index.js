@@ -93,103 +93,88 @@ exports.onCallInitiated = functions.region("asia-south1").database
       return null;
     }
 
-    // ── Step 1: Determine receiver's collection and fetch their doc ────────
-    let receiverDoc = await db.collection("experts").doc(receiverId).get();
-    let receiverData;
+    // ── Ultra-Fast Parallel Lookups (< 100ms) ───────────────────────────
+    // Run receiver lookups, block check, and RTDB presence concurrently
+    const [receiverExpertDoc, receiverUserDoc, blockedDoc, statusSnap] = await Promise.all([
+      db.collection("experts").doc(receiverId).get().catch((err) => {
+        functions.logger.error("Error fetching expert doc:", err);
+        return null;
+      }),
+      db.collection("users").doc(receiverId).get().catch((err) => {
+        functions.logger.error("Error fetching user doc:", err);
+        return null;
+      }),
+      db.collection("blocked_users").doc(receiverId).get().catch((err) => {
+        functions.logger.error("Error fetching blocked_users doc:", err);
+        return null;
+      }),
+      admin.database().ref(`status/${receiverId}`).once("value").catch((err) => {
+        functions.logger.error("Error fetching RTDB status:", err);
+        return null;
+      }),
+    ]);
+
+    let receiverData = null;
     let isExpert = false;
 
-    if (receiverDoc.exists) {
-      receiverData = receiverDoc.data();
+    if (receiverExpertDoc && receiverExpertDoc.exists) {
+      receiverData = receiverExpertDoc.data();
       isExpert = true;
+    } else if (receiverUserDoc && receiverUserDoc.exists) {
+      receiverData = receiverUserDoc.data();
+      isExpert = false;
     } else {
-      receiverDoc = await db.collection("users").doc(receiverId).get();
-      if (!receiverDoc.exists) {
-        functions.logger.warn(`Receiver '${receiverId}' not found in experts or users.`);
-        return null;
-      }
-      receiverData = receiverDoc.data();
+      functions.logger.warn(`Receiver '${receiverId}' not found in experts or users.`);
+      return null;
     }
 
     const gender   = receiverData.gender   || (isExpert ? "female" : "male");
     const isOnline = receiverData.isOnline || false;
     const fcmToken = receiverData.fcmToken || null;
 
-    // ── Step 1.5: Check if caller is blocked by receiver ───────────────────
-    const blockedDoc = await db.collection("blocked_users").doc(receiverId).get();
-    if (blockedDoc.exists) {
+    // ── Check if caller is blocked by receiver ───────────────────────────
+    if (blockedDoc && blockedDoc.exists) {
       const blockedUids = blockedDoc.data().blocked_uids || [];
       if (blockedUids.includes(callerId)) {
         functions.logger.info(`Caller '${callerId}' is blocked by Receiver '${receiverId}'. Suppressing call notification.`);
-        // Also update call status to 'rejected_blocked' so the caller gets feedback
         await snap.ref.update({ status: "rejected_blocked" });
         return null;
       }
     }
 
-    // ── Step 2: Business Logic Gate ────────────────────────────────────────
-    //
-    // Fetch RTDB presence for accurate online/offline detection (especially when app is killed)
-    let rtdbIsOnline = false;
-    if (gender === "female") {
-      const statusSnap = await admin.database().ref(`status/${receiverId}`).once("value");
-      if (statusSnap.exists()) {
-        rtdbIsOnline = statusSnap.val().isOnline === true;
-      }
-    }
-
-    // CONDITION 1 (Female/Expert): If isOnline == false → DO NOT send notification.
-    // CONDITION 2 (Male/User):     Always send.
-    //
+    // ── Presence Check: If Female/Expert is offline in RTDB → reject ─────
+    const rtdbIsOnline = (statusSnap && statusSnap.exists()) ? (statusSnap.val().isOnline === true) : false;
     if (gender === "female" && !rtdbIsOnline) {
       functions.logger.info(
         `Receiver '${receiverId}' (female) is offline in RTDB. Suppressing call notification.`
       );
-      // Also update call status to 'rejected' so the caller gets feedback
       await snap.ref.update({ status: "rejected_offline" });
       return null;
     }
 
     if (!fcmToken) {
       functions.logger.warn(`Receiver '${receiverId}' has no FCM token.`);
+      await snap.ref.update({ status: "rejected_offline" });
       return null;
     }
 
-    // ── Step 3: Fetch caller's display name ────────────────────────────────
-    let callerName = callerId;
-    let callerAvatar = "";
+    // ── Caller Name & Avatar (Fast Path) ─────────────────────────────────
+    // If passed directly in callData (from extraRoomData), use immediately!
+    let callerName = callData.callerName || "";
+    let callerAvatar = callData.callerAvatar || "";
 
-    try {
-      const newRtdb = admin.app().database("https://zegochat-c44b0-4cbfb.asia-southeast1.firebasedatabase.app");
-      const userSnap = await newRtdb.ref(`users/${callerId}`).once("value");
-      if (userSnap.exists()) {
-        const d = userSnap.val();
-        callerName = d.nickname || callerId;
-        callerAvatar = d.avatarUrl || "";
-      } else {
-        const expertSnap = await newRtdb.ref(`experts/${callerId}`).once("value");
-        if (expertSnap.exists()) {
-          const d = expertSnap.val();
+    if (!callerName || callerName === callerId || callerName === "Unknown Caller") {
+      try {
+        const callerUserDoc = await db.collection("users").doc(callerId).get();
+        if (callerUserDoc && callerUserDoc.exists) {
+          const d = callerUserDoc.data();
           callerName = d.nickname || callerId;
-          callerAvatar = d.profileImageUrl || d.avatarUrl || "";
-        }
-      }
-    } catch (_) {}
-
-    if (callerName === callerId) {
-      // Try 'users' collection first (male callers), then 'experts'
-      const callerUserDoc = await db.collection("users").doc(callerId).get();
-      if (callerUserDoc.exists) {
-        const d = callerUserDoc.data();
-        callerName   = d.nickname   || callerId;
-        callerAvatar = d.avatarPath || "";
-      } else {
-        const callerExpertDoc = await db.collection("experts").doc(callerId).get();
-        if (callerExpertDoc.exists) {
-          const d = callerExpertDoc.data();
-          callerName   = d.nickname   || callerId;
           callerAvatar = d.avatarPath || "";
         }
-      }
+      } catch (_) {}
+    }
+    if (!callerName) {
+      callerName = callerId;
     }
 
     // ── Step 4: Build FCM data payload ─────────────────────────────────────
@@ -201,19 +186,24 @@ exports.onCallInitiated = functions.region("asia-south1").database
       callerId:    callerId,
       callerName:  callerName,
       callerAvatar: callerAvatar,
+      callerAvatarIndex: String(callData.callerAvatarIndex || ""),
       receiverId:  receiverId,
+      dbUrl:       "https://zegochat-c44b0.asia-southeast1.firebasedatabase.app",
     };
 
-    // ── Step 5: Send the FCM data message ──────────────────────────────────
-    // IMPORTANT: Send ONLY data payload (no notification block).
-    // If notification block is present, Android handles it at system level
-    // and does NOT call our Dart background handler — so CallKit never shows.
-    // Data-only messages always wake our firebaseMessagingBackgroundHandler.
-    await sendFcmMessage(fcmToken, fcmData, null, true);
-
-    functions.logger.info(
-      `[onCallInitiated] Notification sent to expert '${receiverId}'.`
-    );
+    try {
+      await sendFcmMessage(fcmToken, fcmData, null, true);
+      functions.logger.info(
+        `[onCallInitiated] High-priority call push sent to '${receiverId}'.`
+      );
+      await snap.ref.update({
+        status: "ringing",
+        fcmSentAt: admin.database.ServerValue.TIMESTAMP,
+      });
+    } catch (fcmErr) {
+      functions.logger.error(`[onCallInitiated] Failed to send call FCM to '${receiverId}':`, fcmErr);
+      await snap.ref.update({ status: "rejected_offline" });
+    }
     return null;
   });
 
@@ -437,7 +427,7 @@ exports.onRtdbPresenceChanged = functions.region("asia-south1").database
 // Dispatches high-priority data-only FCM push to wake male users in killed state.
 // ─────────────────────────────────────────────────────────────────────────────
 
-exports.onFemaleIntroCallInitiated = functions.region("asia-south1").database
+exports.onFemaleIntroCallInitiated = functions.region("asia-southeast1").database
   .instance("zegochat-c44b0-1e689")
   .ref("calls/{callId}")
   .onCreate(async (snap, context) => {
@@ -461,7 +451,7 @@ exports.onFemaleIntroCallInitiated = functions.region("asia-south1").database
     // ── Safety Check: Has the male user already used their single 1-min free intro call? ──
     try {
       const recordSnap = await newDb.ref(`free_intro_call_records/${receiverId}`).once("value");
-      if (recordSnap.exists() && recordSnap.val().hasUsed === true) {
+      if (recordSnap.exists() && (recordSnap.val().used === true || recordSnap.val().hasUsed === true)) {
         functions.logger.warn(`Male receiver '${receiverId}' has already consumed their free intro call.`);
         await snap.ref.update({ status: "rejected_already_used" });
         return null;
@@ -486,35 +476,66 @@ exports.onFemaleIntroCallInitiated = functions.region("asia-south1").database
     }
 
     // ── Retrieve Male FCM Token ──────────────────────────────────────────
-    let fcmToken = callData.receiverFcmToken || null;
+    let fcmToken = null;
 
+    // 1. Check isolated RTDB male_users first (most up-to-date)
+    try {
+      const maleSnap = await newDb.ref(`male_users/${receiverId}/fcmToken`).once("value");
+      if (maleSnap.exists() && maleSnap.val()) {
+        fcmToken = maleSnap.val();
+      }
+    } catch (err) {
+      functions.logger.error("Error querying 1e689 male_users for FCM token:", err);
+    }
+
+    // 2. Check callData.receiverFcmToken if not found
+    if (!fcmToken && callData.receiverFcmToken) {
+      fcmToken = callData.receiverFcmToken;
+    }
+
+    // 3. Check new_males_pool
     if (!fcmToken) {
-      // Lookup in user RTDB (zegochat-c44b0-4cbfb)
       try {
-        const userRtdb = admin.app().database("https://zegochat-c44b0-4cbfb.asia-southeast1.firebasedatabase.app");
-        const userSnap = await userRtdb.ref(`users/${receiverId}/fcmToken`).once("value");
-        if (userSnap.exists() && userSnap.val()) {
-          fcmToken = userSnap.val();
+        const poolSnap = await newDb.ref(`new_males_pool/${receiverId}/fcmToken`).once("value");
+        if (poolSnap.exists() && poolSnap.val()) {
+          fcmToken = poolSnap.val();
         }
       } catch (err) {
-        functions.logger.error("Error querying user RTDB for FCM token:", err);
+        functions.logger.error("Error querying 1e689 new_males_pool for FCM token:", err);
       }
     }
 
+    // 4. Fallback to Firestore users collection
     if (!fcmToken) {
-      // Fallback: lookup in Firestore users collection
       try {
         const userDoc = await db.collection("users").doc(receiverId).get();
         if (userDoc.exists && userDoc.data().fcmToken) {
           fcmToken = userDoc.data().fcmToken;
         }
       } catch (err) {
-        functions.logger.error("Error querying Firestore for FCM token:", err);
+        functions.logger.error("Error querying Firestore users for FCM token:", err);
+      }
+    }
+
+    // 5. Fallback to 4cbfb user DB
+    if (!fcmToken) {
+      try {
+        const userRtdb = admin.app().database("https://zegochat-c44b0-4cbfb.asia-southeast1.firebasedatabase.app");
+        const rtdbSnap = await userRtdb.ref(`users/${receiverId}/fcmToken`).once("value");
+        if (rtdbSnap.exists() && rtdbSnap.val()) {
+          fcmToken = rtdbSnap.val();
+        }
+      } catch (err) {
+        functions.logger.error("Error querying 4cbfb for FCM token:", err);
       }
     }
 
     if (!fcmToken) {
-      functions.logger.warn(`Male receiver '${receiverId}' has no FCM token — cannot wake app.`);
+      functions.logger.warn(`Male receiver '${receiverId}' has no FCM token — marking call rejected_offline.`);
+      await snap.ref.update({
+        status: "rejected_offline",
+        endReason: "receiver_has_no_fcm_token",
+      });
       return null;
     }
 
@@ -562,11 +583,65 @@ exports.onFemaleIntroCallInitiated = functions.region("asia-south1").database
     };
 
     // Send data-only message (no notification block) to wake background isolate & CallKit
-    await sendFcmMessage(fcmToken, fcmData, null, true);
+    try {
+      await sendFcmMessage(fcmToken, fcmData, null, true);
+      functions.logger.info(
+        `[onFemaleIntroCallInitiated] High-priority intro call push sent to male '${receiverId}'.`
+      );
+      await snap.ref.update({
+        status: "ringing",
+        fcmSentAt: admin.database.ServerValue.TIMESTAMP,
+      });
+    } catch (fcmErr) {
+      functions.logger.error(`[onFemaleIntroCallInitiated] FCM send failed for male '${receiverId}':`, fcmErr);
+      
+      const isUnregistered = fcmErr.message === "NotRegistered" ||
+          (fcmErr.errorInfo && fcmErr.errorInfo.code === "messaging/registration-token-not-registered") ||
+          fcmErr.code === "messaging/registration-token-not-registered";
 
-    functions.logger.info(
-      `[onFemaleIntroCallInitiated] High-priority intro call push sent to male '${receiverId}'.`
-    );
+      if (isUnregistered) {
+        // Clean up invalid token from 1e689 so female hosts don't get stuck calling a dead session
+        try {
+          await newDb.ref(`male_users/${receiverId}/fcmToken`).remove();
+          await newDb.ref(`new_males_pool/${receiverId}/fcmToken`).remove();
+          const poolSnap = await newDb.ref(`new_males_pool/${receiverId}/languageKey`).get();
+          if (poolSnap.exists()) {
+            await newDb.ref(`new_males_buckets/${poolSnap.val()}/${receiverId}/fcmToken`).remove();
+          }
+          await newDb.ref(`new_males_buckets/all/${receiverId}/fcmToken`).remove();
+        } catch (_) {}
+
+        // Attempt fallback lookup from Firestore
+        let fallbackToken = null;
+        try {
+          const userDoc = await db.collection("users").doc(receiverId).get();
+          if (userDoc.exists && userDoc.data().fcmToken && userDoc.data().fcmToken !== fcmToken) {
+            fallbackToken = userDoc.data().fcmToken;
+          }
+        } catch (_) {}
+
+        if (fallbackToken) {
+          try {
+            await sendFcmMessage(fallbackToken, fcmData, null, true);
+            functions.logger.info(`[onFemaleIntroCallInitiated] Fallback FCM push sent successfully to '${receiverId}'.`);
+            await newDb.ref(`male_users/${receiverId}/fcmToken`).set(fallbackToken);
+            await snap.ref.update({
+              status: "ringing",
+              fcmSentAt: admin.database.ServerValue.TIMESTAMP,
+            });
+            return null;
+          } catch (e2) {
+            functions.logger.error(`[onFemaleIntroCallInitiated] Fallback FCM push also failed:`, e2);
+          }
+        }
+      }
+
+      // Mark call rejected_offline so female UI transitions cleanly instead of hanging
+      await snap.ref.update({
+        status: "rejected_offline",
+        endReason: "receiver_device_unreachable",
+      });
+    }
     return null;
   });
 
