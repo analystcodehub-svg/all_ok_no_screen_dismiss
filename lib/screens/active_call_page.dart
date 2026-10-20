@@ -11,9 +11,9 @@ import '../services/local_chat_database.dart';
 import '../services/block_service.dart';
 import '../services/user_database_service.dart';
 import '../services/new_male_service.dart';
-import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
 import 'package:flutter_ringtone_player/flutter_ringtone_player.dart';
 import 'package:vibration/vibration.dart';
+import '../services/notification_service.dart';
 
 class ActiveCallPage extends StatefulWidget {
   final String? callRoomId; // Supplied for receiver/expert, generated for caller
@@ -956,7 +956,7 @@ class _ActiveCallPageState extends State<ActiveCallPage> with TickerProviderStat
     _isHangingUp = true;
     
     // Clear CallKit Native Notifications
-    FlutterCallkitIncoming.endAllCalls();
+    dismissCallKitScreen();
     
     // Unlock both parties safely (unlockUserFromCall checks experts collection internally)
     _callService.unlockUserFromCall(widget.callerId);

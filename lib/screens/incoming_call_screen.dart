@@ -3,13 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:vibration/vibration.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_database/firebase_database.dart';
-import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
 import '../providers/app_state.dart';
 import '../services/call_service.dart';
 import 'active_call_page.dart';
 import 'package:flutter_ringtone_player/flutter_ringtone_player.dart';
 import '../services/user_database_service.dart';
 import '../services/local_chat_database.dart';
+import '../services/notification_service.dart';
 
 class IncomingCallScreen extends StatefulWidget {
   final String callRoomId;
@@ -200,7 +200,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
     
     _vibrateTimer?.cancel();
     FlutterRingtonePlayer().stop();
-    FlutterCallkitIncoming.endAllCalls();
+    dismissCallKitScreen();
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -214,7 +214,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
   void dispose() {
     _vibrateTimer?.cancel();
     FlutterRingtonePlayer().stop();
-    FlutterCallkitIncoming.endAllCalls();
+    dismissCallKitScreen();
     _callSub?.cancel();
     _pulseController.dispose();
     super.dispose();
@@ -232,7 +232,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
     
     _vibrateTimer?.cancel();
     FlutterRingtonePlayer().stop();
-    FlutterCallkitIncoming.endAllCalls();
+    dismissCallKitScreen();
     
     if (mounted) {
       Navigator.pushReplacement(
@@ -264,7 +264,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
     
     _vibrateTimer?.cancel();
     FlutterRingtonePlayer().stop();
-    FlutterCallkitIncoming.endAllCalls();
+    dismissCallKitScreen();
     
     final appState = context.read<AppState>();
     final currentUserId = appState.uid;

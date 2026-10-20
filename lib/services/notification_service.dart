@@ -185,6 +185,22 @@ Future<void> showChatNotification(Map<String, dynamic> data) async {
   );
 }
 
+/// Dismisses CallKit screen natively via broadcast & MethodChannel.
+/// Fixes the issue where remote cancellation stops the ringtone but leaves CallKit UI stuck on screen.
+Future<void> dismissCallKitScreen() async {
+  try {
+    const channel1 = MethodChannel('com.techflow.co/auto_start_flutter');
+    await channel1.invokeMethod('dismissCallKitScreen');
+  } catch (_) {}
+  try {
+    const channel2 = MethodChannel('com.sajnire.app/auth');
+    await channel2.invokeMethod('dismissCallKitScreen');
+  } catch (_) {}
+  try {
+    await FlutterCallkitIncoming.endAllCalls();
+  } catch (_) {}
+}
+
 @pragma('vm:entry-point')
 void notificationTapBackground(NotificationResponse details) async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -202,14 +218,14 @@ void notificationTapBackground(NotificationResponse details) async {
 
       if (details.actionId == 'action_decline') {
         FlutterRingtonePlayer().stop();
-        FlutterCallkitIncoming.endAllCalls();
+        dismissCallKitScreen();
         if (callRoomId.isNotEmpty) {
           FlutterLocalNotificationsPlugin().cancel(id: callRoomId.hashCode.abs());
           CallService(databaseURL: dbUrl).endCall(callRoomId);
         }
       } else if (details.actionId == 'action_accept') {
         FlutterRingtonePlayer().stop();
-        FlutterCallkitIncoming.endAllCalls();
+        dismissCallKitScreen();
         if (callRoomId.isNotEmpty) {
           FlutterLocalNotificationsPlugin().cancel(id: callRoomId.hashCode.abs());
           final prefs = await SharedPreferences.getInstance();
@@ -242,14 +258,14 @@ Future<void> showCallNotificationWithActions(
             final dbUrl = d['dbUrl'] as String?;
             if (details.actionId == 'action_accept') {
               FlutterRingtonePlayer().stop();
-              FlutterCallkitIncoming.endAllCalls();
+              dismissCallKitScreen();
               if (callRoomId.isNotEmpty) {
                 plugin.cancel(id: callRoomId.hashCode.abs());
                 NotificationService.instance._navigateToActiveCall(callRoomId, autoAccept: true);
               }
             } else if (details.actionId == 'action_decline') {
               FlutterRingtonePlayer().stop();
-              FlutterCallkitIncoming.endAllCalls();
+              dismissCallKitScreen();
               if (callRoomId.isNotEmpty) {
                 plugin.cancel(id: callRoomId.hashCode.abs());
                 CallService(databaseURL: dbUrl).endCall(callRoomId);
@@ -257,7 +273,7 @@ Future<void> showCallNotificationWithActions(
             } else {
               // Tapped notification body
               FlutterRingtonePlayer().stop();
-              FlutterCallkitIncoming.endAllCalls();
+              dismissCallKitScreen();
               if (callRoomId.isNotEmpty) {
                 plugin.cancel(id: callRoomId.hashCode.abs());
                 NotificationService.instance._navigateToActiveCall(callRoomId, autoAccept: false);
@@ -587,12 +603,12 @@ Future<void> _showCallkitIncoming(Map<String, dynamic> data) async {
       app: Firebase.app(),
       databaseURL: dbUrl,
     ).ref('calls/$callRoomId').onValue.listen((event) {
-      // 1. If caller hangs up before answering, the node is deleted (value == null). Stop ringtone immediately!
+      // 1. If caller hangs up before answering, the node is deleted (value == null). Stop ringtone & dismiss CallKit immediately!
       if (!event.snapshot.exists || event.snapshot.value == null) {
-        debugPrint('[CallKit] Remote call room was removed by caller. Stopping ringtone immediately.');
+        debugPrint('[CallKit] Remote call room was removed by caller. Stopping ringtone & dismissing CallKit immediately.');
         FlutterRingtonePlayer().stop();
         FlutterLocalNotificationsPlugin().cancel(id: callRoomId.hashCode.abs());
-        FlutterCallkitIncoming.endAllCalls();
+        dismissCallKitScreen();
         if (!completer.isCompleted) completer.complete();
         return;
       }
@@ -601,10 +617,10 @@ Future<void> _showCallkitIncoming(Map<String, dynamic> data) async {
         final data = Map<String, dynamic>.from(val);
         final status = data['status']?.toString();
         if (status == 'ended' || status == 'cancelled' || status == 'missed' || status == 'rejected_blocked' || status == 'rejected_already_used') {
-          debugPrint('[CallKit] Remote call ended with status: $status. Stopping ringtone immediately.');
+          debugPrint('[CallKit] Remote call ended with status: $status. Stopping ringtone & dismissing CallKit immediately.');
           FlutterRingtonePlayer().stop();
           FlutterLocalNotificationsPlugin().cancel(id: callRoomId.hashCode.abs());
-          FlutterCallkitIncoming.endAllCalls();
+          dismissCallKitScreen();
           if (!completer.isCompleted) completer.complete();
         }
       }
@@ -614,6 +630,7 @@ Future<void> _showCallkitIncoming(Map<String, dynamic> data) async {
   // Failsafe timer: 36 seconds
   Timer(const Duration(seconds: 36), () {
     FlutterRingtonePlayer().stop();
+    dismissCallKitScreen();
     if (!completer.isCompleted) completer.complete();
   });
 
@@ -878,7 +895,7 @@ class NotificationService {
       final callRoomId = data['callRoomId'] as String? ?? '';
       if (callRoomId.isNotEmpty) {
         FlutterRingtonePlayer().stop();
-        FlutterCallkitIncoming.endAllCalls();
+        dismissCallKitScreen();
         _localNotifications.cancel(id: callRoomId.hashCode.abs());
         _navigateToActiveCall(callRoomId, autoAccept: false);
       }
@@ -1111,7 +1128,7 @@ class NotificationService {
           final storedDbUrl = prefs.getString('dbUrl_$callRoomId');
           await CallService(databaseURL: storedDbUrl).endCall(callRoomId);
         }
-        await FlutterCallkitIncoming.endAllCalls();
+        await dismissCallKitScreen();
       }
     });
   }
@@ -1119,6 +1136,6 @@ class NotificationService {
   /// Dismiss all CallKit screens programmatically.
   /// Call when the expert goes offline to cancel any shown call screens.
   Future<void> endAllCallkitScreens() async {
-    await FlutterCallkitIncoming.endAllCalls();
+    await dismissCallKitScreen();
   }
 }

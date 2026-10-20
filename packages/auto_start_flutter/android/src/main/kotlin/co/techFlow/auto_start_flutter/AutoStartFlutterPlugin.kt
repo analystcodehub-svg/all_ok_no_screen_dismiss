@@ -31,6 +31,18 @@ class AutoStartFlutterPlugin : FlutterPlugin, MethodCallHandler {
                 val success = openAutoStartSettings()
                 result.success(success)
             }
+            "dismissCallKitScreen" -> {
+                try {
+                    val intent = Intent("${context.packageName}.com.hiennv.flutter_callkit_incoming.ACTION_ENDED_CALL_INCOMING").apply {
+                        putExtra("ACCEPTED", false)
+                        `package` = context.packageName
+                    }
+                    context.sendBroadcast(intent)
+                    result.success(true)
+                } catch (e: Exception) {
+                    result.error("ERROR", e.message, null)
+                }
+            }
             "registerBootCallback" -> {
                 val callbackHandle = call.argument<Long>("callbackHandle")
                 if (callbackHandle != null) {

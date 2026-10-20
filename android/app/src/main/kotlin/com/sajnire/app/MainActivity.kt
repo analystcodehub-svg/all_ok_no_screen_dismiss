@@ -144,6 +144,17 @@ class MainActivity : FlutterActivity() {
                 val serviceIntent = Intent(context, AppCloseService::class.java)
                 context.stopService(serviceIntent)
                 result.success(null)
+            } else if (call.method == "dismissCallKitScreen") {
+                try {
+                    val intent = Intent("${packageName}.com.hiennv.flutter_callkit_incoming.ACTION_ENDED_CALL_INCOMING").apply {
+                        putExtra("ACCEPTED", false)
+                        `package` = packageName
+                    }
+                    sendBroadcast(intent)
+                    result.success(true)
+                } catch (e: Exception) {
+                    result.error("ERROR", e.message, null)
+                }
             } else {
                 result.notImplemented()
             }
