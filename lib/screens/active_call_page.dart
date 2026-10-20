@@ -183,6 +183,9 @@ class _ActiveCallPageState extends State<ActiveCallPage> with TickerProviderStat
         debugPrint('[ActiveCallPage] calls/$roomId status updated: $status');
         if (status == 'ringing') {
           _onRemoteRingingReceived();
+        } else if (status == 'connected') {
+          debugPrint('[ActiveCallPage] calls/$roomId status updated to connected. Marking call connected.');
+          _markCallConnected();
         } else if (status == 'ended' || status == 'rejected' || status == 'rejected_blocked') {
           FlutterRingtonePlayer().stop();
           _vibrateTimer?.cancel();
@@ -195,6 +198,31 @@ class _ActiveCallPageState extends State<ActiveCallPage> with TickerProviderStat
         }
       }
     });
+  }
+
+  void _markCallConnected() {
+    if (!mounted || _isConnected) return;
+    debugPrint('[ActiveCallPage] Call marked connected. Cancelling ringing and availability timers.');
+    FlutterRingtonePlayer().stop();
+    _vibrateTimer?.cancel();
+    _availabilityTimer?.cancel();
+    _availabilityTicker?.cancel();
+    _ringingTimer?.cancel();
+    _countdownTicker?.cancel();
+
+    setState(() {
+      _isConnected = true;
+      _isAvailabilityChecking = false;
+      _isSpeakerOn = true;
+      _statusMessage = 'Connected';
+    });
+
+    Future.delayed(const Duration(milliseconds: 500), () {
+      Helper.setSpeakerphoneOn(true);
+    });
+
+    _startCallTimer();
+    _handleCallAttended();
   }
 
   void _onRemoteRingingReceived() {
@@ -356,21 +384,7 @@ class _ActiveCallPageState extends State<ActiveCallPage> with TickerProviderStat
             extraRoomData: extra,
             onRemoteStream: (stream) {
               if (mounted) {
-                _availabilityTimer?.cancel();
-                _availabilityTicker?.cancel();
-                _ringingTimer?.cancel();
-                _countdownTicker?.cancel();
-                setState(() {
-                  _isConnected = true;
-                  _isAvailabilityChecking = false;
-                  _isSpeakerOn = true;
-                  _statusMessage = 'Connected';
-                });
-                Future.delayed(const Duration(milliseconds: 500), () {
-                  Helper.setSpeakerphoneOn(true);
-                });
-                _startCallTimer();
-                _handleCallAttended();
+                _markCallConnected();
               }
             },
             onCallEnded: _onCallEndedCallback,
@@ -692,21 +706,7 @@ class _ActiveCallPageState extends State<ActiveCallPage> with TickerProviderStat
             },
             onRemoteStream: (stream) {
               if (mounted) {
-                _availabilityTimer?.cancel();
-                _availabilityTicker?.cancel();
-                _ringingTimer?.cancel();
-                _countdownTicker?.cancel();
-                setState(() {
-                  _isConnected = true;
-                  _isAvailabilityChecking = false;
-                  _isSpeakerOn = true;
-                  _statusMessage = 'Connected';
-                });
-                Future.delayed(const Duration(milliseconds: 500), () {
-                  Helper.setSpeakerphoneOn(true);
-                });
-                _startCallTimer();
-                _handleCallAttended();
+                _markCallConnected();
               }
             },
             onCallEnded: _onCallEndedCallback,
@@ -743,21 +743,7 @@ class _ActiveCallPageState extends State<ActiveCallPage> with TickerProviderStat
       _callService.updateListeners(
         onRemoteStream: (stream) {
           if (mounted) {
-            _availabilityTimer?.cancel();
-            _availabilityTicker?.cancel();
-            _ringingTimer?.cancel();
-            _countdownTicker?.cancel();
-            setState(() {
-              _isConnected = true;
-              _isAvailabilityChecking = false;
-              _isSpeakerOn = true;
-              _statusMessage = 'Connected';
-            });
-            Future.delayed(const Duration(milliseconds: 500), () {
-              Helper.setSpeakerphoneOn(true);
-            });
-            _startCallTimer();
-            _handleCallAttended();
+            _markCallConnected();
           }
         },
         onCallEnded: _onCallEndedCallback,
@@ -765,15 +751,9 @@ class _ActiveCallPageState extends State<ActiveCallPage> with TickerProviderStat
       );
 
       if (mounted) {
-        setState(() {
-          if (_callService.remoteStream != null) {
-            _isConnected = true;
-            _isSpeakerOn = true;
-            _statusMessage = 'Connected';
-            _startCallTimer();
-            _handleCallAttended();
-          }
-        });
+        if (_callService.remoteStream != null) {
+          _markCallConnected();
+        }
       }
       return;
     }
@@ -793,17 +773,7 @@ class _ActiveCallPageState extends State<ActiveCallPage> with TickerProviderStat
           },
           onRemoteStream: (stream) {
             if (mounted) {
-              setState(() {
-                _isConnected = true;
-                _isSpeakerOn = true;
-                _statusMessage = 'Connected';
-              });
-              Future.delayed(const Duration(milliseconds: 500), () {
-                Helper.setSpeakerphoneOn(true);
-              });
-              _ringingTimer?.cancel();
-              _startCallTimer();
-              _handleCallAttended();
+              _markCallConnected();
             }
           },
           onCallEnded: _onCallEndedCallback,
@@ -812,6 +782,7 @@ class _ActiveCallPageState extends State<ActiveCallPage> with TickerProviderStat
           setState(() {
             _roomId = generatedRoomId;
           });
+          _subscribeToRoomStatus(generatedRoomId);
         }
       } catch (e) {
         if (mounted) {
@@ -843,17 +814,7 @@ class _ActiveCallPageState extends State<ActiveCallPage> with TickerProviderStat
         callRoomId: _roomId!,
         onRemoteStream: (stream) {
           if (mounted) {
-            FlutterRingtonePlayer().stop();
-            setState(() {
-              _isConnected = true;
-              _isSpeakerOn = true;
-              _statusMessage = 'Connected';
-            });
-            Future.delayed(const Duration(milliseconds: 500), () {
-              Helper.setSpeakerphoneOn(true);
-            });
-            _startCallTimer();
-            _handleCallAttended();
+            _markCallConnected();
           }
         },
         onCallEnded: _hangupLocal,
@@ -877,30 +838,19 @@ class _ActiveCallPageState extends State<ActiveCallPage> with TickerProviderStat
         _duration++;
       });
 
-      // Free Intro Call: strictly enforce 1 minute (60s) cap and auto-disconnect
+      // Free Intro Call: strictly enforce 1 minute (60s) cap for new users who haven't recharged
       if (_isFreeIntroCall) {
         if (_duration == 5) {
           _handleCallAttended();
         }
-        if (_duration >= _maxDurationSeconds && !_isHangingUp) {
-          _triggerHangup();
-        }
-        return; // Zero coin deduction for intro call
-      }
-
-      // Female auto-hangup guard if duration exceeds caller's affordable time
-      if (!widget.isCaller) {
-        final balance = _callerCoinBalance ?? widget.callerCoinBalance ?? 30;
-        int reqCoins = (widget.pricePerMin * 10).toInt();
-        if (reqCoins <= 0) reqCoins = 30;
-        int maxMins = balance ~/ reqCoins;
-        if (maxMins <= 0 && balance > 0) maxMins = 1;
-        int maxSecs = maxMins * 60;
-        if (_duration > maxSecs && !_isHangingUp) {
+        if (_duration >= (_maxDurationSeconds ?? 60) && !_isHangingUp) {
           _triggerHangup();
           return;
         }
       }
+
+      // Female never auto-hangups; call continues until user presses red button
+      // Caller (male) manages coin deductions and balance.
 
       // Check and deduct balances on every first second of minute start (1s, 61s, 121s, 181s...)
       if (_duration > 0 && (_duration - 1) % 60 == 0) {
@@ -918,14 +868,10 @@ class _ActiveCallPageState extends State<ActiveCallPage> with TickerProviderStat
             return;
           } else {
             context.read<AppState>().deductCoinBalance(requiredCoins);
-            // Deduct new RTDB instantly via transaction
-            UserDatabaseService.instance.deductUserCoins(widget.callerId, requiredCoins).then((success) {
-              if (!success && mounted && !_isHangingUp) {
-                _triggerHangup();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Call ended: Insufficient balance')),
-                );
-              }
+            // Deduct new RTDB in background without interrupting the call
+            UserDatabaseService.instance.deductUserCoins(widget.callerId, requiredCoins).catchError((e) {
+              debugPrint('[ActiveCallPage] Non-fatal error deducting coins: $e');
+              return false;
             });
           }
           

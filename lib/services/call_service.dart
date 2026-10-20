@@ -49,9 +49,8 @@ class CallService {
   }
 
   // WebRTC ICE Configuration.
-  // - 2 STUN servers instead of 5: extra Google STUN servers return the SAME
-  //   public IP, so they only add duplicate candidates (= extra RTDB writes
-  //   and extra connectivity checks) without improving connectivity.
+  // - 1 STUN server (Google Anycast): returns public IP with zero duplicate
+  //   candidates (= faster gathering, fewer RTDB candidate writes).
   // - TURN is KEPT as a fallback: many Indian mobile carriers (Jio/Airtel CGNAT)
   //   use symmetric NAT where STUN alone fails. Because we use trickle ICE,
   //   TURN gathering runs in parallel and does not delay calls that succeed
@@ -63,7 +62,6 @@ class CallService {
       {
         'urls': [
           'stun:stun.l.google.com:19302',
-          'stun:stun1.l.google.com:19302',
         ]
       },
       {
@@ -167,11 +165,10 @@ class CallService {
         onRemoteStreamListener?.call(_remoteStream!);
       };
 
-      // Detect network disconnection immediately via WebRTC ICE state
+      // Detect terminal network failure via WebRTC ICE state
       _peerConnection!.onIceConnectionState = (RTCIceConnectionState state) {
         debugPrint('[WebRTC] Caller ICE State: $state');
-        if (state == RTCIceConnectionState.RTCIceConnectionStateDisconnected ||
-            state == RTCIceConnectionState.RTCIceConnectionStateFailed ||
+        if (state == RTCIceConnectionState.RTCIceConnectionStateFailed ||
             state == RTCIceConnectionState.RTCIceConnectionStateClosed) {
           onCallEndedListener?.call();
         }
@@ -348,11 +345,10 @@ class CallService {
         onRemoteStreamListener?.call(_remoteStream!);
       };
 
-      // Detect network disconnection immediately via WebRTC ICE state
+      // Detect terminal network failure via WebRTC ICE state
       _peerConnection!.onIceConnectionState = (RTCIceConnectionState state) {
         debugPrint('[WebRTC] Receiver ICE State: $state');
-        if (state == RTCIceConnectionState.RTCIceConnectionStateDisconnected ||
-            state == RTCIceConnectionState.RTCIceConnectionStateFailed ||
+        if (state == RTCIceConnectionState.RTCIceConnectionStateFailed ||
             state == RTCIceConnectionState.RTCIceConnectionStateClosed) {
           onCallEndedListener?.call();
         }
