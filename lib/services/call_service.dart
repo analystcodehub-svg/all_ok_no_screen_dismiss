@@ -29,6 +29,7 @@ class CallService {
   Function(MediaStream stream)? onRemoteStreamListener;
   Function()? onCallEndedListener;
   Function()? onRingingListener;
+  Function(RTCIceConnectionState state)? onIceConnectionStateListener;
   String? lastCallStatus;
 
   /// Update the active call callbacks dynamically
@@ -36,6 +37,7 @@ class CallService {
     Function(MediaStream stream)? onRemoteStream,
     Function()? onCallEnded,
     Function()? onRinging,
+    Function(RTCIceConnectionState state)? onIceConnectionState,
   }) {
     if (onRemoteStream != null) {
       onRemoteStreamListener = onRemoteStream;
@@ -45,6 +47,9 @@ class CallService {
     }
     if (onRinging != null) {
       onRingingListener = onRinging;
+    }
+    if (onIceConnectionState != null) {
+      onIceConnectionStateListener = onIceConnectionState;
     }
   }
 
@@ -123,6 +128,7 @@ class CallService {
     required Function(MediaStream stream) onRemoteStream,
     required Function() onCallEnded,
     Function()? onRinging,
+    Function(RTCIceConnectionState state)? onIceConnectionState,
     int? callerCoins,
     double pricePerMin = 4.0,
     Map<String, dynamic>? extraRoomData,
@@ -130,6 +136,9 @@ class CallService {
     onRemoteStreamListener = onRemoteStream;
     onCallEndedListener = onCallEnded;
     onRingingListener = onRinging;
+    if (onIceConnectionState != null) {
+      onIceConnectionStateListener = onIceConnectionState;
+    }
     try {
       // 1 + 2. Initialize local audio and peer connection IN PARALLEL
       // (independent steps; the call doc — and therefore the FCM ring on the
@@ -168,6 +177,7 @@ class CallService {
       // Detect terminal network failure via WebRTC ICE state
       _peerConnection!.onIceConnectionState = (RTCIceConnectionState state) {
         debugPrint('[WebRTC] Caller ICE State: $state');
+        onIceConnectionStateListener?.call(state);
         if (state == RTCIceConnectionState.RTCIceConnectionStateFailed ||
             state == RTCIceConnectionState.RTCIceConnectionStateClosed) {
           onCallEndedListener?.call();
@@ -289,9 +299,13 @@ class CallService {
     required String callRoomId,
     required Function(MediaStream stream) onRemoteStream,
     required Function() onCallEnded,
+    Function(RTCIceConnectionState state)? onIceConnectionState,
   }) async {
     onRemoteStreamListener = onRemoteStream;
     onCallEndedListener = onCallEnded;
+    if (onIceConnectionState != null) {
+      onIceConnectionStateListener = onIceConnectionState;
+    }
     try {
       final DatabaseReference roomRef = _database.ref('calls/$callRoomId');
 
@@ -348,6 +362,7 @@ class CallService {
       // Detect terminal network failure via WebRTC ICE state
       _peerConnection!.onIceConnectionState = (RTCIceConnectionState state) {
         debugPrint('[WebRTC] Receiver ICE State: $state');
+        onIceConnectionStateListener?.call(state);
         if (state == RTCIceConnectionState.RTCIceConnectionStateFailed ||
             state == RTCIceConnectionState.RTCIceConnectionStateClosed) {
           onCallEndedListener?.call();
@@ -499,6 +514,7 @@ class CallService {
       await _peerConnection!.close();
       _peerConnection = null;
     }
+    onIceConnectionStateListener = null;
   }
 
   /// Realtime Database Transaction to safely lock an expert before calling.
