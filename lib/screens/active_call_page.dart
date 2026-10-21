@@ -102,7 +102,6 @@ class _ActiveCallPageState extends State<ActiveCallPage> with TickerProviderStat
   StreamSubscription<DatabaseEvent>? _roomStatusSub;
   Timer? _vibrateTimer;
   Timer? _disconnectGraceTimer;
-  bool _isReconnecting = false;
 
   @override
   void initState() {
@@ -206,12 +205,6 @@ class _ActiveCallPageState extends State<ActiveCallPage> with TickerProviderStat
   void _markCallConnected() {
     _disconnectGraceTimer?.cancel();
     _disconnectGraceTimer = null;
-    if (_isReconnecting && mounted) {
-      setState(() {
-        _isReconnecting = false;
-        _statusMessage = 'Connected';
-      });
-    }
 
     if (!mounted || _isConnected) return;
     debugPrint('[ActiveCallPage] Call marked connected. Cancelling ringing and availability timers.');
@@ -242,32 +235,19 @@ class _ActiveCallPageState extends State<ActiveCallPage> with TickerProviderStat
     debugPrint('[ActiveCallPage] WebRTC ICE State: $state');
 
     if (state == RTCIceConnectionState.RTCIceConnectionStateDisconnected) {
-      if (_isConnected && !_isReconnecting) {
-        setState(() {
-          _isReconnecting = true;
-          _statusMessage = 'Reconnecting...';
-        });
-
-        // Strict 6-second grace timer: if network does not recover within 6 seconds, hang up immediately!
-        _disconnectGraceTimer?.cancel();
+      // If network drops, start 6-second timer. If not recovered within 6s, hang up!
+      if (_isConnected && (_disconnectGraceTimer == null || !_disconnectGraceTimer!.isActive)) {
         _disconnectGraceTimer = Timer(const Duration(seconds: 6), () {
           if (!mounted || _isHangingUp) return;
-          debugPrint('[ActiveCallPage] 6-second disconnect grace limit reached without recovery -> Hanging up!');
+          debugPrint('[ActiveCallPage] Network disconnected for 6s -> Ending call.');
           _triggerHangup();
         });
       }
     } else if (state == RTCIceConnectionState.RTCIceConnectionStateConnected ||
                state == RTCIceConnectionState.RTCIceConnectionStateCompleted) {
-      // Reconnected within 6 seconds!
+      // Reconnected within 6 seconds! Cancel timer.
       _disconnectGraceTimer?.cancel();
       _disconnectGraceTimer = null;
-      if (mounted && _isReconnecting) {
-        setState(() {
-          _isReconnecting = false;
-          _statusMessage = 'Connected';
-        });
-        debugPrint('[ActiveCallPage] Network reconnected successfully within grace period!');
-      }
     } else if (state == RTCIceConnectionState.RTCIceConnectionStateFailed ||
                state == RTCIceConnectionState.RTCIceConnectionStateClosed) {
       _disconnectGraceTimer?.cancel();
@@ -1363,9 +1343,6 @@ class _ActiveCallPageState extends State<ActiveCallPage> with TickerProviderStat
                               duration: const Duration(milliseconds: 900),
                               curve: Curves.easeInOut,
                               builder: (_, val, _) {
-                                final statusColor = _isReconnecting
-                                    ? const Color(0xFFFBBF24)
-                                    : const Color(0xFF34D399);
                                 return Row(
                                   children: List.generate(3, (i) {
                                     return Container(
@@ -1374,7 +1351,7 @@ class _ActiveCallPageState extends State<ActiveCallPage> with TickerProviderStat
                                       height: 6,
                                       decoration: BoxDecoration(
                                         shape: BoxShape.circle,
-                                        color: statusColor.withValues(
+                                        color: const Color(0xFF34D399).withValues(
                                           alpha: i == 0 ? val : i == 1 ? (val * 0.7) : (val * 0.4),
                                         ),
                                       ),
@@ -1384,9 +1361,8 @@ class _ActiveCallPageState extends State<ActiveCallPage> with TickerProviderStat
                               },
                             ),
                             const SizedBox(height: 4),
-                            Icon(Icons.compare_arrows_rounded,
-                                color: _isReconnecting ? const Color(0xFFFBBF24) : const Color(0xFF34D399),
-                                size: 24),
+                            const Icon(Icons.compare_arrows_rounded,
+                                color: Color(0xFF34D399), size: 24),
                           ],
                         ),
                       ),
@@ -1413,15 +1389,13 @@ class _ActiveCallPageState extends State<ActiveCallPage> with TickerProviderStat
                   const SizedBox(height: 4),
                   Text(
                     _isConnected
-                        ? (_isReconnecting ? 'Reconnecting...' : 'Connected')
+                        ? 'Connected'
                         : (!widget.isCaller
                             ? (_callAccepted ? 'Connecting...' : 'Incoming Call...')
                             : (_isFreeIntroCall ? 'Ringing $_displayName... (${_ringingCountdown}s)' : _statusMessage)),
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      color: _isConnected
-                          ? (_isReconnecting ? const Color(0xFFFBBF24) : const Color(0xFF34D399))
-                          : Colors.white,
+                      color: _isConnected ? const Color(0xFF34D399) : Colors.white,
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
                     ),
