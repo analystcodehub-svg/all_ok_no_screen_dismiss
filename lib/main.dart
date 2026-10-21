@@ -210,7 +210,7 @@ class _SajniReAppState extends State<SajniReApp> with WidgetsBindingObserver {
             nickname:   args['callerName'] as String,
             pricePerMin: isFree
                 ? 0.0
-                : ((args['pricePerMin'] as num?)?.toDouble() ?? 3.0),
+                : ((args['pricePerMin'] as num?)?.toDouble() ?? 4.0),
             isCaller: false,     // Receiver is accepting
             callerCoinBalance: args['callerCoins'] as int?,
             callDatabaseURL: resolvedDbUrl,

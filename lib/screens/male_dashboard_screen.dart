@@ -564,7 +564,7 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> with WidgetsB
     final appState = context.read<AppState>();
     final balance = appState.coinBalance;
 
-    const overridePricePerMin = 3.0; // Enforce ₹3/min for male callers
+    const overridePricePerMin = 4.0; // Enforce ₹4/min for male callers
     
     if (balance < (overridePricePerMin * 10).toInt()) {
       showDialog(
@@ -614,7 +614,7 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> with WidgetsB
     final appState = context.read<AppState>();
     final balance = appState.coinBalance;
 
-    const requiredCoins = 30; // equivalent to ₹3/min
+    const requiredCoins = 40; // equivalent to ₹4/min
     
     if (balance < requiredCoins) {
       showDialog(
@@ -1102,7 +1102,7 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> with WidgetsB
                                           ),
                                         ),
                                         TextSpan(
-                                          text: '₹3',
+                                          text: '₹4',
                                           style: TextStyle(
                                             color: Colors.yellowAccent,
                                             fontSize: 24,
@@ -1359,7 +1359,7 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> with WidgetsB
         final expert = FemaleExpert(
           id: expertId,
           nickname: data['nickname'] ?? 'Expert',
-          pricePerMin: (data['pricePerMin'] as num?)?.toInt() ?? 5,
+          pricePerMin: (data['pricePerMin'] as num?)?.toInt() ?? 4,
           languages: data['languages'] ?? 'Hindi',
           rating: (data['rating'] ?? 4.5).toDouble(),
           isOnline: isOnline,

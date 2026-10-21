@@ -31,9 +31,9 @@ class ChatFriend {
 }
 
 final List<CallLog> mockCallLogs = [
-  CallLog(id: 'u11', name: 'nJsVw', timeText: 'Today 09:10 AM', duration: '54 sec', cost: '₹1'),
+  CallLog(id: 'u11', name: 'nJsVw', timeText: 'Today 09:10 AM', duration: '54 sec', cost: '₹1.2'),
   CallLog(id: 'u12', name: 'MkKumar', timeText: 'Today 08:48 AM', duration: '9 sec', cost: '₹0'),
-  CallLog(id: 'u13', name: 'explore', timeText: 'Yesterday 03:53 PM', duration: '13 sec', cost: '₹3'),
+  CallLog(id: 'u13', name: 'explore', timeText: 'Yesterday 03:53 PM', duration: '13 sec', cost: '₹4'),
   CallLog(id: 'u14', name: 'tTKmW', timeText: 'Yesterday 01:13 PM', duration: '5 min 39 sec', cost: '₹6'),
   CallLog(id: 'u15', name: 'abcdRam', timeText: '05 Jun 05:19 PM', duration: '3 sec', cost: '₹0'),
   CallLog(id: 'u16', name: 'ak', timeText: '03 Jun 04:11 AM', duration: '4 sec', cost: '₹0'),

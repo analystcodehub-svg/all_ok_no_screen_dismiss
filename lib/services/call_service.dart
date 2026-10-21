@@ -124,7 +124,7 @@ class CallService {
     required Function() onCallEnded,
     Function()? onRinging,
     int? callerCoins,
-    double pricePerMin = 3.0,
+    double pricePerMin = 4.0,
     Map<String, dynamic>? extraRoomData,
   }) async {
     onRemoteStreamListener = onRemoteStream;

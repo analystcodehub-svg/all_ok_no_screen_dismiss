@@ -265,7 +265,7 @@ class _ExpertFeedScreenState extends State<ExpertFeedScreen> {
                   
                   final appState = context.read<AppState>();
                   final balance = appState.coinBalance;
-                  const overridePricePerMin = 3.0;
+                  const overridePricePerMin = 4.0;
                   
                   if (balance < (overridePricePerMin * 10).toInt()) {
                     if (!context.mounted) return;
@@ -308,7 +308,7 @@ class _ExpertFeedScreenState extends State<ExpertFeedScreen> {
                       final expertObj = FemaleExpert(
                         id: expertId,
                         nickname: data['nickname'] ?? nickname,
-                        pricePerMin: (data['pricePerMin'] as num?)?.toInt() ?? 5,
+                        pricePerMin: (data['pricePerMin'] as num?)?.toInt() ?? 4,
                         languages: data['languages'] ?? 'Hindi',
                         rating: (data['rating'] ?? 4.5).toDouble(),
                         isOnline: true,

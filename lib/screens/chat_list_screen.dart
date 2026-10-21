@@ -934,7 +934,7 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
           'nickname': appState.nickname,
           'mobileNumber': appState.mobileNumber,
           'age': 2026 - appState.birthYear,
-          'pricePerMin': 3,
+          'pricePerMin': 4,
           'languages': appState.primaryLanguage,
           'rating': 4.8,
         });

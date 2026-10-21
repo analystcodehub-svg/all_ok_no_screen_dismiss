@@ -245,7 +245,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
             nickname: callerData['nickname'] ?? 'User',
             avatarUrl: callerData['avatarUrl'] as String?,
             avatarIndex: (callerData['avatarIndex'] as num?)?.toInt() ?? 1,
-            pricePerMin: widget.isFreeIntroCall ? 0.0 : 3.0,
+            pricePerMin: widget.isFreeIntroCall ? 0.0 : 4.0,
             isCaller: false,
             callerCoinBalance: (callerData['coinBalance'] as num?)?.toInt() ?? 0,
             onCallEnded: widget.onCallEnded,

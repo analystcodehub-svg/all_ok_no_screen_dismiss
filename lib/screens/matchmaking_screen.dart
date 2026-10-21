@@ -217,7 +217,7 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> with SingleTicker
         expertId: matchedExpertUid,
         callerId: callerUid,
         callerCoins: maleCoins,
-        pricePerMin: 3.0,
+        pricePerMin: 4.0,
         extraRoomData: {
           'callerName': maleNick.isNotEmpty ? maleNick : 'User',
           'callerAvatarIndex': maleAvatarIdx,
@@ -274,7 +274,7 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> with SingleTicker
 
       if (expertAnswered) {
         // SUCCESS: Proceed with WebRTC stream
-        double pricePerMin = 3.0; // Fixed price for male users
+        double pricePerMin = 4.0; // Fixed price for male users
 
         if (!_isDisposed && mounted) {
           Navigator.pushReplacement(

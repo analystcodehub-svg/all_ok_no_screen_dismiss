@@ -94,7 +94,8 @@ class _ActiveCallPageState extends State<ActiveCallPage> with TickerProviderStat
   late AnimationController _rippleController;
 
   // Tier-based expert earning rate (resolved from Firestore on connect)
-  double _expertEarningRate = 1.0; // default Bronze
+  double _expertEarningRate = 1.2; // default Bronze ₹1.2/min
+  int _creditedMinutes = 0; // Tracks minutes credited at 50s mark
   bool _tierResolved = false;
   int? _callerCoinBalance;
   StreamSubscription? _balanceSub;
@@ -517,20 +518,20 @@ class _ActiveCallPageState extends State<ActiveCallPage> with TickerProviderStat
           final tier = expertData['tier'] as String? ?? 'bronze';
           if (mounted) {
             setState(() {
-              _expertEarningRate = tier == 'silver' ? 1.6 : 1.0;
+              _expertEarningRate = tier == 'silver' ? 1.6 : 1.2;
             });
           }
         }
       }
 
       if (actualCallerId.isNotEmpty) {
-        if (_callerCoinBalance == null) {
+        if (_callerCoinBalance == null || _callerCoinBalance == 0) {
           final callerData = await UserDatabaseService.instance.getUser(actualCallerId);
           debugPrint('[_resolveRemoteData] callerData exists: ${callerData != null}');
           if (callerData != null) {
             final b = (callerData['coinBalance'] as num?)?.toInt() ?? 0;
             debugPrint('[_resolveRemoteData] Setting balance: $b');
-            if (mounted && _callerCoinBalance == null) {
+            if (mounted && (_callerCoinBalance == null || _callerCoinBalance == 0)) {
               setState(() {
                 _callerCoinBalance = b;
               });
@@ -547,11 +548,17 @@ class _ActiveCallPageState extends State<ActiveCallPage> with TickerProviderStat
             .listen((event) {
           if (event.snapshot.exists && event.snapshot.value != null) {
             final latestCoins = (event.snapshot.value as num).toInt();
-            if (mounted && _callerCoinBalance != null && latestCoins > _callerCoinBalance!) {
-              final added = latestCoins - _callerCoinBalance!;
-              setState(() {
-                _callerCoinBalance = (_callerCoinBalance ?? 0) + added;
-              });
+            if (mounted) {
+              if (_callerCoinBalance == null || _callerCoinBalance == 0) {
+                setState(() {
+                  _callerCoinBalance = latestCoins;
+                });
+              } else if (latestCoins > _callerCoinBalance!) {
+                final added = latestCoins - _callerCoinBalance!;
+                setState(() {
+                  _callerCoinBalance = (_callerCoinBalance ?? 0) + added;
+                });
+              }
             }
           }
         });
@@ -843,7 +850,7 @@ class _ActiveCallPageState extends State<ActiveCallPage> with TickerProviderStat
         if (_duration == 5) {
           _handleCallAttended();
         }
-        if (_duration >= (_maxDurationSeconds ?? 60) && !_isHangingUp) {
+        if (_duration >= _maxDurationSeconds && !_isHangingUp) {
           _triggerHangup();
           return;
         }
@@ -857,7 +864,7 @@ class _ActiveCallPageState extends State<ActiveCallPage> with TickerProviderStat
         if (widget.isCaller) {
           final requiredCoins = (widget.pricePerMin * 10).toInt() > 0
               ? (widget.pricePerMin * 10).toInt()
-              : 30;
+              : 40;
           final currentBalance = context.read<AppState>().coinBalance;
           
           if (currentBalance < requiredCoins) {
@@ -877,6 +884,15 @@ class _ActiveCallPageState extends State<ActiveCallPage> with TickerProviderStat
           
           // Male incrementally logs the duration!
           _saveCallLogIncremental();
+        }
+      }
+
+      // Female earns at the 50th second of each minute (50s, 110s, 170s, 230s...)
+      if (!widget.isCaller && !_isFreeIntroCall && _duration >= 50 && (_duration % 60 == 50)) {
+        final minuteToCredit = (_duration ~/ 60) + 1;
+        if (minuteToCredit > _creditedMinutes) {
+          _creditedMinutes = minuteToCredit;
+          _creditExpertMinuteEarning(_expertEarningRate);
         }
       }
     });
@@ -965,20 +981,25 @@ class _ActiveCallPageState extends State<ActiveCallPage> with TickerProviderStat
     );
 
     // Credit expert earnings and update talk time at end of call (only if >= 50 seconds)
-    if (!widget.isCaller) {
-      if (finalDuration >= 50) {
-        int callMinutes = finalDuration ~/ 60;
-        if (finalDuration % 60 >= 50) {
-          callMinutes += 1;
-        }
-        final earned = _expertEarningRate * callMinutes;
-        _updateExpertStats(earned, finalDuration, 'hindi');
-        debugPrint('Expert earned: ₹${earned.toStringAsFixed(2)} (${finalDuration}s at ₹$_expertEarningRate/min, billed as $callMinutes min)');
-      } else if (finalDuration > 0) {
+    if (!widget.isCaller && !_isFreeIntroCall) {
+      int eligibleMinutes = finalDuration ~/ 60;
+      if (finalDuration % 60 >= 50) {
+        eligibleMinutes += 1;
+      }
+      if (eligibleMinutes > _creditedMinutes) {
+        final uncredited = eligibleMinutes - _creditedMinutes;
+        final earned = _expertEarningRate * uncredited;
+        _creditedMinutes = eligibleMinutes;
+        _creditExpertMinuteEarning(earned);
+      }
+      _updateExpertTalkSeconds(finalDuration, 'hindi');
+      debugPrint('Expert final stats updated: total credited $eligibleMinutes min (${finalDuration}s at ₹$_expertEarningRate/min)');
+
+      if (eligibleMinutes == 0 && finalDuration > 0) {
         // Female talked for less than 50 seconds -> Earns Rs 0
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Aapko Rs 1 earn karne ke liye kam se kam 50 seconds baat karni hogi.'),
+            content: Text('Aapko Rs 1.2 earn karne ke liye kam se kam 50 seconds baat karni hogi.'),
             backgroundColor: Colors.orange,
             duration: Duration(seconds: 4),
           ),
@@ -992,23 +1013,40 @@ class _ActiveCallPageState extends State<ActiveCallPage> with TickerProviderStat
     }
   }
 
-  Future<void> _updateExpertStats(double earned, int seconds, String language) async {
+  Future<void> _creditExpertMinuteEarning(double amount) async {
     try {
       String expertId = widget.receiverId;
       if (expertId.isEmpty) {
         expertId = FirebaseAuth.instance.currentUser?.uid ?? '';
       }
       if (expertId.isEmpty) return;
-      int minutesToAdd = seconds ~/ 60;
-      if (seconds % 60 >= 50) {
-        minutesToAdd += 1;
-      }
-      // 1. Direct new RTDB Update using UserDatabaseService
+
       await UserDatabaseService.instance.incrementExpertStats(
         expertId,
-        earned: earned,
+        earned: amount,
+        seconds: 0,
+        minutesToAdd: 1,
+      );
+      debugPrint('[ActiveCallPage] Credited expert $expertId with ₹$amount for 50s mark.');
+    } catch (e) {
+      debugPrint('[ActiveCallPage] Error crediting expert minute earning: $e');
+    }
+  }
+
+  Future<void> _updateExpertTalkSeconds(int seconds, String language) async {
+    try {
+      String expertId = widget.receiverId;
+      if (expertId.isEmpty) {
+        expertId = FirebaseAuth.instance.currentUser?.uid ?? '';
+      }
+      if (expertId.isEmpty) return;
+
+      // 1. Update talk seconds in stats
+      await UserDatabaseService.instance.incrementExpertStats(
+        expertId,
+        earned: 0.0,
         seconds: seconds,
-        minutesToAdd: minutesToAdd,
+        minutesToAdd: 0,
       );
 
       // 2. Direct RTDB Update using ServerValue.increment
@@ -1108,9 +1146,17 @@ class _ActiveCallPageState extends State<ActiveCallPage> with TickerProviderStat
   String _formatDuration(int sec) {
     // Expert (female) sees a countdown based strictly on caller's maximum affordable minutes
     if (!widget.isCaller) {
-      final balance = _callerCoinBalance ?? widget.callerCoinBalance ?? 30;
+      if (_isFreeIntroCall) {
+        int remaining = _maxDurationSeconds - sec;
+        if (remaining < 0) remaining = 0;
+        final m = (remaining ~/ 60).toString().padLeft(2, '0');
+        final s = (remaining % 60).toString().padLeft(2, '0');
+        return '$m:$s';
+      }
+
+      final balance = _callerCoinBalance ?? widget.callerCoinBalance ?? 40;
       int reqCoins = (widget.pricePerMin * 10).toInt();
-      if (reqCoins <= 0) reqCoins = 30;
+      if (reqCoins <= 0) reqCoins = 40;
       
       int maxMins = balance ~/ reqCoins;
       if (maxMins <= 0 && balance > 0) {

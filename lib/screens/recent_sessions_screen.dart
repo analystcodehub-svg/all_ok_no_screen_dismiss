@@ -184,15 +184,16 @@ class _RecentSessionsScreenState extends State<RecentSessionsScreen> {
                             }
                             
                             if (isCaller) {
-                              // Caller is User (Male), uses Coins
-                              final coins = callMinutes > 0 ? callMinutes * 30 : 30;
+                              // Caller is User (Male), uses Coins (₹4/min = 40 coins)
+                              final coins = callMinutes > 0 ? callMinutes * 40 : 40;
                               costText = '-$coins Coins';
                             } else {
-                              // Receiver is Expert (Female), earns Rupees
+                              // Receiver is Expert (Female), earns Rupees (₹1.2/min)
                               if (sec < 50 || callMinutes == 0) {
                                 costText = 'Rs 0';
                               } else {
-                                costText = '+₹$callMinutes';
+                                final earned = (callMinutes * 1.2).toStringAsFixed((callMinutes * 1.2) % 1 == 0 ? 0 : 1);
+                                costText = '+₹$earned';
                               }
                             }
                           }

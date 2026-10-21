@@ -28,7 +28,7 @@ class FemaleExpert {
       FemaleExpert(
         id: "expert_1",
         nickname: "Seerat",
-        pricePerMin: 5,
+        pricePerMin: 4,
         languages: "Hindi - Punjabi",
         rating: 4.5,
         isOnline: true,
@@ -36,7 +36,7 @@ class FemaleExpert {
       FemaleExpert(
         id: "expert_2",
         nickname: "maya",
-        pricePerMin: 5,
+        pricePerMin: 4,
         languages: "Hindi-Kannada",
         rating: 4.8,
         isOnline: true,
@@ -44,7 +44,7 @@ class FemaleExpert {
       FemaleExpert(
         id: "expert_3",
         nickname: "Archana gupta",
-        pricePerMin: 5,
+        pricePerMin: 4,
         languages: "Hindi - Punjabi",
         rating: 4.6,
         isOnline: true,
@@ -52,7 +52,7 @@ class FemaleExpert {
       FemaleExpert(
         id: "expert_4",
         nickname: "Simmi",
-        pricePerMin: 5,
+        pricePerMin: 4,
         languages: "Hindi",
         rating: 4.7,
         isOnline: true,
@@ -60,7 +60,7 @@ class FemaleExpert {
       FemaleExpert(
         id: "expert_5",
         nickname: "divya",
-        pricePerMin: 5,
+        pricePerMin: 4,
         languages: "Hindi",
         rating: 4.4,
         isOnline: true,
@@ -68,7 +68,7 @@ class FemaleExpert {
       FemaleExpert(
         id: "expert_6",
         nickname: "Poonam",
-        pricePerMin: 5,
+        pricePerMin: 4,
         languages: "Hindi-Gujarati",
         rating: 4.9,
         isOnline: true,
@@ -76,7 +76,7 @@ class FemaleExpert {
       FemaleExpert(
         id: "expert_7",
         nickname: "Aanya",
-        pricePerMin: 5,
+        pricePerMin: 4,
         languages: "Hindi-English",
         rating: 4.6,
         isOnline: true,
@@ -84,7 +84,7 @@ class FemaleExpert {
       FemaleExpert(
         id: "expert_8",
         nickname: "Sanjuli",
-        pricePerMin: 5,
+        pricePerMin: 4,
         languages: "Hindi-Rajasthani",
         rating: 4.7,
         isOnline: false,

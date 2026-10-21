@@ -123,7 +123,7 @@ class UpgradeProgramScreen extends StatelessWidget {
             _buildTierCard(
               context,
               tierName: 'Bronze Tier',
-              rate: '₹1/min',
+              rate: '₹1.2/min',
               badgeColor: const Color(0xFFB45309), // Bronze brown
               bgGradient: const LinearGradient(
                 colors: [Color(0xFFD97706), Color(0xFF92400E)],

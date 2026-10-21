@@ -43,7 +43,7 @@ class RefundCancellationScreen extends StatelessWidget {
             ),
 
             _buildSection('3. Call Charges',
-              '• Calls are billed at ₹3 per minute for male users.\n'
+              '• Calls are billed at ₹4 per minute for male users.\n'
               '• Deductions happen from the in-app coin wallet.\n'
               '• If a call drops within the first 60 seconds due to a verified technical fault on our server, you may contact support for a review.\n'
               '• Call quality issues caused by the user\'s own network or device are not eligible for refunds.',

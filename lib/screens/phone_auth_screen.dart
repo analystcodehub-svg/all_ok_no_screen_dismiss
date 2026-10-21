@@ -46,7 +46,7 @@ class _PhoneAuthScreenState extends State<PhoneAuthScreen> {
     {
       'icon': Icons.phone_in_talk_rounded,
       'title': 'Instant Audio Calls',
-      'subtitle': 'Connect directly with experts starting at just ₹3/min.',
+      'subtitle': 'Connect directly with experts starting at just ₹4/min.',
     },
   ];
 
