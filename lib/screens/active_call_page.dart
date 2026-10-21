@@ -102,7 +102,6 @@ class _ActiveCallPageState extends State<ActiveCallPage> with TickerProviderStat
   StreamSubscription? _balanceSub;
   StreamSubscription<DatabaseEvent>? _roomStatusSub;
   Timer? _vibrateTimer;
-  Timer? _disconnectGraceTimer;
 
   @override
   void initState() {
@@ -207,9 +206,6 @@ class _ActiveCallPageState extends State<ActiveCallPage> with TickerProviderStat
   }
 
   void _markCallConnected() {
-    _disconnectGraceTimer?.cancel();
-    _disconnectGraceTimer = null;
-
     if (!mounted || _isConnected) return;
     debugPrint('[ActiveCallPage] Call marked connected. Cancelling ringing and availability timers.');
     FlutterRingtonePlayer().stop();
@@ -238,23 +234,11 @@ class _ActiveCallPageState extends State<ActiveCallPage> with TickerProviderStat
     if (!mounted || _isHangingUp) return;
     debugPrint('[ActiveCallPage] WebRTC ICE State: $state');
 
-    if (state == RTCIceConnectionState.RTCIceConnectionStateDisconnected) {
-      // If network drops, start 6-second timer. If not recovered within 6s, hang up!
-      if (_isConnected && (_disconnectGraceTimer == null || !_disconnectGraceTimer!.isActive)) {
-        _disconnectGraceTimer = Timer(const Duration(seconds: 6), () {
-          if (!mounted || _isHangingUp) return;
-          debugPrint('[ActiveCallPage] Network disconnected for 6s -> Ending call.');
-          _triggerHangup();
-        });
-      }
-    } else if (state == RTCIceConnectionState.RTCIceConnectionStateConnected ||
-               state == RTCIceConnectionState.RTCIceConnectionStateCompleted) {
-      // Reconnected within 6 seconds! Cancel timer.
-      _disconnectGraceTimer?.cancel();
-      _disconnectGraceTimer = null;
-    } else if (state == RTCIceConnectionState.RTCIceConnectionStateFailed ||
-               state == RTCIceConnectionState.RTCIceConnectionStateClosed) {
-      _disconnectGraceTimer?.cancel();
+    // Only hang up on terminal failure (actual connection loss/failure).
+    // Do NOT hang up on transient Disconnected state (which happens during screen-off, power save, or NAT re-routes).
+    if (state == RTCIceConnectionState.RTCIceConnectionStateFailed ||
+        state == RTCIceConnectionState.RTCIceConnectionStateClosed) {
+      debugPrint('[ActiveCallPage] Terminal WebRTC failure ($state) -> Ending call.');
       _triggerHangup();
     }
   }
@@ -938,7 +922,6 @@ class _ActiveCallPageState extends State<ActiveCallPage> with TickerProviderStat
 
   void _triggerHangup() {
     _isHangingUp = true;
-    _disconnectGraceTimer?.cancel();
     _availabilityTimer?.cancel();
     _availabilityTicker?.cancel();
     _ringingTimer?.cancel();
@@ -1221,7 +1204,6 @@ class _ActiveCallPageState extends State<ActiveCallPage> with TickerProviderStat
   void dispose() {
     FlutterRingtonePlayer().stop();
     _vibrateTimer?.cancel();
-    _disconnectGraceTimer?.cancel();
     _timer?.cancel();
     _ringingTimer?.cancel();
     _availabilityTimer?.cancel();
