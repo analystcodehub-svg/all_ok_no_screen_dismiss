@@ -33,6 +33,7 @@ class UserDatabaseService {
   DatabaseReference get blockedUsersRef => db.ref('blocked_users');
   DatabaseReference get callLogsRef => db.ref('call_logs');
   DatabaseReference get userCallLogsRef => db.ref('user_call_logs');
+  DatabaseReference get userChatTransactionsRef => db.ref('user_chat_transactions');
   DatabaseReference get reportsRef => db.ref('reports');
   DatabaseReference get tierApplicationsRef => db.ref('tier_applications');
 
@@ -310,7 +311,7 @@ class UserDatabaseService {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // CALL LOGS (Capped to last 20 calls per user in user_call_logs/{uid})
+  // CALL LOGS (Capped to last 10 calls per user in user_call_logs/{uid})
   // ─────────────────────────────────────────────────────────────────────────
 
   Future<void> saveCallLog(
@@ -339,12 +340,12 @@ class UserDatabaseService {
           await userCallLogsRef.child(receiverId).child(logId).update(clean);
         }
 
-        // Cap to last 20 calls per user (deletes oldest excess calls)
+        // Cap to last 10 calls per user (deletes oldest excess calls) as requested
         if (callerId.isNotEmpty) {
-          _pruneOldCallLogs(callerId, maxKeep: 20);
+          _pruneOldCallLogs(callerId, maxKeep: 10);
         }
         if (receiverId.isNotEmpty) {
-          _pruneOldCallLogs(receiverId, maxKeep: 20);
+          _pruneOldCallLogs(receiverId, maxKeep: 10);
         }
 
         // Clean up temporary root call_log handshake after 60s
@@ -387,8 +388,8 @@ class UserDatabaseService {
     return null;
   }
 
-  /// Fetches up to [limit] recent call logs for a user from new RTDB.
-  Future<List<Map<String, dynamic>>> getUserCallLogs(String userId, {int limit = 20}) async {
+  /// Fetches up to [limit] recent call logs for a user from new RTDB. Default 10.
+  Future<List<Map<String, dynamic>>> getUserCallLogs(String userId, {int limit = 10}) async {
     if (userId.isEmpty) return [];
     try {
       final snap = await userCallLogsRef
@@ -417,9 +418,9 @@ class UserDatabaseService {
     return [];
   }
 
-  /// Automatically keeps only the newest [maxKeep] (20) calls for a user,
+  /// Automatically keeps only the newest [maxKeep] (10) calls for a user,
   /// deleting the oldest ones in RTDB.
-  Future<void> _pruneOldCallLogs(String userId, {int maxKeep = 20}) async {
+  Future<void> _pruneOldCallLogs(String userId, {int maxKeep = 10}) async {
     if (userId.isEmpty) return;
     try {
       final snap = await userCallLogsRef.child(userId).get();
@@ -443,6 +444,80 @@ class UserDatabaseService {
       await userCallLogsRef.child(userId).update(updates);
     } catch (e) {
       debugPrint('Error pruning call logs for $userId: $e');
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // CHAT TRANSACTIONS (Capped to last 5 transactions per male user in RTDB)
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Future<void> saveChatTransaction(String userId, Map<String, dynamic> txData) async {
+    if (userId.isEmpty) return;
+    try {
+      final clean = _sanitizeForRtdb(txData);
+      final txId = clean['txId']?.toString() ?? DateTime.now().millisecondsSinceEpoch.toString();
+      await userChatTransactionsRef.child(userId).child(txId).update(clean);
+
+      // Auto-prune to keep max 5 chat transactions per user in RTDB
+      _pruneOldChatTransactions(userId, maxKeep: 5);
+    } catch (e) {
+      debugPrint('Error saving chat transaction in RTDB: $e');
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getUserChatTransactions(String userId, {int limit = 5}) async {
+    if (userId.isEmpty) return [];
+    try {
+      final snap = await userChatTransactionsRef
+          .child(userId)
+          .orderByChild('timestamp')
+          .limitToLast(limit)
+          .get();
+      if (snap.exists && snap.value != null) {
+        final data = Map<dynamic, dynamic>.from(snap.value as Map);
+        final list = <Map<String, dynamic>>[];
+        for (final entry in data.entries) {
+          if (entry.value is Map) {
+            list.add(Map<String, dynamic>.from(entry.value as Map));
+          }
+        }
+        list.sort((a, b) {
+          final aTime = (a['timestamp'] as num?)?.toInt() ?? 0;
+          final bTime = (b['timestamp'] as num?)?.toInt() ?? 0;
+          return bTime.compareTo(aTime); // descending (newest first)
+        });
+        return list;
+      }
+    } catch (e) {
+      debugPrint('Error getting chat transactions for $userId: $e');
+    }
+    return [];
+  }
+
+  Future<void> _pruneOldChatTransactions(String userId, {int maxKeep = 5}) async {
+    if (userId.isEmpty) return;
+    try {
+      final snap = await userChatTransactionsRef.child(userId).get();
+      if (!snap.exists || snap.value == null) return;
+      final data = Map<dynamic, dynamic>.from(snap.value as Map);
+      if (data.length <= maxKeep) return;
+
+      final entries = data.entries.toList();
+      // Sort oldest first
+      entries.sort((a, b) {
+        final aTime = (a.value is Map ? (a.value['timestamp'] as num?)?.toInt() : null) ?? 0;
+        final bTime = (b.value is Map ? (b.value['timestamp'] as num?)?.toInt() : null) ?? 0;
+        return aTime.compareTo(bTime);
+      });
+
+      final removeCount = entries.length - maxKeep;
+      final updates = <String, Object?>{};
+      for (int i = 0; i < removeCount; i++) {
+        updates[entries[i].key.toString()] = null; // null deletes key in RTDB
+      }
+      await userChatTransactionsRef.child(userId).update(updates);
+    } catch (e) {
+      debugPrint('Error pruning chat transactions for $userId: $e');
     }
   }
 

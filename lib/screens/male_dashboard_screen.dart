@@ -19,6 +19,7 @@ import '../services/call_service.dart';
 import '../services/notification_service.dart';
 import '../services/hybrid_chat_service.dart';
 import 'chat_list_screen.dart';
+import 'hybrid_chat_screen.dart';
 
 import 'expert_feed_screen.dart';
 import '../utils/auto_start_helper.dart';
@@ -40,7 +41,8 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> with WidgetsB
   // Removed unused _callService
 
   // Navigation & filter states
-  int _currentTab = 0; // 0 for Home, 1 for Recents, 2 for Chats
+  int _currentTab = 0; // 0 for Home, 1 for Call, 2 for Chats, 3 for Profile
+  int _recentsSubTab = 0; // 0 for Call transactions, 1 for Chat transactions
 
   // Modern Color Palette Constants
   static const Color brandBg = Color(0xFFF8FAFC); // Slate 50
@@ -102,6 +104,56 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> with WidgetsB
     return enriched;
   }
 
+  Future<List<Map<String, dynamic>>> _fetchEnrichedChatTransactions(String uid) async {
+    final docs = await LocalChatDatabase.instance.getRecentChatTransactions(uid);
+    final enriched = <Map<String, dynamic>>[];
+    for (var data in docs) {
+      final map = Map<String, dynamic>.from(data);
+      final otherUid = (map['otherUid'] ?? '').toString();
+      
+      String displayName = (map['otherUserName'] as String?)?.isNotEmpty == true 
+          ? map['otherUserName'] as String 
+          : otherUid;
+      String? avatarUrl = map['otherAvatarUrl'] as String?;
+      int avatarIndex = (map['otherAvatarIndex'] as num?)?.toInt() ?? 1;
+      
+      try {
+        final cachedProfile = await LocalChatDatabase.instance.getUserProfile(otherUid);
+        if (cachedProfile != null) {
+          displayName = cachedProfile['name'] as String? ?? displayName;
+          avatarUrl = cachedProfile['avatarUrl'] as String? ?? avatarUrl;
+          avatarIndex = (cachedProfile['avatarIndex'] as num?)?.toInt() ?? avatarIndex;
+        } else if (otherUid.isNotEmpty) {
+          final expertData = await UserDatabaseService.instance.getExpert(otherUid);
+          if (expertData != null) {
+            displayName = expertData['nickname'] ?? expertData['name'] ?? displayName;
+            avatarUrl = expertData['profileImageUrl'] ?? expertData['avatarUrl'] ?? avatarUrl;
+            avatarIndex = (expertData['avatarIndex'] as num?)?.toInt() ?? avatarIndex;
+            
+            // Save to local cache
+            await LocalChatDatabase.instance.saveUserProfile({
+              'uid': otherUid,
+              'name': displayName,
+              'avatarUrl': avatarUrl,
+              'avatarIndex': avatarIndex,
+              'role': 'expert',
+              'timestamp': DateTime.now().millisecondsSinceEpoch,
+            });
+          }
+        }
+      } catch (e) {
+        // Ignore errors, fallback to default
+      }
+      
+      map['enrichedName'] = displayName;
+      map['enrichedAvatarUrl'] = avatarUrl;
+      map['enrichedAvatarIndex'] = avatarIndex;
+      map['otherUid'] = otherUid;
+      enriched.add(map);
+    }
+    return enriched;
+  }
+
   int _unreadCount = 0;
   StreamSubscription<void>? _chatUpdatesSubscription;
 
@@ -142,6 +194,7 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> with WidgetsB
       final myUid = appState.uid;
       HybridChatService.instance.initListeners(myUid);
       LocalChatDatabase.instance.syncCallLogsFromFirestore(myUid);
+      LocalChatDatabase.instance.syncChatTransactionsFromRtdb(myUid);
       
       // Update initial unread count and listen for updates
       _updateUnreadCount(myUid);
@@ -744,9 +797,9 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> with WidgetsB
               label: 'Home',
             ),
             const BottomNavigationBarItem(
-              icon: Icon(Icons.access_time_rounded, size: 26),
-              activeIcon: Icon(Icons.access_time_filled_rounded, size: 26),
-              label: 'Recents',
+              icon: Icon(Icons.phone_outlined, size: 26),
+              activeIcon: Icon(Icons.phone_rounded, size: 26),
+              label: 'Call',
             ),
             BottomNavigationBarItem(
               icon: _buildIconWithBadge(Icons.chat_bubble_outline_rounded, _unreadCount > 0 ? (_unreadCount > 99 ? '99+' : _unreadCount.toString()) : ''),
@@ -1378,7 +1431,23 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> with WidgetsB
     }
   }
 
-  // Redesigned Recents Tab view (60-70% similar)
+  String _formatLogTimestamp(BuildContext context, int? timestamp) {
+    if (timestamp == null) return 'Just now';
+    final dt = DateTime.fromMillisecondsSinceEpoch(timestamp);
+    final now = DateTime.now();
+    final isToday = dt.year == now.year && dt.month == now.month && dt.day == now.day;
+    final isYesterday = dt.year == now.year && dt.month == now.month && dt.day == now.day - 1;
+    final timeStr = TimeOfDay.fromDateTime(dt).format(context);
+    if (isToday) {
+      return 'Today $timeStr';
+    } else if (isYesterday) {
+      return 'Yesterday $timeStr';
+    } else {
+      return '${dt.day}/${dt.month} $timeStr';
+    }
+  }
+
+  // Call & Chat Transaction History View
   Widget _buildRecentsTab() {
     final appState = context.watch<AppState>();
 
@@ -1387,21 +1456,105 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> with WidgetsB
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header Row
-          Row(
-            children: [
-              const Text(
-                'Recents',
-                style: TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.w900,
-                  color: brandTextDark,
+          // Top Toggle Header: [ Call ] and [ Chat ]
+          Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF1F5F9), // Slate 100 pill
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Call Tab Button
+                InkWell(
+                  onTap: () {
+                    if (_recentsSubTab != 0) {
+                      setState(() => _recentsSubTab = 0);
+                    }
+                  },
+                  borderRadius: BorderRadius.circular(10),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: _recentsSubTab == 0 ? brandPrimary : Colors.transparent,
+                      borderRadius: BorderRadius.circular(10),
+                      boxShadow: _recentsSubTab == 0
+                          ? [
+                              BoxShadow(
+                                color: brandPrimary.withValues(alpha: 0.25),
+                                blurRadius: 6,
+                                offset: const Offset(0, 2),
+                              ),
+                            ]
+                          : null,
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.phone_rounded,
+                          size: 18,
+                          color: _recentsSubTab == 0 ? Colors.white : brandTextGrey,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Call',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            color: _recentsSubTab == 0 ? Colors.white : brandTextGrey,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
-              const Spacer(),
-
-
-            ],
+                const SizedBox(width: 4),
+                // Chat Tab Button
+                InkWell(
+                  onTap: () {
+                    if (_recentsSubTab != 1) {
+                      setState(() => _recentsSubTab = 1);
+                    }
+                  },
+                  borderRadius: BorderRadius.circular(10),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: _recentsSubTab == 1 ? brandPrimary : Colors.transparent,
+                      borderRadius: BorderRadius.circular(10),
+                      boxShadow: _recentsSubTab == 1
+                          ? [
+                              BoxShadow(
+                                color: brandPrimary.withValues(alpha: 0.25),
+                                blurRadius: 6,
+                                offset: const Offset(0, 2),
+                              ),
+                            ]
+                          : null,
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.chat_bubble_rounded,
+                          size: 18,
+                          color: _recentsSubTab == 1 ? Colors.white : brandTextGrey,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Chat',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            color: _recentsSubTab == 1 ? Colors.white : brandTextGrey,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 16),
           
@@ -1409,147 +1562,312 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> with WidgetsB
             child: StreamBuilder<void>(
               stream: LocalChatDatabase.instance.updates,
               builder: (context, snapshot) {
-                return FutureBuilder<List<Map<String, dynamic>>>(
-                  future: _fetchEnrichedCallLogs(appState.uid),
-                  builder: (context, futureSnapshot) {
-                if (futureSnapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                final docs = futureSnapshot.data ?? [];
-                if (docs.isEmpty) {
-                  return const Center(
-                    child: Text('No recent calls', style: TextStyle(color: brandTextGrey)),
-                  );
-                }
-
-                return ListView.builder(
-                  itemCount: docs.length,
-                  itemBuilder: (context, index) {
-                    final data = docs[index];
-                    final expertId = data['expertId'] as String;
-                    final durationSeconds = data['durationSeconds'] ?? 0;
-                    
-                    final m = durationSeconds ~/ 60;
-                    final s = durationSeconds % 60;
-                    final durationStr = '${m}m ${s}s';
-                    
-                    String formattedTime = 'Just now';
-                    if (data['timestamp'] != null) {
-                      final dt = DateTime.fromMillisecondsSinceEpoch(data['timestamp']);
-                      final now = DateTime.now();
-                      if (dt.year == now.year && dt.month == now.month && dt.day == now.day) {
-                        formattedTime = TimeOfDay.fromDateTime(dt).format(context);
-                      } else {
-                        formattedTime = '${dt.day}/${dt.month}';
+                if (_recentsSubTab == 0) {
+                  // ==== CALL TRANSACTION HISTORY ====
+                  return FutureBuilder<List<Map<String, dynamic>>>(
+                    future: _fetchEnrichedCallLogs(appState.uid),
+                    builder: (context, futureSnapshot) {
+                      if (futureSnapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
                       }
-                    }
-
-                    final displayName = data['enrichedName'] as String;
-                    final avatarUrl = data['enrichedAvatarUrl'] as String?;
-                    final avatarIndex = data['enrichedAvatarIndex'] as int;
-
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 16),
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: brandCardBg,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.03),
-                            blurRadius: 12,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        children: [
-                          // Avatar
-                          Container(
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: Colors.blue.shade200,
-                                width: 1.5,
+                      final docs = futureSnapshot.data ?? [];
+                      if (docs.isEmpty) {
+                        return Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.phone_missed_rounded, size: 54, color: Colors.grey.shade400),
+                              const SizedBox(height: 12),
+                              const Text(
+                                'No call transaction history',
+                                style: TextStyle(color: brandTextGrey, fontSize: 15, fontWeight: FontWeight.w600),
                               ),
-                            ),
-                            child: LocalAvatarWidget(
-                              uid: expertId,
-                              role: 'expert',
-                              radius: 28,
-                              avatarUrl: avatarUrl,
-                              avatarIndex: avatarIndex,
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-
-                          // Details
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                            displayName,
-                                            style: const TextStyle(
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.bold,
-                                              color: brandTextDark,
-                                            ),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  '$durationStr • $formattedTime',
-                                  style: const TextStyle(color: brandTextGrey, fontSize: 13),
-                                ),
-                              ],
-                            ),
-                          ),
-
-                          // Call Button
-                          GestureDetector(
-                            onTap: () => _triggerCallByExpertId(expertId),
-                            child: Container(
-                              width: 44,
-                              height: 44,
-                              decoration: BoxDecoration(
-                                color: brandPrimary,
-                                shape: BoxShape.circle,
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: brandPrimary.withValues(alpha: 0.2),
-                                    blurRadius: 8,
-                                    offset: const Offset(0, 4),
-                                  ),
-                                ],
-                              ),
-                              child: const Icon(
-                                Icons.phone_in_talk_rounded,
-                                color: Colors.white,
-                                size: 20,
-                              ),
-                            ),
-                          ),
                             ],
                           ),
                         );
-                  },
-                );
-              },
-            );
-          },
-        ),
-      ),
-    ],
-  ),
-);
-}
+                      }
 
+                      return ListView.builder(
+                        itemCount: docs.length,
+                        itemBuilder: (context, index) {
+                          final data = docs[index];
+                          final expertId = data['expertId'] as String;
+                          final durationSeconds = data['durationSeconds'] ?? 0;
+                          
+                          final m = durationSeconds ~/ 60;
+                          final s = durationSeconds % 60;
+                          final durationStr = durationSeconds > 0 ? '${m}m ${s}s' : 'Missed';
+                          final formattedTime = _formatLogTimestamp(context, data['timestamp']);
+
+                          final displayName = data['enrichedName'] as String;
+                          final avatarUrl = data['enrichedAvatarUrl'] as String?;
+                          final avatarIndex = data['enrichedAvatarIndex'] as int;
+
+                          // Deducted balance calculation (NO coins displayed!)
+                          final num? rawDeducted = data['deductedAmount'] as num?;
+                          final double callCost = rawDeducted != null
+                              ? rawDeducted.toDouble()
+                              : (durationSeconds > 0
+                                  ? (((durationSeconds ~/ 60) + (durationSeconds % 60 > 0 ? 1 : 0)) * 4.0)
+                                  : 0.0);
+
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                            decoration: BoxDecoration(
+                              color: brandCardBg,
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.03),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 3),
+                                ),
+                              ],
+                            ),
+                            child: Row(
+                              children: [
+                                // Avatar
+                                Container(
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: Colors.blue.shade100,
+                                      width: 1.5,
+                                    ),
+                                  ),
+                                  child: LocalAvatarWidget(
+                                    uid: expertId,
+                                    role: 'expert',
+                                    radius: 26,
+                                    avatarUrl: avatarUrl,
+                                    avatarIndex: avatarIndex,
+                                  ),
+                                ),
+                                const SizedBox(width: 14),
+
+                                // Details: Name, Duration/Time, Deducted Balance
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        displayName,
+                                        style: const TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                          color: brandTextDark,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      const SizedBox(height: 3),
+                                      Text(
+                                        '$durationStr • $formattedTime',
+                                        style: const TextStyle(color: brandTextGrey, fontSize: 13),
+                                      ),
+                                      const SizedBox(height: 3),
+                                      Text(
+                                        '- ₹${callCost.toStringAsFixed(2)}',
+                                        style: const TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w700,
+                                          color: Color(0xFFDC2626), // Deducted balance
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+
+                                // Purple Re-dial Call Button
+                                GestureDetector(
+                                  onTap: () => _triggerCallByExpertId(expertId),
+                                  child: Container(
+                                    width: 44,
+                                    height: 44,
+                                    decoration: BoxDecoration(
+                                      color: brandPrimary,
+                                      shape: BoxShape.circle,
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: brandPrimary.withValues(alpha: 0.25),
+                                          blurRadius: 8,
+                                          offset: const Offset(0, 4),
+                                        ),
+                                      ],
+                                    ),
+                                    child: const Icon(
+                                      Icons.phone_in_talk_rounded,
+                                      color: Colors.white,
+                                      size: 20,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  );
+                } else {
+                  // ==== CHAT TRANSACTION HISTORY ====
+                  return FutureBuilder<List<Map<String, dynamic>>>(
+                    future: _fetchEnrichedChatTransactions(appState.uid),
+                    builder: (context, futureSnapshot) {
+                      if (futureSnapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                      final docs = futureSnapshot.data ?? [];
+                      if (docs.isEmpty) {
+                        return Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.chat_bubble_outline_rounded, size: 54, color: Colors.grey.shade400),
+                              const SizedBox(height: 12),
+                              const Text(
+                                'No chat transaction history',
+                                style: TextStyle(color: brandTextGrey, fontSize: 15, fontWeight: FontWeight.w600),
+                              ),
+                            ],
+                          ),
+                        );
+                      }
+
+                      return ListView.builder(
+                        itemCount: docs.length,
+                        itemBuilder: (context, index) {
+                          final data = docs[index];
+                          final otherUid = (data['otherUid'] ?? '').toString();
+                          final formattedTime = _formatLogTimestamp(context, data['timestamp']);
+
+                          final displayName = data['enrichedName'] as String;
+                          final avatarUrl = data['enrichedAvatarUrl'] as String?;
+                          final avatarIndex = data['enrichedAvatarIndex'] as int;
+
+                          // Deducted balance for message (NO coins displayed!)
+                          final double amount = (data['amount'] as num?)?.toDouble() ?? 0.50;
+
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                            decoration: BoxDecoration(
+                              color: brandCardBg,
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.03),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 3),
+                                ),
+                              ],
+                            ),
+                            child: Row(
+                              children: [
+                                // Avatar
+                                Container(
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: Colors.indigo.shade100,
+                                      width: 1.5,
+                                    ),
+                                  ),
+                                  child: LocalAvatarWidget(
+                                    uid: otherUid,
+                                    role: 'expert',
+                                    radius: 26,
+                                    avatarUrl: avatarUrl,
+                                    avatarIndex: avatarIndex,
+                                  ),
+                                ),
+                                const SizedBox(width: 14),
+
+                                // Details: Name, Timestamp, Deducted Balance
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        displayName,
+                                        style: const TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                          color: brandTextDark,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      const SizedBox(height: 3),
+                                      Text(
+                                        formattedTime,
+                                        style: const TextStyle(color: brandTextGrey, fontSize: 13),
+                                      ),
+                                      const SizedBox(height: 3),
+                                      Text(
+                                        '- ₹${amount.toStringAsFixed(2)}',
+                                        style: const TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w700,
+                                          color: Color(0xFFDC2626), // Deducted balance
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+
+                                // Direct Chat Button
+                                GestureDetector(
+                                  onTap: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) => HybridChatScreen(
+                                          myUid: appState.uid,
+                                          otherUid: otherUid,
+                                          otherUserName: displayName,
+                                          otherUserAvatarUrl: avatarUrl,
+                                          otherUserAvatarIndex: avatarIndex,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                  child: Container(
+                                    width: 44,
+                                    height: 44,
+                                    decoration: BoxDecoration(
+                                      color: brandPrimary,
+                                      shape: BoxShape.circle,
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: brandPrimary.withValues(alpha: 0.25),
+                                          blurRadius: 8,
+                                          offset: const Offset(0, 4),
+                                        ),
+                                      ],
+                                    ),
+                                    child: const Icon(
+                                      Icons.chat_bubble_rounded,
+                                      color: Colors.white,
+                                      size: 20,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  );
+                }
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 

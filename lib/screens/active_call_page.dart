@@ -982,6 +982,9 @@ class _ActiveCallPageState extends State<ActiveCallPage> with TickerProviderStat
       'timestamp': timestamp,
     });
 
+    final int billedMinutes = finalDuration > 0 ? (finalDuration ~/ 60) + (finalDuration % 60 > 0 ? 1 : 0) : 0;
+    final double deductedRupees = _isFreeIntroCall ? 0.0 : (billedMinutes * 4.0);
+
     final logData = {
       'logId': logId,
       'callerId': widget.callerId,
@@ -990,6 +993,7 @@ class _ActiveCallPageState extends State<ActiveCallPage> with TickerProviderStat
       'durationSeconds': finalDuration,
       'status': status,
       'timestamp': timestamp,
+      'deductedAmount': deductedRupees,
     };
 
     // ALWAYS save to local SQLite on this device immediately!
@@ -1113,6 +1117,9 @@ class _ActiveCallPageState extends State<ActiveCallPage> with TickerProviderStat
       final logId = 'log_${_roomId ?? timestamp}';
       
       final String resolvedOtherName = _displayName.isNotEmpty ? _displayName : widget.nickname;
+      final int billedMinutes = _duration > 0 ? (_duration ~/ 60) + (_duration % 60 > 0 ? 1 : 0) : 0;
+      final double deductedRupees = _isFreeIntroCall ? 0.0 : (billedMinutes * 4.0);
+
       final logData = {
         'logId': logId,
         'callerId': widget.callerId,
@@ -1121,6 +1128,7 @@ class _ActiveCallPageState extends State<ActiveCallPage> with TickerProviderStat
         'durationSeconds': _duration,
         'status': status,
         'timestamp': timestamp,
+        'deductedAmount': deductedRupees,
       };
 
       if (widget.isCaller) {

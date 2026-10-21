@@ -201,11 +201,13 @@ class _HybridChatScreenState extends State<HybridChatScreen> with WidgetsBinding
     
     // If the sender is a Male User, deduct coins or use free messages
     if (appState.selectedGender == 'Male') {
+      double deductedAmount = 0.50;
       if (appState.freeMessagesUsed < 5) {
         // Use a free message
         appState.addPendingChatDeduction(coins: 0, freeMsgs: 1);
+        deductedAmount = 0.00;
       } else {
-        // Deduct 5 coins (50 paise)
+        // Deduct 5 coins (50 paise = ₹0.50)
         if (appState.coinBalance < 5) {
           showDialog(
             context: context,
@@ -250,8 +252,25 @@ class _HybridChatScreenState extends State<HybridChatScreen> with WidgetsBinding
         
         // Deduct locally and save to SharedPreferences
         appState.addPendingChatDeduction(coins: 5, freeMsgs: 0);
+        deductedAmount = 0.50;
       }
       
+      // Save chat transaction: local SQLite (max 30) & RTDB (max 5)
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final txId = 'ctx_${widget.myUid}_$timestamp';
+      final txData = {
+        'txId': txId,
+        'userId': widget.myUid,
+        'otherUid': widget.otherUid,
+        'otherUserName': widget.otherUserName,
+        'otherAvatarUrl': widget.otherUserAvatarUrl,
+        'otherAvatarIndex': widget.otherUserAvatarIndex,
+        'amount': deductedAmount,
+        'timestamp': timestamp,
+      };
+      LocalChatDatabase.instance.saveChatTransactionLocally(txData);
+      UserDatabaseService.instance.saveChatTransaction(widget.myUid, txData);
+
       // Batch sync rule: Sync after 5 messages
       if (appState.pendingChatFreeMsgs >= 5 || appState.pendingChatCoins >= 25) {
         AppState.syncPendingChatDeductions();

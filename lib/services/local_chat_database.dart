@@ -30,7 +30,7 @@ class LocalChatDatabase {
 
     return await openDatabase(
       path,
-      version: 5, // Upgraded for isEarned in messages
+      version: 6, // Upgraded for deductedAmount in call_logs and chat_transactions table
       onCreate: _createDB,
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -72,6 +72,30 @@ class LocalChatDatabase {
             debugPrint('Error altering messages table: $e');
           }
         }
+        if (oldVersion < 6) {
+          try {
+            await db.execute('ALTER TABLE call_logs ADD COLUMN deductedAmount REAL DEFAULT 0.0');
+          } catch (e) {
+            debugPrint('Error adding deductedAmount to call_logs table: $e');
+          }
+          try {
+            await db.execute('''
+              CREATE TABLE IF NOT EXISTS chat_transactions (
+                txId TEXT PRIMARY KEY,
+                userId TEXT NOT NULL,
+                otherUid TEXT NOT NULL,
+                otherUserName TEXT,
+                otherAvatarUrl TEXT,
+                otherAvatarIndex INTEGER,
+                amount REAL NOT NULL,
+                timestamp INTEGER NOT NULL
+              )
+            ''');
+            await db.execute('CREATE INDEX IF NOT EXISTS idx_chat_tx_timestamp ON chat_transactions (timestamp DESC)');
+          } catch (e) {
+            debugPrint('Error creating chat_transactions table: $e');
+          }
+        }
       },
     );
   }
@@ -99,7 +123,8 @@ class LocalChatDatabase {
         durationSeconds INTEGER NOT NULL,
         status TEXT NOT NULL,
         timestamp INTEGER NOT NULL,
-        otherUserName TEXT
+        otherUserName TEXT,
+        deductedAmount REAL DEFAULT 0.0
       )
     ''');
     await db.execute('CREATE INDEX idx_call_timestamp ON call_logs (timestamp DESC)');
@@ -114,6 +139,20 @@ class LocalChatDatabase {
         timestamp INTEGER
       )
     ''');
+
+    await db.execute('''
+      CREATE TABLE chat_transactions (
+        txId TEXT PRIMARY KEY,
+        userId TEXT NOT NULL,
+        otherUid TEXT NOT NULL,
+        otherUserName TEXT,
+        otherAvatarUrl TEXT,
+        otherAvatarIndex INTEGER,
+        amount REAL NOT NULL,
+        timestamp INTEGER NOT NULL
+      )
+    ''');
+    await db.execute('CREATE INDEX idx_chat_tx_timestamp ON chat_transactions (timestamp DESC)');
   }
 
   // Generate a deterministic room ID using double-underscore separator
@@ -269,14 +308,14 @@ class LocalChatDatabase {
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
 
-    // Auto-prune phone SQLite: keep only last 50 calls per user
+    // Auto-prune phone SQLite: keep maximum 30 calls per user as requested
     final callerId = log['callerId']?.toString() ?? '';
     final receiverId = log['receiverId']?.toString() ?? '';
     if (callerId.isNotEmpty) {
-      await _pruneLocalCallLogs(callerId, 50);
+      await _pruneLocalCallLogs(callerId, 30);
     }
     if (receiverId.isNotEmpty && receiverId != callerId) {
-      await _pruneLocalCallLogs(receiverId, 50);
+      await _pruneLocalCallLogs(receiverId, 30);
     }
 
     _updateController.add(null);
@@ -313,7 +352,7 @@ class LocalChatDatabase {
       where: 'callerId = ? OR receiverId = ?',
       whereArgs: [myId, myId],
       orderBy: 'timestamp DESC',
-      limit: 50,
+      limit: 30,
     );
   }
 
@@ -327,7 +366,98 @@ class LocalChatDatabase {
     _updateController.add(null);
   }
 
-  // Sync last 20 call logs from RTDB (Fallback to Firestore if empty)
+  // ==== CHAT TRANSACTIONS LOCAL STORAGE ====
+
+  Future<void> saveChatTransactionLocally(Map<String, dynamic> tx) async {
+    final db = await instance.database;
+    await db.insert(
+      'chat_transactions',
+      tx,
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+
+    // Auto-prune phone SQLite: maximum 30 chat transactions in local storage
+    final userId = tx['userId']?.toString() ?? '';
+    if (userId.isNotEmpty) {
+      await _pruneLocalChatTransactions(userId, 30);
+    }
+
+    _updateController.add(null);
+  }
+
+  Future<void> _pruneLocalChatTransactions(String userId, int maxKeep) async {
+    try {
+      final db = await instance.database;
+      final rows = await db.query(
+        'chat_transactions',
+        columns: ['txId'],
+        where: 'userId = ?',
+        whereArgs: [userId],
+        orderBy: 'timestamp DESC',
+      );
+      if (rows.length > maxKeep) {
+        final toDelete = rows.sublist(maxKeep).map((r) => r['txId'] as String).toList();
+        final placeholders = List.filled(toDelete.length, '?').join(',');
+        await db.delete(
+          'chat_transactions',
+          where: 'txId IN ($placeholders)',
+          whereArgs: toDelete,
+        );
+      }
+    } catch (e) {
+      debugPrint('Error pruning local chat transactions for $userId: $e');
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getRecentChatTransactions(String userId) async {
+    final db = await instance.database;
+    return await db.query(
+      'chat_transactions',
+      where: 'userId = ?',
+      whereArgs: [userId],
+      orderBy: 'timestamp DESC',
+      limit: 30,
+    );
+  }
+
+  Future<void> syncChatTransactionsFromRtdb(String myId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final hasSynced = prefs.getBool('has_synced_chat_tx_$myId') ?? false;
+      if (hasSynced) return;
+
+      final rtdbTx = await UserDatabaseService.instance.getUserChatTransactions(myId, limit: 5);
+      if (rtdbTx.isNotEmpty) {
+        final db = await instance.database;
+        final batch = db.batch();
+        for (var data in rtdbTx) {
+          batch.insert(
+            'chat_transactions',
+            {
+              'txId': data['txId'] ?? '',
+              'userId': data['userId'] ?? myId,
+              'otherUid': data['otherUid'] ?? '',
+              'otherUserName': data['otherUserName'] ?? '',
+              'otherAvatarUrl': data['otherAvatarUrl'],
+              'otherAvatarIndex': (data['otherAvatarIndex'] as num?)?.toInt() ?? 1,
+              'amount': (data['amount'] as num?)?.toDouble() ?? 0.50,
+              'timestamp': data['timestamp'] ?? DateTime.now().millisecondsSinceEpoch,
+            },
+            conflictAlgorithm: ConflictAlgorithm.replace,
+          );
+        }
+        await batch.commit(noResult: true);
+        _updateController.add(null);
+        await prefs.setBool('has_synced_chat_tx_$myId', true);
+      }
+    } catch (e) {
+      debugPrint('Error syncing chat transactions: $e');
+    }
+  }
+
+  // ==========================================
+
+  // Sync last 10 call logs from RTDB (Fallback to Firestore if empty)
   Future<void> syncCallLogsFromFirestore(String myId) async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -337,8 +467,8 @@ class LocalChatDatabase {
         return; // Already synced once
       }
 
-      // 1. Try new RTDB user_call_logs (Capped at 20)
-      final rtdbLogs = await UserDatabaseService.instance.getUserCallLogs(myId, limit: 20);
+      // 1. Try new RTDB user_call_logs (Capped at 10)
+      final rtdbLogs = await UserDatabaseService.instance.getUserCallLogs(myId, limit: 10);
       if (rtdbLogs.isNotEmpty) {
         final db = await instance.database;
         final batch = db.batch();
@@ -353,6 +483,7 @@ class LocalChatDatabase {
               'status': data['status'] ?? 'unknown',
               'timestamp': data['timestamp'] ?? DateTime.now().millisecondsSinceEpoch,
               'otherUserName': data['otherUserName'] ?? '',
+              'deductedAmount': (data['deductedAmount'] as num?)?.toDouble() ?? 0.0,
             },
             conflictAlgorithm: ConflictAlgorithm.replace,
           );
@@ -371,7 +502,7 @@ class LocalChatDatabase {
             Filter('receiverId', isEqualTo: myId),
           ))
           .orderBy('timestamp', descending: true)
-          .limit(50)
+          .limit(30)
           .get();
 
       if (snapshot.docs.isNotEmpty) {
@@ -389,6 +520,7 @@ class LocalChatDatabase {
               'status': data['status'] ?? 'unknown',
               'timestamp': data['timestamp'] ?? DateTime.now().millisecondsSinceEpoch,
               'otherUserName': data['otherUserName'] ?? '',
+              'deductedAmount': (data['deductedAmount'] as num?)?.toDouble() ?? 0.0,
             },
             conflictAlgorithm: ConflictAlgorithm.replace,
           );
