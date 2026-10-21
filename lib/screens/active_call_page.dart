@@ -5,6 +5,7 @@ import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 import '../providers/app_state.dart';
 import '../services/call_service.dart';
 import '../services/local_chat_database.dart';
@@ -106,11 +107,14 @@ class _ActiveCallPageState extends State<ActiveCallPage> with TickerProviderStat
   @override
   void initState() {
     super.initState();
+    // Keep screen ON for entire call duration (prevents black screen on proximity)
+    WakelockPlus.enable();
     _currentReceiverId = widget.receiverId;
     _triedReceiverUids.add(widget.receiverId);
     _roomId = widget.callRoomId;
     _isFreeIntroCall = widget.isFreeIntroCall;
-    _maxDurationSeconds = widget.maxDurationSeconds ?? 60;
+    // null means unlimited — call ends only when male runs out of coins, not by timer
+    _maxDurationSeconds = widget.maxDurationSeconds ?? 99999;
     _displayName = widget.nickname;
     _displayAvatarUrl = widget.avatarUrl;
     _displayAvatarIndex = widget.avatarIndex;
@@ -1227,6 +1231,8 @@ class _ActiveCallPageState extends State<ActiveCallPage> with TickerProviderStat
     _rippleController.dispose();
     _balanceSub?.cancel();
     _callService.disposeCall();
+    // Release wakelock when call ends so screen can sleep normally
+    WakelockPlus.disable();
     super.dispose();
   }
 

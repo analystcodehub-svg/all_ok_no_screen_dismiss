@@ -275,6 +275,7 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> with SingleTicker
       if (expertAnswered) {
         // SUCCESS: Proceed with WebRTC stream
         double pricePerMin = 4.0; // Fixed price for male users
+        final callerCoins = mounted ? context.read<AppState>().coinBalance : 0;
 
         if (!_isDisposed && mounted) {
           Navigator.pushReplacement(
@@ -289,7 +290,9 @@ class _MatchmakingScreenState extends State<MatchmakingScreen> with SingleTicker
                 avatarIndex: _matchedExpertAvatarIndex,
                 pricePerMin: pricePerMin,
                 isCaller: true,
+                callerCoinBalance: callerCoins,
                 preStartedCallService: _callService,
+                // No maxDurationSeconds — call runs until male balance is exhausted
               ),
             ),
           );

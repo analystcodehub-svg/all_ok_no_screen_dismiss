@@ -1063,7 +1063,8 @@ class NotificationService {
             'callerCoins': storedCallerCoins,
             'dbUrl': storedDbUrl,
             'isFreeIntroCall': storedIsFreeIntro,
-            'maxDurationSeconds': 60,
+            // maxDurationSeconds only for free intro calls; paid calls run until balance exhausted
+            'maxDurationSeconds': storedIsFreeIntro == true ? 60 : null,
             'autoAccept': shouldAutoAccept,
           },
         );

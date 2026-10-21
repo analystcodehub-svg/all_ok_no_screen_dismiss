@@ -63,6 +63,7 @@ dependencies:
   credential_manager: ^4.3.0
   uuid: ^4.6.0
   firebase_crashlytics: ^5.4.0
+  wakelock_plus: ^1.2.10
 dev_dependencies:
   flutter_test:
     sdk: flutter
