@@ -1,12 +1,16 @@
 import 'dart:async';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'local_chat_database.dart';
 import 'block_service.dart';
+import 'user_database_service.dart';
 
 class HybridChatService {
   static final HybridChatService instance = HybridChatService._init();
   static String? activeChatRoomId;
+  static void Function(double earnedAmount)? onLiveMessageEarned;
+  static bool? isFemaleUser;
   
   final FirebaseDatabase _database = FirebaseDatabase.instanceFor(
     app: FirebaseDatabase.instance.app,
@@ -61,10 +65,11 @@ class HybridChatService {
       'timestamp': timestamp,
     };
 
-    // 1. Save locally (status 1: Sent - Single Grey Tick)
+    // 1. Save locally (status 1: Sent - Single Grey Tick, isEarned: 0)
     await LocalChatDatabase.instance.saveMessageLocally({
       ...message,
       'status': 1,
+      'isEarned': 0,
     });
 
     // 2. Push to transit (pure message data, deleted immediately upon arrival)
@@ -120,10 +125,38 @@ class HybridChatService {
       // Determine status based on active screen
       // If currently inside this chat room -> 3 (Read / Blue tick)
       // If not currently in this chat room -> 2 (Delivered / Double grey tick)
-      int localStatus = (activeChatRoomId == roomId) ? 3 : 2;
+      final bool isLive = (activeChatRoomId == roomId);
+      final int localStatus = isLive ? 3 : 2;
+      int isEarned = 0;
+
+      // Female earns 10 paise on incoming message ONLY in live chat!
+      // No earning on transit/background messages or unread backlog messages
+      if (isLive && senderId != myUid) {
+        bool isFemale = isFemaleUser ?? false;
+        if (!isFemale) {
+          try {
+            final prefs = await SharedPreferences.getInstance();
+            isFemale = (prefs.getString('userRole')?.toLowerCase() == 'female');
+          } catch (_) {}
+        }
+
+        if (isFemale) {
+          isEarned = 1;
+          // Atomically update expert wallet in RTDB
+          await UserDatabaseService.instance.incrementExpertStats(
+            myUid,
+            earned: 0.10,
+            seconds: 0,
+            minutesToAdd: 0,
+          );
+          // Notify active screen/AppState
+          onLiveMessageEarned?.call(0.10);
+        }
+      }
 
       // 1. Save to local SQLite
       data['status'] = localStatus;
+      data['isEarned'] = isEarned;
       await LocalChatDatabase.instance.saveMessageLocally(data);
 
       // 2. Send acknowledgment back to sender!

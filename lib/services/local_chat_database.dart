@@ -30,7 +30,7 @@ class LocalChatDatabase {
 
     return await openDatabase(
       path,
-      version: 4, // Upgraded for user_profiles cache
+      version: 5, // Upgraded for isEarned in messages
       onCreate: _createDB,
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -65,6 +65,13 @@ class LocalChatDatabase {
             )
           ''');
         }
+        if (oldVersion < 5) {
+          try {
+            await db.execute('ALTER TABLE messages ADD COLUMN isEarned INTEGER DEFAULT 0');
+          } catch (e) {
+            debugPrint('Error altering messages table: $e');
+          }
+        }
       },
     );
   }
@@ -77,7 +84,8 @@ class LocalChatDatabase {
         senderId TEXT NOT NULL,
         text TEXT NOT NULL,
         timestamp INTEGER NOT NULL,
-        status INTEGER NOT NULL
+        status INTEGER NOT NULL,
+        isEarned INTEGER DEFAULT 0
       )
     ''');
     // Index to speed up roomId queries
@@ -163,9 +171,13 @@ class LocalChatDatabase {
 
   Future<void> saveMessageLocally(Map<String, dynamic> message) async {
     final db = await instance.database;
+    final row = Map<String, dynamic>.from(message);
+    if (!row.containsKey('isEarned')) {
+      row['isEarned'] = 0;
+    }
     await db.insert(
       'messages',
-      message,
+      row,
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
     _updateController.add(null);

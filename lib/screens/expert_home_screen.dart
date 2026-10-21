@@ -639,7 +639,7 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
                         color: Colors.white, size: 16),
                     const SizedBox(width: 6),
                     Text(
-                      '₹${_redeemableBalance.toStringAsFixed(0)}',
+                      '₹${_redeemableBalance % 1 == 0 ? _redeemableBalance.toStringAsFixed(0) : _redeemableBalance.toStringAsFixed(2)}',
                       style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
@@ -1039,7 +1039,7 @@ class _ExpertHomeScreenState extends State<ExpertHomeScreen>
                           icon: Icons.account_balance_wallet_outlined,
                           iconColor: AppColors.successGreen,
                           value:
-                              '₹${_redeemableBalance.toStringAsFixed(0)}',
+                              '₹${_redeemableBalance % 1 == 0 ? _redeemableBalance.toStringAsFixed(0) : _redeemableBalance.toStringAsFixed(2)}',
                           label: 'Redeemable Balance',
                           valueColor: AppColors.successGreen,
                           trailing: Tooltip(

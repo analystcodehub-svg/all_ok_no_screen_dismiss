@@ -271,7 +271,7 @@ class _FemaleExpertDashboardState extends State<FemaleExpertDashboard> with Widg
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      '₹${appState.totalEarnings.toStringAsFixed(0)}',
+                      '₹${appState.totalEarnings % 1 == 0 ? appState.totalEarnings.toStringAsFixed(0) : appState.totalEarnings.toStringAsFixed(2)}',
                       style: const TextStyle(
                         fontSize: 40,
                         fontWeight: FontWeight.bold,

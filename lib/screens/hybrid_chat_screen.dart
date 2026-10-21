@@ -94,6 +94,14 @@ class _HybridChatScreenState extends State<HybridChatScreen> with WidgetsBinding
     // Set active room to prevent false delivery ACKs when we are actually reading
     HybridChatService.activeChatRoomId = _roomId;
 
+    final appState = context.read<AppState>();
+    HybridChatService.isFemaleUser = (appState.selectedGender == 'Female');
+    HybridChatService.onLiveMessageEarned = (amount) {
+      if (mounted) {
+        context.read<AppState>().addEarnings(amount);
+      }
+    };
+
     // Ensure listeners are active
     HybridChatService.instance.initListeners(widget.myUid);
 
@@ -137,6 +145,8 @@ class _HybridChatScreenState extends State<HybridChatScreen> with WidgetsBinding
   @override
   void dispose() {
     HybridChatService.activeChatRoomId = null;
+    HybridChatService.onLiveMessageEarned = null;
+    HybridChatService.isFemaleUser = null;
     WidgetsBinding.instance.removeObserver(this);
     AppState.syncPendingChatDeductions();
     _dbUpdateSubscription?.cancel();
@@ -276,7 +286,8 @@ class _HybridChatScreenState extends State<HybridChatScreen> with WidgetsBinding
   @override
   Widget build(BuildContext context) {
     final appState = context.read<AppState>();
-    final otherRole = appState.selectedGender == 'Female' ? 'user' : 'expert';
+    final isFemale = appState.selectedGender == 'Female';
+    final otherRole = isFemale ? 'user' : 'expert';
 
     return Scaffold(
       backgroundColor: const Color(0xFFF0F2F5), // WhatsApp-like background
@@ -403,6 +414,30 @@ class _HybridChatScreenState extends State<HybridChatScreen> with WidgetsBinding
       ),
       body: Column(
         children: [
+          if (isFemale)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+              color: const Color(0xFFFFF9E6),
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.monetization_on_outlined, size: 16, color: Color(0xFFB78103)),
+                  SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      'You can earn 10 paise on message in live chat only',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF8A5D00),
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           Expanded(
             child: ListView.builder(
               controller: _scrollController,
@@ -414,53 +449,79 @@ class _HybridChatScreenState extends State<HybridChatScreen> with WidgetsBinding
                 final text = (msg['text'] ?? '').toString();
                 final timestamp = (msg['timestamp'] is num) ? (msg['timestamp'] as num).toInt() : DateTime.now().millisecondsSinceEpoch;
                 final status = (msg['status'] is num) ? (msg['status'] as num).toInt() : 0;
+                final isEarned = (msg['isEarned'] is num) ? (msg['isEarned'] as num).toInt() : 0;
+                final isEarnedLive = !isMe && isFemale && isEarned == 1;
                 
                 final timeStr = TimeOfDay.fromDateTime(DateTime.fromMillisecondsSinceEpoch(timestamp)).format(context);
 
                 return Align(
                   alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-                  child: Container(
-                    margin: const EdgeInsets.only(bottom: 6),
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: isMe ? AppColors.lightBlueBg : Colors.white,
-                      borderRadius: BorderRadius.circular(12).copyWith(
-                        bottomRight: isMe ? const Radius.circular(0) : const Radius.circular(12),
-                        bottomLeft: !isMe ? const Radius.circular(0) : const Radius.circular(12),
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.05),
-                          blurRadius: 2,
-                          offset: const Offset(0, 1),
-                        )
-                      ]
-                    ),
-                    constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
-                    child: Wrap(
-                      alignment: WrapAlignment.end,
-                      crossAxisAlignment: WrapCrossAlignment.end,
-                      children: [
-                        Text(
-                          text,
-                          style: const TextStyle(fontSize: 15, color: Colors.black87),
+                  child: Column(
+                    crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        margin: EdgeInsets.only(bottom: isEarnedLive ? 2 : 6),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: isMe ? AppColors.lightBlueBg : Colors.white,
+                          borderRadius: BorderRadius.circular(12).copyWith(
+                            bottomRight: isMe ? const Radius.circular(0) : const Radius.circular(12),
+                            bottomLeft: !isMe ? const Radius.circular(0) : const Radius.circular(12),
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.05),
+                              blurRadius: 2,
+                              offset: const Offset(0, 1),
+                            )
+                          ]
                         ),
-                        const SizedBox(width: 8),
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
+                        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
+                        child: Wrap(
+                          alignment: WrapAlignment.end,
+                          crossAxisAlignment: WrapCrossAlignment.end,
                           children: [
                             Text(
-                              timeStr,
-                              style: const TextStyle(fontSize: 10, color: Colors.grey),
+                              text,
+                              style: const TextStyle(fontSize: 15, color: Colors.black87),
                             ),
-                            if (isMe) ...[
-                              const SizedBox(width: 4),
-                              _buildTickIcon(status),
-                            ]
+                            const SizedBox(width: 8),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  timeStr,
+                                  style: const TextStyle(fontSize: 10, color: Colors.grey),
+                                ),
+                                if (isMe) ...[
+                                  const SizedBox(width: 4),
+                                  _buildTickIcon(status),
+                                ]
+                              ],
+                            )
                           ],
-                        )
-                      ],
-                    ),
+                        ),
+                      ),
+                      if (isEarnedLive)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 4, bottom: 6),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: const [
+                              Icon(Icons.check_circle_rounded, size: 12, color: Color(0xFF2E7D32)),
+                              SizedBox(width: 3),
+                              Text(
+                                '10 paise earned',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF2E7D32),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
                   ),
                 );
               },
