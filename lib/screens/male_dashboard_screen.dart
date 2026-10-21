@@ -652,6 +652,19 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> with WidgetsB
       return;
     }
 
+    // Immediately add/update this female in Friends & Call history
+    final now = DateTime.now().millisecondsSinceEpoch;
+    LocalChatDatabase.instance.saveCallLogLocally({
+      'logId': 'call_${expert.id}_$now',
+      'callerId': appState.uid,
+      'receiverId': expert.id,
+      'otherUserName': expert.nickname,
+      'durationSeconds': 0,
+      'status': 'calling',
+      'timestamp': now,
+      'deductedAmount': 0.0,
+    });
+
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -802,9 +815,9 @@ class _MaleCallerDashboardState extends State<MaleCallerDashboard> with WidgetsB
               label: 'Call',
             ),
             BottomNavigationBarItem(
-              icon: _buildIconWithBadge(Icons.chat_bubble_outline_rounded, _unreadCount > 0 ? (_unreadCount > 99 ? '99+' : _unreadCount.toString()) : ''),
-              activeIcon: _buildIconWithBadge(Icons.chat_bubble_rounded, _unreadCount > 0 ? (_unreadCount > 99 ? '99+' : _unreadCount.toString()) : '', isActive: true),
-              label: 'Chat',
+              icon: _buildIconWithBadge(Icons.people_alt_outlined, _unreadCount > 0 ? (_unreadCount > 99 ? '99+' : _unreadCount.toString()) : ''),
+              activeIcon: _buildIconWithBadge(Icons.people_alt_rounded, _unreadCount > 0 ? (_unreadCount > 99 ? '99+' : _unreadCount.toString()) : '', isActive: true),
+              label: 'Friends',
             ),
             const BottomNavigationBarItem(
               icon: Icon(Icons.person_outline_rounded, size: 26),

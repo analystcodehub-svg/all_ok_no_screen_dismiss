@@ -300,6 +300,84 @@ class LocalChatDatabase {
     }).toList();
   }
 
+  // getMaleFriends: returns all females the male user has either called or messaged,
+  // ordered by most recent interaction (call or chat).
+  Future<List<Map<String, dynamic>>> getMaleFriends(String myUid) async {
+    final db = await instance.database;
+
+    // 1. Fetch recent chats
+    final recentChats = await getRecentChats(myUid);
+
+    // 2. Fetch all call logs for myUid
+    final callLogs = await db.query(
+      'call_logs',
+      where: 'callerId = ? OR receiverId = ?',
+      whereArgs: [myUid, myUid],
+      orderBy: 'timestamp DESC',
+    );
+
+    // 3. Map of friendUid -> data
+    final Map<String, Map<String, dynamic>> friendsMap = {};
+
+    // Process recent chats
+    for (var chat in recentChats) {
+      final otherUid = (chat['otherUserId'] ?? '').toString();
+      if (otherUid.isEmpty || otherUid == myUid) continue;
+
+      final int time = (chat['timestamp'] as num?)?.toInt() ?? 0;
+      final String lastMsg = chat['lastMessage']?.toString() ?? '';
+      final int unread = (chat['unreadCount'] as num?)?.toInt() ?? 0;
+
+      friendsMap[otherUid] = {
+        'otherUid': otherUid,
+        'timestamp': time,
+        'lastType': 'chat',
+        'lastText': lastMsg,
+        'unreadCount': unread,
+        'durationSeconds': 0,
+      };
+    }
+
+    // Process call logs
+    for (var log in callLogs) {
+      final caller = (log['callerId'] ?? '').toString();
+      final receiver = (log['receiverId'] ?? '').toString();
+      final otherUid = (caller == myUid) ? receiver : caller;
+      if (otherUid.isEmpty || otherUid == myUid) continue;
+
+      final int time = (log['timestamp'] as num?)?.toInt() ?? 0;
+      final int duration = (log['durationSeconds'] as num?)?.toInt() ?? 0;
+      final otherName = log['otherUserName']?.toString();
+
+      if (!friendsMap.containsKey(otherUid)) {
+        friendsMap[otherUid] = {
+          'otherUid': otherUid,
+          'otherUserName': otherName,
+          'timestamp': time,
+          'lastType': 'call',
+          'lastText': duration > 0 ? '${duration ~/ 60}m ${duration % 60}s' : 'Call',
+          'unreadCount': 0,
+          'durationSeconds': duration,
+        };
+      } else {
+        final existing = friendsMap[otherUid]!;
+        if (otherName != null && otherName.isNotEmpty && (existing['otherUserName'] == null || existing['otherUserName'].isEmpty)) {
+          existing['otherUserName'] = otherName;
+        }
+        if (time > (existing['timestamp'] as int)) {
+          existing['timestamp'] = time;
+          existing['lastType'] = 'call';
+          existing['lastText'] = duration > 0 ? '${duration ~/ 60}m ${duration % 60}s' : 'Call';
+          existing['durationSeconds'] = duration;
+        }
+      }
+    }
+
+    final list = friendsMap.values.toList();
+    list.sort((a, b) => (b['timestamp'] as int).compareTo(a['timestamp'] as int));
+    return list;
+  }
+
   Future<void> saveCallLogLocally(Map<String, dynamic> log) async {
     final db = await instance.database;
     await db.insert(

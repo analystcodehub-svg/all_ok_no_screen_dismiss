@@ -14,6 +14,9 @@ import 'package:firebase_database/firebase_database.dart';
 import 'active_call_page.dart';
 import '../services/matchmaking_service.dart';
 import '../services/foreground_task_service.dart';
+import '../models/female_expert.dart';
+import 'wallet_recharge_screen.dart';
+import 'matchmaking_screen.dart';
 
 class ChatListScreen extends StatefulWidget {
   const ChatListScreen({super.key});
@@ -155,6 +158,146 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
     return enrichedDocs;
   }
 
+  Future<List<Map<String, dynamic>>> _fetchEnrichedFriends(String myUid) async {
+    final friends = await LocalChatDatabase.instance.getMaleFriends(myUid);
+    final enrichedList = <Map<String, dynamic>>[];
+
+    for (var doc in friends) {
+      final data = Map<String, dynamic>.from(doc);
+      final otherUser = data['otherUid'] as String;
+      String displayName = (data['otherUserName'] as String?)?.isNotEmpty == true 
+          ? data['otherUserName'] as String 
+          : otherUser;
+      String? avatarUrl;
+      int avatarIndex = 1;
+
+      try {
+        final cachedProfile = await LocalChatDatabase.instance.getUserProfile(otherUser);
+        if (cachedProfile != null) {
+          displayName = cachedProfile['name'] as String? ?? displayName;
+          avatarUrl = cachedProfile['avatarUrl'] as String?;
+          avatarIndex = (cachedProfile['avatarIndex'] as num?)?.toInt() ?? 1;
+        } else {
+          final expertData = await UserDatabaseService.instance.getExpert(otherUser);
+          if (expertData != null) {
+            displayName = expertData['nickname'] ?? expertData['name'] ?? displayName;
+            avatarUrl = expertData['profileImageUrl'] ?? expertData['avatarUrl'];
+            avatarIndex = (expertData['avatarIndex'] as num?)?.toInt() ?? 1;
+
+            await LocalChatDatabase.instance.saveUserProfile({
+              'uid': otherUser,
+              'name': displayName,
+              'avatarUrl': avatarUrl,
+              'avatarIndex': avatarIndex,
+              'role': 'expert',
+              'timestamp': DateTime.now().millisecondsSinceEpoch,
+            });
+          }
+        }
+      } catch (e) {
+        // Fallback
+      }
+
+      data['displayName'] = displayName;
+      data['avatarUrl'] = avatarUrl;
+      data['avatarIndex'] = avatarIndex;
+      data['role'] = 'expert';
+      enrichedList.add(data);
+    }
+
+    return enrichedList;
+  }
+
+  void _triggerCallByExpertId(String expertId) async {
+    try {
+      final data = await UserDatabaseService.instance.getExpert(expertId);
+      if (data != null) {
+        bool isOnline = false;
+        try {
+          final rtdb = FirebaseDatabase.instanceFor(
+            app: FirebaseDatabase.instance.app,
+            databaseURL: 'https://zegochat-c44b0.asia-southeast1.firebasedatabase.app',
+          );
+          final event = await rtdb.ref('status/$expertId/isOnline').once();
+          if (event.snapshot.value != null) {
+            isOnline = event.snapshot.value == true;
+          }
+        } catch (_) {}
+
+        final expert = FemaleExpert(
+          id: expertId,
+          nickname: data['nickname'] ?? data['name'] ?? 'Expert',
+          pricePerMin: (data['pricePerMin'] as num?)?.toInt() ?? 4,
+          languages: data['languages'] ?? 'Hindi',
+          rating: (data['rating'] ?? 4.5).toDouble(),
+          isOnline: isOnline,
+          avatarUrl: data['profileImageUrl'] ?? data['avatarUrl'],
+          avatarIndex: (data['avatarIndex'] as num?)?.toInt() ?? 1,
+          age: (data['age'] as num?)?.toInt() ?? 22,
+        );
+
+        if (!mounted) return;
+        final appState = context.read<AppState>();
+        final balance = appState.coinBalance;
+        const requiredCoins = 40; // ₹4.00
+
+        if (balance < requiredCoins) {
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('Insufficient Balance', style: TextStyle(fontWeight: FontWeight.bold)),
+              content: Text('Your balance is ₹${(balance / 10).toStringAsFixed(1)}. You need at least ₹4.0 to place a call.'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => const WalletRechargeScreen()));
+                  },
+                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4F46E5)),
+                  child: const Text('Recharge', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+          );
+          return;
+        }
+
+        // Immediately add/update this female in Friends & Call history
+        final now = DateTime.now().millisecondsSinceEpoch;
+        LocalChatDatabase.instance.saveCallLogLocally({
+          'logId': 'call_${expertId}_$now',
+          'callerId': appState.uid,
+          'receiverId': expertId,
+          'otherUserName': expert.nickname,
+          'durationSeconds': 0,
+          'status': 'calling',
+          'timestamp': now,
+          'deductedAmount': 0.0,
+        });
+
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => MatchmakingScreen(
+              requestedExpert: expert,
+              isRandomMode: false,
+            ),
+          ),
+        );
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Expert not found')));
+        }
+      }
+    } catch (e) {
+      debugPrint('Error triggering call: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
@@ -266,7 +409,7 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
       );
     }
 
-    // ── Male View: Standard Chats ──
+    // ── Male View: Friends (Instant Update on Call or Message with Both Buttons) ──
     return Scaffold(
       backgroundColor: AppColors.bgLight,
       body: SafeArea(
@@ -277,7 +420,7 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
               padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
               color: AppColors.bgLight,
               child: const Text(
-                'Chats',
+                'Friends',
                 style: TextStyle(
                   fontSize: 26,
                   fontWeight: FontWeight.w900,
@@ -286,7 +429,290 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
               ),
             ),
             Expanded(
-              child: _buildFriendsTab(context, appState, myUid, isCurrentMale, isOnline: true),
+              child: _buildMaleFriendsView(context, appState, myUid),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ─── MALE FRIENDS VIEW (Updated instantly on Call or Message) ────────────
+
+  Widget _buildMaleFriendsView(BuildContext context, AppState appState, String myUid) {
+    return StreamBuilder<void>(
+      stream: LocalChatDatabase.instance.updates,
+      builder: (context, snapshot) {
+        return FutureBuilder<List<Map<String, dynamic>>>(
+          future: _fetchEnrichedFriends(myUid),
+          builder: (context, futureSnapshot) {
+            if (futureSnapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator(color: Color(0xFF4F46E5)));
+            }
+
+            if (futureSnapshot.hasError) {
+              return Center(child: Text('Error loading friends: ${futureSnapshot.error}'));
+            }
+
+            final friends = futureSnapshot.data ?? [];
+            if (friends.isEmpty) {
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.people_outline_rounded, size: 72, color: Colors.grey.shade400),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'No friends yet.',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textDark,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Call or message an expert to add them here.',
+                      style: TextStyle(fontSize: 14, color: AppColors.textGrey),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              );
+            }
+
+            return ListView.builder(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              itemCount: friends.length,
+              itemBuilder: (context, index) {
+                final friend = friends[index];
+                final otherUid = friend['otherUid'] as String;
+                final displayName = friend['displayName'] as String;
+                final avatarUrl = friend['avatarUrl'] as String?;
+                final avatarIndex = (friend['avatarIndex'] as num?)?.toInt() ?? 1;
+                final timestamp = friend['timestamp'] as int;
+                final lastType = friend['lastType'] as String? ?? 'call';
+                final lastText = friend['lastText'] as String? ?? '';
+                final unreadCount = (friend['unreadCount'] as num?)?.toInt() ?? 0;
+
+                final dt = DateTime.fromMillisecondsSinceEpoch(timestamp);
+                final now = DateTime.now();
+                String timeText;
+                if (dt.year == now.year && dt.month == now.month && dt.day == now.day) {
+                  timeText = TimeOfDay.fromDateTime(dt).format(context);
+                } else {
+                  timeText = '${dt.day}/${dt.month}';
+                }
+
+                return _buildMaleFriendCard(
+                  uid: otherUid,
+                  name: displayName,
+                  avatarUrl: avatarUrl,
+                  avatarIndex: avatarIndex,
+                  lastType: lastType,
+                  lastText: lastText,
+                  timeText: timeText,
+                  unreadCount: unreadCount,
+                  onCallTap: () => _triggerCallByExpertId(otherUid),
+                  onMessageTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => HybridChatScreen(
+                          myUid: myUid,
+                          otherUid: otherUid,
+                          otherUserName: displayName,
+                          otherUserAvatarUrl: avatarUrl,
+                          otherUserAvatarIndex: avatarIndex,
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // ─── MALE FRIEND CARD (Both Call and Message Buttons) ───────────────────
+
+  Widget _buildMaleFriendCard({
+    required String uid,
+    required String name,
+    required String? avatarUrl,
+    required int avatarIndex,
+    required String lastType,
+    required String lastText,
+    required String timeText,
+    required int unreadCount,
+    required VoidCallback onCallTap,
+    required VoidCallback onMessageTap,
+  }) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: const Color(0xFFE2E8F0),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: InkWell(
+        onTap: onMessageTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Row(
+          children: [
+            // Avatar
+            LocalAvatarWidget(
+              uid: uid,
+              role: 'expert',
+              radius: 26,
+              avatarIndex: avatarIndex,
+              avatarUrl: avatarUrl,
+            ),
+            const SizedBox(width: 12),
+
+            // Name and Last Interaction
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    name,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textDark,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 3),
+                  Row(
+                    children: [
+                      Icon(
+                        lastType == 'call' ? Icons.phone_in_talk_rounded : Icons.chat_bubble_outline_rounded,
+                        size: 13,
+                        color: lastType == 'call' ? const Color(0xFF10B981) : const Color(0xFF4F46E5),
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          lastType == 'call'
+                              ? 'Call • $lastText • $timeText'
+                              : '$lastText • $timeText',
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            color: unreadCount > 0 ? AppColors.textDark : AppColors.textGrey,
+                            fontWeight: unreadCount > 0 ? FontWeight.bold : FontWeight.w500,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+
+            // Action Buttons: BOTH Call and Message
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Call Button
+                GestureDetector(
+                  onTap: onCallTap,
+                  child: Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF4F46E5), // Indigo
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF4F46E5).withValues(alpha: 0.25),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.phone_in_talk_rounded,
+                      color: Colors.white,
+                      size: 18,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+
+                // Message Button
+                GestureDetector(
+                  onTap: onMessageTap,
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Container(
+                        width: 38,
+                        height: 38,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE11D48), // Rose
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFFE11D48).withValues(alpha: 0.25),
+                              blurRadius: 6,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: const Icon(
+                          Icons.chat_bubble_rounded,
+                          color: Colors.white,
+                          size: 18,
+                        ),
+                      ),
+                      if (unreadCount > 0)
+                        Positioned(
+                          top: -4,
+                          right: -4,
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: const BoxDecoration(
+                              color: Colors.red,
+                              shape: BoxShape.circle,
+                            ),
+                            constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                            child: Center(
+                              child: Text(
+                                unreadCount > 99 ? '99+' : unreadCount.toString(),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ],
         ),
